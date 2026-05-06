@@ -1,0 +1,26 @@
+{
+  "name": "@ai-detection-viewer/ai_detection_viewer-e2e",
+  "version": "0.0.1",
+  "private": true,
+  "nx": {
+    "implicitDependencies": [
+      "@ai-detection-viewer/ai_detection_viewer"
+    ],
+    "targets": {
+      "e2e": {
+        "executor": "@nx/jest:jest",
+        "outputs": [
+          "{projectRoot}/test-output/jest/coverage"
+        ],
+        "options": {
+          "jestConfig": "apps/ai_detection_viewer-e2e/jest.config.cts",
+          "passWithNoTests": true
+        },
+        "dependsOn": [
+          "@ai-detection-viewer/ai_detection_viewer:build",
+          "@ai-detection-viewer/ai_detection_viewer:serve"
+        ]
+      }
+    }
+  }
+}
