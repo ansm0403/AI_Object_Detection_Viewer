@@ -4,10 +4,16 @@
   "files": [],
   "references": [
     {
-      "path": "./apps/ai_detection_viewer-e2e"
+      "path": "./apps/ai_detection_viewer_server-e2e"
     },
     {
-      "path": "./apps/ai_detection_viewer"
+      "path": "./apps/ai_detection_viewer_server"
+    },
+    {
+      "path": "./apps/ai_detection_viewer_client-e2e"
+    },
+    {
+      "path": "./apps/ai_detection_viewer_client"
     }
   ]
 }

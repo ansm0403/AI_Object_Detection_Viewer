@@ -4,12 +4,12 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Debug @ai-detection-viewer/ai_detection_viewer with Nx",
+      "name": "Debug @ai-detection-viewer/ai_detection_viewer_server with Nx",
       "runtimeExecutable": "npx",
       "runtimeArgs": [
         "nx",
         "serve",
-        "@ai-detection-viewer/ai_detection_viewer"
+        "@ai-detection-viewer/ai_detection_viewer_server"
       ],
       "env": {
         "NODE_OPTIONS": "--inspect=9229"
@@ -21,7 +21,7 @@
       ],
       "sourceMaps": true,
       "outFiles": [
-        "${workspaceFolder}/apps/ai_detection_viewer/dist/**/*.(m|c|)js",
+        "${workspaceFolder}/apps/ai_detection_viewer_server/dist/**/*.(m|c|)js",
         "!**/node_modules/**"
       ]
     }
