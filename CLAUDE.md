@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## 필수조건
+
+해당 파일을 읽었다는 것을 검증하기 위해 답변하기 전에 "지침에 의거하여 답변할게" 라고 말해줘.
+
 ## Project
 
 AI Object Detection Viewer — a portfolio project to demonstrate 3D visualization,
@@ -11,7 +15,12 @@ Not a production AI system.
 - Experienced: React, Next.js, TypeScript, state management, API integration, frontend performance
 - New to: Three.js, WebGL, React Three Fiber, 3D visualization, AI data domain (Object Detection,
   Bounding Box, Point Cloud, Annotation), Zustand
-- Use beginner-friendly explanations when 3D or AI domain concepts appear.
+- When explaining any topic listed under "New to", including 3D-related technologies, AI data domain concepts, and Zustand, provide beginner-friendly explanations.
+- For AI domain and 3D implementation: this is an unfamiliar area, but apply 
+  the same engineering standards as the rest of the project — proper error 
+  handling, appropriate abstraction, and performance awareness. Avoid 
+  over-engineering (e.g. adding unnecessary layers or speculative generalization), 
+  but do not simplify below production quality either.
 
 ## Tech Stack (core)
 
@@ -22,11 +31,13 @@ Do NOT add TanStack Query, Recharts (until post-MVP), database, backend, or auth
 
 ## Reference Documents
 
-Read these on demand. Do not load all of them every time.
-
-- `.claude/docs/architecture.md` — data model, folder structure, data flow, 2D↔3D mapping
-- `.claude/docs/domain-glossary.md` — definitions for 3D/AI terms (Point Cloud, COCO, etc.)
+- `.claude/docs/architecture.md` — data model, folder structure, data flow
+- `.claude/docs/domain-glossary.md` — 3D/AI term definitions
 - `.claude/docs/mvp-checklist.md` — MVP step list and completion criteria
+- `docs/PROJECT_DESIGN.md` — original project intent and background.
+  Read this ONLY when (a) clarifying user intent, (b) resolving conflicts
+  between docs, or (c) deciding whether a feature fits the project goal.
+  Do NOT read for routine implementation tasks.
 
 When unsure about a 3D/AI term, read `domain-glossary.md` before answering.
 When making structural or multi-file changes, read `architecture.md` first.
@@ -52,8 +63,6 @@ These rules must never be broken. If a request conflicts with them, propose an a
 - Before any multi-file or architectural change, propose a short plan and wait for approval.
 - After implementation, summarize: changed files, key logic, and any rule conflicts encountered.
 - If a package script is needed, inspect `package.json` instead of guessing commands.
-- Prefer beginner-friendly TypeScript. Avoid clever generics or advanced patterns
-  unless the user asks.
 - Avoid editing unrelated files. Stay within the scope of the current step.
 - If installing a new library, verify the latest stable version is compatible
   with the existing Three.js / R3F versions before installing.

@@ -1,4 +1,25 @@
+'use client';
+
+import { useEffect } from 'react';
+import { parseCoco } from '@/lib/coco';
+
 export default function Index() {
+  // Step 1 verification probe — remove when Step 2 starts.
+  useEffect(() => {
+    fetch('/sample-data/sample.json')
+      .then((r) => r.json())
+      .then((raw) => {
+        console.log('[Step 1] parseCoco(sample):', parseCoco(raw));
+        console.log('[Step 1] parseCoco(null):', parseCoco(null));
+        console.log('[Step 1] parseCoco({}):', parseCoco({}));
+        console.log(
+          '[Step 1] parseCoco(empty dataset):',
+          parseCoco({ images: [], annotations: [], categories: [] }),
+        );
+      })
+      .catch((err) => console.error('[Step 1] fetch failed:', err));
+  }, []);
+
   /*
    * Replace the elements below with your own.
    *

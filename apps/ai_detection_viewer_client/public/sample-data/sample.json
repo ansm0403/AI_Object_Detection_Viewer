@@ -1,0 +1,21 @@
+{
+  "categories": [
+    { "id": 1, "name": "car" },
+    { "id": 2, "name": "person" },
+    { "id": 3, "name": "bicycle" }
+  ],
+  "images": [
+    { "id": 1, "file_name": "frame_001.jpg", "width": 1280, "height": 720 },
+    { "id": 2, "file_name": "frame_002.jpg", "width": 1280, "height": 720 },
+    { "id": 3, "file_name": "frame_003.jpg", "width": 1280, "height": 720 },
+    { "id": 4, "file_name": "frame_004.jpg", "width": 1280, "height": 720 }
+  ],
+  "annotations": [
+    { "id": 1, "image_id": 1, "category_id": 1, "bbox": [120, 220, 240, 160], "score": 0.95 },
+    { "id": 2, "image_id": 1, "category_id": 1, "bbox": [600, 260, 180, 140], "score": 0.87 },
+    { "id": 3, "image_id": 1, "category_id": 2, "bbox": [900, 200, 80, 220], "score": 0.91 },
+    { "id": 4, "image_id": 2, "category_id": 2, "bbox": [400, 180, 100, 260], "score": 0.88 },
+    { "id": 5, "image_id": 2, "category_id": 3, "bbox": [800, 320, 200, 180], "score": 0.76 },
+    { "id": 6, "image_id": 3, "category_id": 1, "bbox": [500, 240, 320, 200], "score": 0.93 }
+  ]
+}
