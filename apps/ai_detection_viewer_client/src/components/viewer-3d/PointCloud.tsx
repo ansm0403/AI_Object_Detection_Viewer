@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { Point3D } from '@/lib/types';
 
@@ -22,6 +22,8 @@ export function PointCloud({ points, size = 0.04, color = '#cbd5f5' }: Props) {
     geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     return geom;
   }, [points]);
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   const ref = useRef<THREE.Points>(null);
 

@@ -14,7 +14,7 @@ export function Viewer3D({ frame }: Viewer3DProps) {
   return (
     <div className="w-full aspect-[4/3] bg-neutral-950 rounded">
       <Canvas
-        camera={{ position: [0, 0, 14], fov: 50, near: 0.1, far: 100 }}
+        camera={{ position: [0, 0, -10], fov: 50, near: 0.1, far: 100 }}
         dpr={[1, 2]}
       >
         <color attach="background" args={['#0a0a0a']} />

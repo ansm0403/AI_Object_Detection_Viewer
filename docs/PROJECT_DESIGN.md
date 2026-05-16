@@ -104,9 +104,9 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 
 |스택|역할|선택 이유|
 |-|-|-|
-|Three.js|3D 렌더링 엔진. WebGL 기반|웹 3D의 사실상 표준|
-|React Three Fiber (R3F)|Three.js를 React 방식으로 사용하는 래퍼|React 생태계와 자연스럽게 연동, Zustand와 직접 연동 가능, 메모리 관리 자동화|
-|@react-three/drei|R3F 편의 기능 모음|OrbitControls, CameraControls 등 한 줄로 사용 가능|
+|Three.js (^0.184.0)|3D 렌더링 엔진. WebGL 기반|웹 3D의 사실상 표준|
+|React Three Fiber (^9.6.1)|Three.js를 React 방식으로 사용하는 래퍼|React 생태계와 자연스럽게 연동, Zustand와 직접 연동 가능, 메모리 관리 자동화|
+|@react-three/drei (^10.7.7)|R3F 편의 기능 모음|OrbitControls, CameraControls 등 한 줄로 사용 가능|
 
 > \*\*R3F 선택 근거\*\*: Three.js 직접 사용은 React와의 렌더링 루프 충돌, 메모리 수동 관리, Zustand 상태 동기화 코드를 별도 작성해야 하는 문제가 있다. R3F는 이 모든 것을 React 방식으로 자동 처리한다. 타협이 아니라 React + 3D 조합에서 현업 기준으로도 합리적인 선택이다. R3F를 배우는 것은 곧 Three.js 핵심 개념(geometry, material, camera, lighting)을 배우는 것이기도 하다.
 
@@ -432,7 +432,7 @@ Next.js / TypeScript / React Three Fiber(Three.js) / Zustand / Tailwind CSS
 3. **폴더 구조 및 컴포넌트 설계**: 각 컴포넌트의 역할과 의존 관계.
 4. **데이터 흐름**: COCO JSON 파싱 → 내부 타입 변환 → 뷰어 렌더링의 전체 흐름.
 5. **Zustand store 구체적 구조**: 위 초안을 기반으로 실제 구현 가능한 수준의 store 설계.
-6. **3D 씬 구성 세부 설계**: 카메라 초기 위치, 조명 종류, 좌표계 기준.
+6. **3D 씬 구성 세부 설계**: ✅ 결정 완료 (Step 4). 카메라 `(0, 0, -10)` → +z 방향, OrbitControls target `(0, 0, 4.5)`, FOV 50°. 조명: `ambientLight` + `directionalLight`. Three.js 오른손 좌표계 y-up. 상세는 `architecture.md` "2D → 3D Estimation Strategy" 및 "3D Viewer Component Contract" 참조.
 7. **raycaster 기반 클릭 이벤트 처리 전략**: 3D 오브젝트 클릭 → Zustand 업데이트 → 2D 반응의 구체적 구현 방법.
 8. **구현 순서와 의존 관계**: 어떤 것을 먼저 만들어야 다음 것을 만들 수 있는가.
 9. **예상 난이도 병목 구간과 대응 방법**.

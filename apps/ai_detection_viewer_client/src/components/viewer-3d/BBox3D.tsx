@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import type { Detection3D } from '@/lib/types';
 
@@ -22,6 +22,8 @@ export function BBox3D({ detection }: Props) {
     () => new THREE.EdgesGeometry(new THREE.BoxGeometry(sx, sy, sz)),
     [sx, sy, sz],
   );
+
+  useEffect(() => () => geometry.dispose(), [geometry]);
 
   const color = CLASS_COLORS[detection.class] ?? DEFAULT_COLOR;
 
