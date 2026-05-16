@@ -42,13 +42,33 @@ Work on ONE step at a time. Mark with [x] when complete.
 -->
 
 
-## Step 2 — 2D Image Viewer
-- [ ] Goal: Display image + 2D bounding boxes via SVG overlay.
-- Scope: `components/viewer-2d/*`.
+## Step 2 — 2D Image Viewer ✅ Complete
+- [x] Goal: Display image + 2D bounding boxes via SVG overlay.
+- Scope: `components/viewer-2d/*`. Also modified: `lib/types/index.ts`,
+  `lib/coco/parser.ts`, `lib/coco/parser.test.ts`, `app/page.tsx`.
 - Done when:
-  - Image renders with bboxes positioned correctly.
-  - Each bbox is clickable (placeholder handler is fine for now).
-  - Bbox labels show class name and confidence.
+  - [x] Image renders with bboxes positioned correctly.
+  - [x] Each bbox is clickable (placeholder `onSelect` logs to console; signature
+        matches Step 5's `setSelectedObject(id: string | null)` — wire-ready).
+  - [x] Bbox labels show class name and confidence.
+- Type change (required for SVG viewBox coordinate system):
+  - `Frame` extended with `imageWidth: number` and `imageHeight: number`.
+  - `parser.ts` populates these from `CocoImage.width` / `CocoImage.height`.
+  - `parser.test.ts`: 2 assertions added to the existing "valid input" test.
+    Test case count unchanged — **25 tests passing**.
+- Implementation notes:
+  - `<svg viewBox="0 0 {imageWidth} {imageHeight}">` — COCO bbox coordinates
+    map to `<rect>` attributes with no arithmetic; browser handles scaling.
+  - Class color map: `person` → green, `bicycle` → yellow, `car` → red (fallback: blue).
+  - Nx welcome template and Step 1 verification probe in `page.tsx` removed.
+    Page now: fetch → parseCoco → `<Viewer2D frame={frames[0]} />`.
+- Edge cases (see `docs/edgecases/Edge_#2.md` — 6 cases discovered):
+  - Fixed: label clips past bottom edge (id=9-40), label clips past right edge
+    (id=2-11, id=10-49). Both are latent in Step 2 (only frame_001 renders)
+    and will manifest in Step 8 timeline navigation.
+  - Documented without fix: click selection ambiguity in overlapping bboxes,
+    label text click-through, missing image-load fallback, tiny bbox click difficulty.
+    Primary mitigation for most: Step 6 Object List (non-spatial selection path).
 
 ## Step 3 — Zustand Store
 - [ ] Goal: Set up global UI state.

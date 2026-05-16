@@ -230,16 +230,16 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 ```typescript
 {
   // 지금 어떤 프레임을 보고 있는가
-  selectedFrameId: string,
+  selectedFrameId: string | null,
 
   // 지금 어떤 객체가 선택되어 있는가 (2D와 3D가 공유하는 핵심)
   selectedObjectId: string | null,
 
-  // confidence 슬라이더 값 (0\~1)
+  // confidence 슬라이더 값 (0~1)
   confidenceThreshold: number,
 
-  // 어떤 클래스를 보여줄 것인가
-  visibleClasses: string\[],
+  // 어떤 클래스를 보여줄 것인가 (Set으로 O(1) 조회)
+  visibleClasses: Set<string>,
 }
 ```
 
@@ -250,35 +250,37 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 ## 11\. 내부 데이터 타입 설계
 
 ```typescript
-interface Detection2D {
+// 실제 구현 타입 (architecture.md가 정본)
+type Detection2D = {
   id: string;
-  label: string;
+  class: string;      // COCO category name ("person" | "bicycle" | "car" 등)
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
-}
+};
 
-interface Detection3D {
-  id: string;       // Detection2D.id와 동일 — 2D/3D 동기화의 핵심
-  label: string;
+type Detection3D = {
+  id: string;         // Detection2D.id와 동일 — 2D/3D 동기화의 핵심
+  class: string;
   confidence: number;
-  position: { x: number; y: number; z: number };
-  size: { width: number; height: number; depth: number };
-}
+  bbox3D: { center: [number, number, number]; size: [number, number, number] };
+};
 
-interface Point3D {
+type Point3D = {
   x: number;
   y: number;
   z: number;
-}
+  intensity?: number;
+};
 
-interface Frame {
+type Frame = {
   id: string;
-  timestamp: number;
   imageUrl: string;
-  detections2d: Detection2D\[];
-  detections3d: Detection3D\[];
-  points3d: Point3D\[];
-}
+  imageWidth: number;   // 원본 이미지 픽셀 너비 (SVG viewBox 기준)
+  imageHeight: number;  // 원본 이미지 픽셀 높이 (SVG viewBox 기준)
+  detections2D: Detection2D[];
+  detections3D: Detection3D[];
+  pointCloud: Point3D[];
+};
 ```
 
 Detection2D.id === Detection3D.id → 같은 객체. 클릭 시 양쪽 뷰어에서 동시 하이라이트.

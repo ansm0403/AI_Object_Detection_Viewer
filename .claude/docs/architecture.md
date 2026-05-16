@@ -12,8 +12,11 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
+│   │   └── page.tsx        # minimal loader: fetch → parseCoco → Viewer2D
 │   ├── components/
-│   │   ├── viewer-2d/      # 2D image + SVG bounding box overlay
+│   │   ├── viewer-2d/      # ✅ Step 2 — 2D image + SVG bounding box overlay
+│   │   │   ├── Viewer2D.tsx    # props: frame, onSelect?
+│   │   │   └── index.ts        # barrel
 │   │   ├── viewer-3d/      # R3F canvas, point cloud, 3D bboxes
 │   │   ├── object-list/    # detection list panel
 │   │   ├── filters/        # confidence / class filters
@@ -43,6 +46,8 @@ Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
 type Frame = {
   id: string;
   imageUrl: string;
+  imageWidth: number;   // original pixel width from CocoImage.width
+  imageHeight: number;  // original pixel height from CocoImage.height
   detections2D: Detection2D[];
   detections3D: Detection3D[];
   pointCloud: Point3D[];
@@ -166,6 +171,27 @@ for the discovery history.
 so that the same input JSON always produces the same ids — critical for the
 2D↔3D selection invariant.
 
+
+## 2D Viewer SVG Contract
+
+`Viewer2D` renders via `<svg viewBox="0 0 {frame.imageWidth} {frame.imageHeight}">`.
+COCO bbox coordinates (`x, y, width, height`) map directly to SVG `<rect>` attributes
+with no arithmetic — the browser scales the vector to fit the container automatically.
+
+`Viewer2D` props:
+```ts
+type Viewer2DProps = {
+  frame: Frame;
+  onSelect?: (id: string | null) => void;  // wire to store.setSelectedObject in Step 5
+};
+```
+
+`onSelect` is a placeholder through Step 4. In Step 5 it receives `setSelectedObject`
+from the Zustand store. Passing `null` is the deselect path ("Clicking empty space
+deselects" — Step 5 Done when).
+
+For known edge cases in the 2D viewer (label overflow, click ambiguity in overlapping
+bboxes, etc.), see `docs/edgecases/Edge_#2.md`.
 
 ## Sample Data
 
