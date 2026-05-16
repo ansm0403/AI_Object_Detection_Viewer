@@ -104,33 +104,61 @@ Work on ONE step at a time. Mark with [x] when complete.
 -->
 
 
-## Step 4 — 3D Scene (basic)
-- [ ] Goal: Render point cloud + 3D bboxes in R3F with OrbitControls.
+## Step 4 — 3D Scene (basic) ✅ Complete
+- [x] Goal: Render point cloud + 3D bboxes in R3F with OrbitControls.
 - Scope: `components/viewer-3d/*`, `lib/geometry/*`.
+  Also added: `lib/geometry/frame-enricher.ts` (orchestrator), `lib/geometry/index.ts` (barrel).
+  Modified: `app/page.tsx` (enrichFrame + Viewer3D side-by-side with Viewer2D).
+  Installed: `three@^0.184.0`, `@react-three/fiber@^9.6.1`, `@react-three/drei@^10.7.7`, `@types/three@^0.184.1`.
 - Done when:
-  - `Detection2D` data is converted into `Detection3D` + `Point3D[]` via `lib/geometry/`.
-  - Point cloud renders using `BufferGeometry`.
-  - 3D bboxes render as wireframe boxes at estimated positions.
-  - OrbitControls allows mouse navigation.
+  - [x] `Detection2D` data is converted into `Detection3D` + `Point3D[]` via `lib/geometry/`.
+  - [x] Point cloud renders using `BufferGeometry`.
+  - [x] 3D bboxes render as wireframe boxes at estimated positions.
+  - [x] OrbitControls allows mouse navigation.
 - Tests (required):
-  - [ ] `lib/geometry/<estimator>.test.ts` — verify pure conversion functions:
+  - [x] `lib/geometry/bbox-estimator.test.ts` — 15 tests:
     - id preservation: `Detection2D.id === Detection3D.id` for every input (Immutable Rule #1).
     - class/confidence pass through unchanged.
     - Larger bbox area produces a smaller `z` (closer-to-camera) than a smaller bbox area.
-    - bbox center coordinates map to expected 3D `x`, `y` (document the mapping).
-    - Point cloud generator returns the expected number of points and stays inside the bbox volume.
-    - Empty `Detection2D[]` input returns empty `Detection3D[]` and `Point3D[]`.
-  - Do not test the R3F canvas itself.
+    - bbox center coordinates map to expected 3D `x`, `y` (documented in bbox-estimator.ts header).
+    - 0-area bbox: size clamped to `MIN_SIZE_WORLD`; center/area/z unchanged.
+    - Empty `Detection2D[]` input returns empty `Detection3D[]`.
+  - [x] `lib/geometry/pointcloud-generator.test.ts` — 7 tests:
+    - Returns expected count (N detections × pointsPerDetection).
+    - All points stay inside their source bbox volume.
+    - Reproducible with seeded rng; different seeds produce different output.
+    - Empty `Detection3D[]` input returns `Point3D[]`.
+  - [x] Do not test the R3F canvas itself.
+- Implementation notes:
+  - Mapping: `cxN/cyN → world x/y` (y flipped), `area → z` (larger area → smaller z). See `bbox-estimator.ts` header.
+  - 0-width/0-height bbox (parser allows them): `size` clamped to `MIN_SIZE_WORLD=0.05`; center/area untouched.
+  - Camera at `(0,0,-10)` targeting `(0,0,4.5)` (looks in +z direction; smaller z = closer per spec).
+  - `frame-enricher.ts` supports optional `rng`/`pointsPerDetection` overrides for testability.
+  - `next build` passed (✓ Compiled successfully).
+- Suite total: **65/65** (43 prior + 15 bbox-estimator + 7 pointcloud-generator).
+- Edge cases (see `docs/edgecases/Edge_#4.md` — 6 cases discovered):
+  - Fixed: 3D depth direction inverted — camera was at +z causing large objects to appear at back
+    (Case 2, Path A: camera moved to `[0,0,-10]`). Frustum clipping resolved as a side effect (Case 3).
+    `BufferGeometry`/`EdgesGeometry` not disposed — GPU memory leak on re-renders (Case 4,
+    `useEffect` cleanup added to `PointCloud.tsx` and `BBox3D.tsx`).
+  - Documented without fix: SVG bbox click priority (Case 1, defer to Step 6 — read Edge_#4 Case 1
+    before starting Step 6). `pointCloud` locked at enrich time, ignores filters (Case 5, defer to
+    Step 7 — read Edge_#4 Case 5 before starting Step 7). Camera state persists across frame changes
+    (Case 6, defer to Step 8 — read Edge_#4 Case 6 before starting Step 8).
 
 <!-- KO (move to a localized file)
 - 테스트 (필수):
-  - [ ] `lib/geometry/<estimator>.test.ts` — 순수 변환 함수 검증.
+  - [x] `lib/geometry/bbox-estimator.test.ts` — 순수 변환 함수 검증 (15개 테스트).
     - id 보존: 모든 입력에 대해 `Detection2D.id === Detection3D.id` (Immutable Rule #1).
     - class, confidence는 그대로 통과한다.
     - bbox 면적이 클수록 더 작은 `z`(카메라에 더 가까움)를 만든다.
     - bbox 중심 좌표가 예상한 3D `x`, `y`로 매핑된다 (매핑 방식은 문서화).
-    - point cloud 생성기는 예상 개수의 포인트를 반환하고 bbox 부피 안에 머문다.
-    - 빈 `Detection2D[]` 입력은 빈 `Detection3D[]`, `Point3D[]`를 반환한다.
+    - 0-area bbox: size가 `MIN_SIZE_WORLD`로 클램핑된다.
+    - 빈 `Detection2D[]` 입력은 빈 `Detection3D[]`를 반환한다.
+  - [x] `lib/geometry/pointcloud-generator.test.ts` — point cloud 생성기 검증 (7개 테스트).
+    - 예상 개수의 포인트를 반환하고 bbox 부피 안에 머문다.
+    - seeded rng로 재현 가능하고, 다른 seed는 다른 결과를 생성한다.
+    - 빈 `Detection3D[]` 입력은 빈 `Point3D[]`를 반환한다.
   - R3F 캔버스 자체는 테스트하지 않는다.
 -->
 
