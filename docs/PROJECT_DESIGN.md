@@ -128,12 +128,24 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 
 |항목|내용|
 |-|-|
-|데이터 출처|COCO annotation JSON (공개 AI 객체 탐지 데이터셋)|
+|데이터 출처|MS COCO val2017 subset (10 images, person/bicycle/car, 실제 ground-truth bbox)|
+|샘플 위치|`apps/ai_detection_viewer_client/public/sample-data/sample.json` + `frame_001.jpg ~ frame_010.jpg`|
 |파싱 방식|COCO 포맷을 직접 파싱해서 내부 TypeScript 타입으로 변환하는 로직 직접 작성|
 |3D 좌표 처리|옵션 A 채택: 2D bbox 크기/위치에서 z값을 추정하는 변환 로직 직접 설계|
 |Point cloud|depth 추정 좌표 배열을 자동 생성, Three.js BufferGeometry로 렌더링|
 
 > \*\*TanStack Query 제거 결정\*\*: 로컬 파일 또는 정적 JSON을 사용하는 단계에서 불필요. 추후 Nest.js API 연동 시점에 도입 여부 결정.
+
+> \*\*샘플 데이터 결정 경위\*\*: 초기 placeholder(picsum.photos) 4장으로 시작했으나 이미지와 bbox 좌표 불일치 문제로 포트폴리오 데모 가치 부족. Step 1 종료 직전 MS COCO val2017에서 person/bicycle/car만 골라 10장 + 49 annotation으로 교체. 이미지·bbox·class 라벨이 모두 실제 데이터.
+
+### 테스트
+
+|항목|내용|
+|-|-|
+|툴|Vitest (Step 1 종료 시점 도입)|
+|범위|`lib/coco/`, `lib/geometry/`, `store/` 의 순수 함수만 (Step 5부터 통합 테스트 추가)|
+|UI 테스트|MVP 비대상. React 컴포넌트 렌더링은 수동 검증|
+|파일 위치|테스트 대상 모듈과 같은 디렉토리 (`parser.ts` ↔ `parser.test.ts`)|
 
 ### 배포
 
@@ -421,6 +433,37 @@ Next.js / TypeScript / React Three Fiber(Three.js) / Zustand / Tailwind CSS
 7. **raycaster 기반 클릭 이벤트 처리 전략**: 3D 오브젝트 클릭 → Zustand 업데이트 → 2D 반응의 구체적 구현 방법.
 8. **구현 순서와 의존 관계**: 어떤 것을 먼저 만들어야 다음 것을 만들 수 있는가.
 9. **예상 난이도 병목 구간과 대응 방법**.
+
+\---
+
+## 17\. 테스트 전략
+
+> 이 절은 **테스트 전략의 설계 의도(왜 이렇게 결정했는가)**만 담는다. 운영 규칙(파일 위치, Step별 작성 항목, 작성 규칙)은 `CLAUDE.md`, `.claude/docs/architecture.md`, `.claude/docs/mvp-checklist.md`에서 관리한다.
+
+### 기본 방침
+
+* **유닛 테스트 우선, 통합 테스트는 나중**. 통합 테스트는 핵심 데이터 흐름이 두 단계 이상 연결되는 시점, 구체적으로 Step 5(2D ↔ 3D 객체 선택 동기화)부터 시작한다.
+* **UI 컴포넌트 렌더링 테스트는 MVP에서 제외**한다. 렌더링은 수동 확인이 더 빠르고, 3D 뷰어는 WebGL 기반이라 JSDOM에서 실질적으로 테스트가 어렵다.
+* **검증 대상은 데이터 계약과 불변 조건**이다. COCO 파싱(`lib/coco/`), 2D → 3D 좌표 변환(`lib/geometry/`), 상태 액션·셀렉터(`store/`) 같은 **순수 비즈니스 로직**만 테스트한다.
+* **모든 코드를 무리하게 테스트하지 않는다.** 변경 가능성이 높거나 Immutable Rule(예: `Detection2D.id === Detection3D.id`, `selectedObjectId`가 선택의 단일 진실 공급원)이 걸린 모듈만 테스트한다.
+
+### 이 전략을 채택한 이유
+
+이 프로젝트의 핵심 가치는 "여러 뷰가 한 상태에 동기화되는 데이터 계약"에 있다. 그 계약을 코드로 잠가두면 리팩토링 안전성이 올라가고, 포트폴리오 측면에서도 "테스트 경계를 의식적으로 결정했다"는 신호가 된다. 반대로 컴포넌트 렌더링·시각적 회귀까지 테스트하면 시간 소모 대비 얻는 게 작고, 3D 영역은 WebGL 의존성 때문에 ROI가 더 낮다.
+
+### 도구
+
+**Vitest**를 사용한다. Next.js + TypeScript와 자연스럽게 동작하고 jest API와 호환된다. Step 1의 마지막 작업으로 도입한다. React 컴포넌트 테스트 라이브러리(`@testing-library/react`)는 MVP 동안 도입하지 않는다.
+
+### 상세 규칙이 살아 있는 위치
+
+|무엇을 찾을 때|어디를 본다|
+|-|-|
+|Step별로 어떤 테스트를 작성해야 하는가|`.claude/docs/mvp-checklist.md`의 각 Step "Tests" 하위 항목|
+|레이어별 테스트 경계, 잠가야 할 불변 조건, 테스트 파일 위치|`.claude/docs/architecture.md`의 "Testing Boundaries"|
+|일상 작업에서 지켜야 할 짧은 규칙 요약|`CLAUDE.md`의 "Testing Policy"|
+
+이 절은 설계 의도만 담는다. 위 세 문서가 운영 규칙의 정본이며, 의도와 운영 규칙이 어긋날 경우 **운영 규칙 쪽을 먼저 갱신**한다.
 
 \---
 

@@ -6,14 +6,40 @@
 Track MVP progress here. Each step has a goal, scope, and "done when" criteria.
 Work on ONE step at a time. Mark with [x] when complete.
 
-## Step 1 — COCO Parsing
-- [ ] Goal: Convert COCO JSON into internal `Frame[]` structure.
-- Scope: `lib/coco/parser.ts`, `lib/types/*`.
+## Step 1 — COCO Parsing ✅ Complete
+- [x] Goal: Convert COCO JSON into internal `Frame[]` structure.
+- Scope: `lib/coco/parser.ts`, `lib/coco/types.ts`, `lib/coco/index.ts`, `lib/types/index.ts`.
 - Done when:
-  - Sample COCO JSON loads without errors.
-  - Each `Frame` has correct `detections2D` populated.
-  - `Detection2D.id` is generated and unique within a frame.
-  - Invalid/empty inputs return `[]` with a console.warn, not a crash.
+  - [x] Sample COCO JSON loads without errors.
+  - [x] Each `Frame` has correct `detections2D` populated.
+  - [x] `Detection2D.id` is generated and unique within a frame.
+  - [x] Invalid/empty inputs return `[]` with a console.warn, not a crash.
+- Tests (required):
+  - [x] Set up Vitest (`vitest.config.ts`, npm `test` script).
+  - [x] `lib/coco/parser.test.ts` — verifies the following with inline fixtures (25 tests passing):
+    - Valid input: well-formed images/categories/annotations produce a correct `Frame[]`.
+    - Empty / invalid root: empty object, `null`, or missing arrays returns `[]`.
+    - Unknown category: annotations whose `category_id` has no matching category are skipped.
+    - Invalid bbox: bbox length ≠ 4 or non-finite entries are skipped (incl. `NaN`, `Infinity`).
+    - Invalid score: non-finite `score` falls back to confidence `1.0`.
+    - Zero-annotation frame: a Frame is still created with `detections2D = []`.
+    - id uniqueness: all `detections2D[].id` within a single frame are distinct.
+    - Duplicate `image.id`: keep the first, skip the rest with warn.
+- Edge cases discovered and fixed: see `docs/edgecases/Edge_#1.md`.
+- Sample data: 10-image MS COCO val2017 subset (`person`, `bicycle`, `car`), real bboxes.
+
+<!-- KO (move to a localized file)
+- 테스트 (필수):
+  - [ ] Vitest 도입 (`vitest.config.ts`, npm script `test`).
+  - [ ] `lib/coco/parser.test.ts` — 다음 케이스를 인라인 fixture로 검증.
+    - 정상 입력: 이미지/카테고리/어노테이션이 올바르면 `Frame[]`이 만들어진다.
+    - 빈 / 잘못된 루트: 빈 객체, `null`, 배열 누락이면 `[]`을 반환한다.
+    - 알 수 없는 카테고리: 매칭되는 카테고리가 없는 어노테이션은 건너뛴다.
+    - 잘못된 bbox: 길이가 4가 아니거나 숫자가 아닌 값이 있으면 해당 어노테이션을 건너뛴다.
+    - 어노테이션 0개 프레임: 어노테이션이 없어도 Frame은 만들어지고 `detections2D`가 `[]`이다.
+    - id 유일성: 같은 프레임 안의 모든 `detections2D[].id`는 서로 다르다.
+-->
+
 
 ## Step 2 — 2D Image Viewer
 - [ ] Goal: Display image + 2D bounding boxes via SVG overlay.
@@ -30,6 +56,22 @@ Work on ONE step at a time. Mark with [x] when complete.
   - Store exposes `selectedFrameId`, `selectedObjectId`, `confidenceThreshold`, `visibleClasses`.
   - Setters work and trigger re-renders.
   - Frame data is NOT stored here.
+- Tests (required):
+  - [ ] `store/viewer-store.test.ts` — call actions directly (no React) and assert resulting state.
+    - `setSelectedObject(id)` updates `selectedObjectId`; passing `null` clears it.
+    - `setConfidenceThreshold(v)` clamps/sets the value.
+    - `toggleClass(name)` adds/removes the class in `visibleClasses`.
+    - Independent state slices do not mutate each other.
+
+<!-- KO (move to a localized file)
+- 테스트 (필수):
+  - [ ] `store/viewer-store.test.ts` — React 없이 액션을 직접 호출해 상태 결과를 검증.
+    - `setSelectedObject(id)`가 `selectedObjectId`를 갱신하고, `null`을 넘기면 선택이 해제된다.
+    - `setConfidenceThreshold(v)`가 값을 올바르게 반영한다.
+    - `toggleClass(name)`이 `visibleClasses`에서 추가/제거를 토글한다.
+    - 서로 다른 상태 슬라이스는 서로 변경하지 않는다.
+-->
+
 
 ## Step 4 — 3D Scene (basic)
 - [ ] Goal: Render point cloud + 3D bboxes in R3F with OrbitControls.
@@ -39,6 +81,28 @@ Work on ONE step at a time. Mark with [x] when complete.
   - Point cloud renders using `BufferGeometry`.
   - 3D bboxes render as wireframe boxes at estimated positions.
   - OrbitControls allows mouse navigation.
+- Tests (required):
+  - [ ] `lib/geometry/<estimator>.test.ts` — verify pure conversion functions:
+    - id preservation: `Detection2D.id === Detection3D.id` for every input (Immutable Rule #1).
+    - class/confidence pass through unchanged.
+    - Larger bbox area produces a smaller `z` (closer-to-camera) than a smaller bbox area.
+    - bbox center coordinates map to expected 3D `x`, `y` (document the mapping).
+    - Point cloud generator returns the expected number of points and stays inside the bbox volume.
+    - Empty `Detection2D[]` input returns empty `Detection3D[]` and `Point3D[]`.
+  - Do not test the R3F canvas itself.
+
+<!-- KO (move to a localized file)
+- 테스트 (필수):
+  - [ ] `lib/geometry/<estimator>.test.ts` — 순수 변환 함수 검증.
+    - id 보존: 모든 입력에 대해 `Detection2D.id === Detection3D.id` (Immutable Rule #1).
+    - class, confidence는 그대로 통과한다.
+    - bbox 면적이 클수록 더 작은 `z`(카메라에 더 가까움)를 만든다.
+    - bbox 중심 좌표가 예상한 3D `x`, `y`로 매핑된다 (매핑 방식은 문서화).
+    - point cloud 생성기는 예상 개수의 포인트를 반환하고 bbox 부피 안에 머문다.
+    - 빈 `Detection2D[]` 입력은 빈 `Detection3D[]`, `Point3D[]`를 반환한다.
+  - R3F 캔버스 자체는 테스트하지 않는다.
+-->
+
 
 ## Step 5 — 2D ↔ 3D Selection Sync
 - [ ] Goal: Clicking an object in 2D highlights it in 3D, and vice versa.
@@ -48,6 +112,22 @@ Work on ONE step at a time. Mark with [x] when complete.
   - Clicking a 3D bbox sets `selectedObjectId`.
   - The selected object highlights in BOTH views.
   - Clicking empty space deselects.
+- Tests (integration starts here):
+  - [ ] `tests/integration/selection-sync.test.ts` — wire the real store with the selector logic used by both viewers (not the canvases themselves).
+    - Selecting an id "from 2D" produces the same `selectedObjectId` queried "from 3D".
+    - Selecting the same id twice does not throw or duplicate state.
+    - `setSelectedObject(null)` clears the selection (deselect path).
+  - Still no DOM/canvas rendering tests. Verify the data contract only.
+
+<!-- KO (move to a localized file)
+- 테스트 (통합 테스트 시작):
+  - [ ] `tests/integration/selection-sync.test.ts` — 두 뷰어가 공유하는 셀렉터 로직을 실제 store와 함께 검증 (캔버스 자체는 테스트하지 않음).
+    - "2D에서" id를 선택하면 "3D에서" 조회한 `selectedObjectId`가 동일하다.
+    - 같은 id를 두 번 선택해도 예외나 중복 상태가 발생하지 않는다.
+    - `setSelectedObject(null)`로 선택이 해제된다.
+  - DOM/캔버스 렌더링은 여전히 테스트하지 않는다. 데이터 계약만 검증한다.
+-->
+
 
 ## Step 6 — Object List Panel
 - [ ] Goal: Side panel listing detections in the current frame.
@@ -64,6 +144,20 @@ Work on ONE step at a time. Mark with [x] when complete.
   - Slider updates `confidenceThreshold` in store.
   - Class toggles update `visibleClasses` in store.
   - Both 2D and 3D viewers respect these filters.
+- Tests (required):
+  - [ ] Selector unit tests — given a `Frame` and store state, the visible-detections selector returns only detections that:
+    - have `confidence >= confidenceThreshold`, AND
+    - have `class` in `visibleClasses` (or `visibleClasses` empty means "show all" — pick one and lock it with a test).
+  - Threshold = 0 returns all detections; threshold = 1 returns only confidence-1.0 detections.
+
+<!-- KO (move to a localized file)
+- 테스트 (필수):
+  - [ ] 셀렉터 유닛 테스트 — `Frame`과 store 상태가 주어졌을 때, 가시 detections 셀렉터가 다음 조건을 모두 만족하는 detection만 반환한다.
+    - `confidence >= confidenceThreshold`이고,
+    - `class`가 `visibleClasses`에 포함된다 (또는 `visibleClasses`가 비었으면 "모두 표시" — 한 가지 의미로 정하고 테스트로 잠근다).
+  - threshold = 0이면 모든 detection이, threshold = 1이면 confidence가 1.0인 것만 반환된다.
+-->
+
 
 ## Step 8 — Frame Timeline
 - [ ] Goal: Horizontal timeline to switch between frames.

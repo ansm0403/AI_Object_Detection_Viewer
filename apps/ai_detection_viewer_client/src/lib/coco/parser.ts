@@ -17,9 +17,21 @@ export function parseCoco(raw: unknown): Frame[] {
   const categoryMap = buildCategoryMap(raw.categories);
   const annotationsByImage = groupAnnotationsByImage(raw.annotations);
 
-  return raw.images.map((image) =>
-    buildFrame(image, annotationsByImage, categoryMap),
-  );
+  const frames: Frame[] = [];
+  const seenImageIds = new Set<number>();
+
+  for (const image of raw.images) {
+    if (seenImageIds.has(image.id)) {
+      console.warn(
+        `[parseCoco] Duplicate image id ${image.id}. Skipping.`,
+      );
+      continue;
+    }
+    seenImageIds.add(image.id);
+    frames.push(buildFrame(image, annotationsByImage, categoryMap));
+  }
+
+  return frames;
 }
 
 function isCocoDataset(raw: unknown): raw is CocoDataset {
@@ -78,6 +90,8 @@ function buildFrame(
   return {
     id: String(image.id),
     imageUrl: `/sample-data/${image.file_name}`,
+    imageWidth: image.width,
+    imageHeight: image.height,
     detections2D,
     detections3D: [],
     pointCloud: [],
@@ -99,7 +113,7 @@ function toDetection2D(
   if (
     !Array.isArray(ann.bbox) ||
     ann.bbox.length !== 4 ||
-    ann.bbox.some((n) => typeof n !== 'number')
+    !ann.bbox.every((n) => Number.isFinite(n))
   ) {
     console.warn(
       `[parseCoco] Annotation ${ann.id} has invalid bbox. Skipping.`,
@@ -108,10 +122,12 @@ function toDetection2D(
   }
 
   const [x, y, width, height] = ann.bbox;
+  const confidence = Number.isFinite(ann.score) ? (ann.score as number) : 1.0;
+
   return {
     id: `${imageId}-${ann.id}`,
     class: className,
-    confidence: ann.score ?? 1.0,
+    confidence,
     bbox: { x, y, width, height },
   };
 }

@@ -2,6 +2,10 @@
   "name": "@ai-detection-viewer/ai_detection_viewer_client",
   "version": "0.0.1",
   "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
   "dependencies": {
     "next": "~16.1.6",
     "react": "^19.0.0",

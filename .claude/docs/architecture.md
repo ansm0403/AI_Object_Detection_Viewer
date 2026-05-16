@@ -5,23 +5,37 @@
 
 ## Folder Structure
 
+The project is an **nx monorepo**. All Step 1–10 work happens inside the
+`ai_detection_viewer_client` Next.js app. The backend app is out of MVP scope.
+
 ```
-src/
-├── app/                    # Next.js app router pages
-├── components/
-│   ├── viewer-2d/          # 2D image + SVG bounding box overlay
-│   ├── viewer-3d/          # R3F canvas, point cloud, 3D bboxes
-│   ├── object-list/        # detection list panel
-│   ├── filters/            # confidence / class filters
-│   └── timeline/           # frame timeline
-├── lib/
-│   ├── coco/               # COCO JSON parsing → internal Frame[]
-│   ├── geometry/           # 2D bbox → 3D bbox/point cloud estimation
-│   └── types/              # Frame, Detection2D, Detection3D, Point3D
-├── store/                  # Zustand store (UI state only)
-└── public/
-    └── sample-data/        # sample COCO JSON for development
+apps/ai_detection_viewer_client/
+├── src/
+│   ├── app/                # Next.js app router pages
+│   ├── components/
+│   │   ├── viewer-2d/      # 2D image + SVG bounding box overlay
+│   │   ├── viewer-3d/      # R3F canvas, point cloud, 3D bboxes
+│   │   ├── object-list/    # detection list panel
+│   │   ├── filters/        # confidence / class filters
+│   │   └── timeline/       # frame timeline
+│   ├── lib/
+│   │   ├── coco/           # COCO JSON parsing → internal Frame[]
+│   │   │   ├── parser.ts
+│   │   │   ├── parser.test.ts
+│   │   │   ├── types.ts    # raw COCO schema types
+│   │   │   └── index.ts    # barrel
+│   │   ├── geometry/       # 2D bbox → 3D bbox/point cloud estimation
+│   │   └── types/          # Frame, Detection2D, Detection3D, Point3D
+│   └── store/              # Zustand store (UI state only)
+├── public/
+│   └── sample-data/        # sample COCO JSON + frame images
+│       ├── sample.json
+│       └── frame_001.jpg ~ frame_010.jpg
+└── vitest.config.ts
 ```
+
+Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
+(declared in the app's `tsconfig.json`).
 
 ## Core Data Types
 
@@ -108,9 +122,133 @@ This is a visualization trick, not real perception. Document this clearly in
 | `store/`         | UI state (selection, filters)          | Hold frame data, do parsing       |
 | `components/`    | Rendering, event handling              | Do parsing or coordinate math     |
 
+## COCO Raw Schema Types
+
+External COCO JSON is described by a separate type set in `lib/coco/types.ts`.
+These are kept distinct from the internal `Frame` / `Detection2D` types so that
+swapping the input dataset (e.g. KITTI in the future) does not leak through
+the rest of the app.
+
+```ts
+type CocoDataset = {
+  images: CocoImage[];
+  annotations: CocoAnnotation[];
+  categories: CocoCategory[];
+};
+
+type CocoImage = { id: number; file_name: string; width: number; height: number };
+type CocoAnnotation = {
+  id: number;
+  image_id: number;
+  category_id: number;
+  bbox: [number, number, number, number];   // [x, y, width, height]
+  score?: number;                            // optional; absent for ground truth
+};
+type CocoCategory = { id: number; name: string; supercategory?: string };
+```
+
+## Parser Validation Rules
+
+`parseCoco(raw)` follows these defensive rules. See `docs/edgecases/Edge_#1.md`
+for the discovery history.
+
+| Input shape | Behavior |
+|---|---|
+| `null` / `undefined` / non-object / missing arrays | `console.warn` and return `[]` |
+| `{ images: [], annotations: [], categories: [] }` | return `[]` **without** warn (empty is not an error) |
+| `bbox` not array, length ≠ 4, or any entry fails `Number.isFinite` | skip that detection, warn |
+| `category_id` with no matching category | skip that detection, warn |
+| `score` missing or not finite | confidence falls back to `1.0` |
+| Duplicate `Detection2D.id` within a frame | keep the first, skip the rest, warn |
+| Duplicate `image.id` across the dataset | keep the first, skip the rest, warn |
+
+`Detection2D.id` is generated deterministically as `` `${imageId}-${annotationId}` ``
+so that the same input JSON always produces the same ids — critical for the
+2D↔3D selection invariant.
+
 ## Sample Data
 
-Sample COCO JSON lives at `public/sample-data/sample.json`.
-Used for development and demo. Format follows the standard COCO detection format
-(`images`, `annotations`, `categories`).
+Sample COCO JSON lives at `public/sample-data/sample.json`. It is a 10-image
+subset of **MS COCO val2017** containing only the `person`, `bicycle`, and
+`car` classes. Bounding boxes are the original COCO annotations, not synthetic.
+
+- 10 images (real JPEG, ~150–280 KB each)
+- 49 annotations (4–6 per image)
+- 3 categories (`person`, `bicycle`, `car`)
+- Each `image.coco_url` records the upstream source for traceability.
+
+The accompanying `frame_001.jpg ~ frame_010.jpg` files are downloaded copies
+of those upstream images, kept under `public/sample-data/` so the dev server
+can serve them without an internet round-trip.
+
+## Testing Boundaries
+
+Tests follow the same layer boundaries as "Separation of Concerns". Each layer has a designated test style.
+
+| Layer            | Test style                | What to verify                                                  |
+|------------------|---------------------------|-----------------------------------------------------------------|
+| `lib/coco/`      | Unit                      | COCO JSON → `Frame[]` conversion correctness and edge cases     |
+| `lib/geometry/`  | Unit                      | 2D bbox → 3D bbox / point cloud math correctness                |
+| `store/`         | Unit                      | Actions update state correctly; selectors return expected data  |
+| `components/`    | (MVP) none                | Rendering is verified manually. Only extracted pure functions are tested |
+| Integration      | Starting Step 5           | store + 2D + 3D respond to the same `selectedObjectId`          |
+
+### Invariants the tests must lock down
+
+The two invariants below come from the Immutable Rules. Whenever related code is touched, add a test that pins them.
+
+- `Detection2D.id` and `Detection3D.id` are identical for the same object.
+  → In `lib/geometry/`, lock the 2D→3D function's id passthrough with a test.
+- `selectedObjectId` is the single source of truth for selection.
+  → In store tests, confirm that "2D selection" and "3D selection" mutate the same field.
+
+### Test file location
+
+Place test files in the same directory as the module under test. Do not create a separate `__tests__/` folder.
+
+```
+src/lib/coco/
+├── parser.ts
+├── parser.test.ts         ← same directory
+├── types.ts
+└── index.ts
+```
+
+Reasons:
+- The test follows the file when refactored.
+- It is obvious at a glance which modules are tested.
+- Import paths stay short (`./parser`).
+
+<!-- KO (move to a localized file)
+## 테스트 경계
+
+테스트도 "관심사 분리" 표와 같은 레이어 경계를 따른다. 어떤 레이어를 어떤 방식으로 테스트할지가 정해져 있다.
+
+| 레이어            | 테스트 종류         | 무엇을 검증하는가                                  |
+|------------------|------------------|--------------------------------------------------|
+| `lib/coco/`      | 유닛               | COCO JSON → `Frame[]` 변환의 정확성과 엣지 케이스    |
+| `lib/geometry/`  | 유닛               | 2D bbox → 3D bbox / point cloud 수학의 정확성       |
+| `store/`         | 유닛               | 액션 호출 시 상태가 올바르게 갱신되는가, 셀렉터 결과   |
+| `components/`    | (MVP) 안함         | 렌더링 자체는 수동 확인. 추출된 순수 함수만 테스트    |
+| 통합              | Step 5부터         | store + 2D + 3D가 같은 `selectedObjectId`에 반응    |
+
+### 테스트가 잠가야 할 불변 조건
+
+다음 두 가지는 Immutable Rules에서 비롯된 핵심 불변 조건이다. 관련 코드를 만질 때마다 해당 조건을 검증하는 테스트를 추가한다.
+
+- `Detection2D.id`와 `Detection3D.id`는 같은 객체에 대해 동일하다.
+  → `lib/geometry/`에서 2D→3D 변환 함수가 id를 그대로 전달하는지 테스트로 잠근다.
+- `selectedObjectId`는 선택의 단일 진실 공급원이다.
+  → store 테스트에서 2D 선택과 3D 선택이 같은 필드를 갱신하는지 확인.
+
+### 테스트 파일 위치
+
+테스트 파일은 테스트 대상 모듈과 같은 디렉토리에 둔다. 별도 `__tests__/` 폴더는 만들지 않는다.
+
+이렇게 두는 이유:
+- 리팩토링 시 파일과 테스트가 함께 이동한다.
+- 어떤 모듈이 테스트되고 있는지 한눈에 보인다.
+- import 경로가 짧다 (`./parser`).
+-->
+
 ```

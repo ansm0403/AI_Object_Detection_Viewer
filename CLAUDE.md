@@ -74,10 +74,15 @@ These rules must never be broken. If a request conflicts with them, propose an a
 - Frame with zero detections → render the image/point cloud with no overlays.
 - Confidence threshold filtering happens at the selector level, not at parse time.
 
-## Testing Policy (MVP)
+## Testing Policy
 
-No unit tests in the MVP. Focus on working features and clean structure.
-Post-MVP testing decisions are deferred.
+- Unit tests only until Step 5. Integration tests begin at Step 5 (2D↔3D sync).
+- Test only: `lib/coco/` parsing, `lib/geometry/` conversion, `store/` selectors/actions.
+  Do NOT test UI rendering or React component structure.
+- Test files live next to the module they test: `parser.ts` → `parser.test.ts`.
+- Tool: **Vitest**. Introduce at end of Step 1. No `@testing-library/react` in MVP.
+- Step-by-step test scope: see `mvp-checklist.md` Tests sub-items.
+- Writing rules and layer boundaries: see `architecture.md` Testing Boundaries section.
 
 ## Commit Convention
 

@@ -1,6 +1,8 @@
 export type Frame = {
   id: string;
   imageUrl: string;
+  imageWidth: number;
+  imageHeight: number;
   detections2D: Detection2D[];
   detections3D: Detection3D[];
   pointCloud: Point3D[];
