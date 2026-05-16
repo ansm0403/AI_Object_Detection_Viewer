@@ -31,8 +31,22 @@ export function Viewer2D({ frame, onSelect }: Viewer2DProps) {
       />
       {frame.detections2D.map((d) => {
         const color = CLASS_COLORS[d.class] ?? DEFAULT_COLOR;
+        const labelText = `${d.class} ${d.confidence.toFixed(2)}`;
+        // ~7 px/char approximates fontSize=12 sans-serif. Slight overestimate
+        // biases toward end-anchoring when in doubt; misclassification is invisible.
+        const estLabelWidth = labelText.length * 7;
+        const overflowRight = d.bbox.x + estLabelWidth > frame.imageWidth;
+        const labelX = overflowRight
+          ? d.bbox.x + d.bbox.width - 2
+          : d.bbox.x + 2;
+        const labelAnchor = overflowRight ? 'end' : 'start';
+        // Prefer above; fall back to below; inside-top if both clip the image.
         const labelY =
-          d.bbox.y > 16 ? d.bbox.y - 3 : d.bbox.y + d.bbox.height + 14;
+          d.bbox.y > 16
+            ? d.bbox.y - 3
+            : d.bbox.y + d.bbox.height + 14 <= frame.imageHeight - 2
+              ? d.bbox.y + d.bbox.height + 14
+              : d.bbox.y + 14;
 
         return (
           <g key={d.id}>
@@ -51,14 +65,15 @@ export function Viewer2D({ frame, onSelect }: Viewer2DProps) {
               }}
             />
             <text
-              x={d.bbox.x + 2}
+              x={labelX}
               y={labelY}
+              textAnchor={labelAnchor}
               fill={color}
               fontSize={12}
               fontFamily="sans-serif"
               style={{ userSelect: 'none', pointerEvents: 'none' }}
             >
-              {d.class} {d.confidence.toFixed(2)}
+              {labelText}
             </text>
           </g>
         );
