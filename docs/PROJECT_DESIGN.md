@@ -226,6 +226,7 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 ## 10\. Zustand store 설계 방향
 
 2D 뷰어, 3D 뷰어, 객체 목록, 필터, 타임라인이 모두 공유하는 전역 상태.
+구현 정본은 `apps/ai_detection_viewer_client/src/store/viewer-store.ts`, 동작 명세(클램프·비-유한 입력 거부·factory 초기화)는 `.claude/docs/architecture.md`의 Store Validation Rules에서 관리한다.
 
 ```typescript
 {

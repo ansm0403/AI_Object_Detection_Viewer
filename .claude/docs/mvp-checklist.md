@@ -70,19 +70,29 @@ Work on ONE step at a time. Mark with [x] when complete.
     label text click-through, missing image-load fallback, tiny bbox click difficulty.
     Primary mitigation for most: Step 6 Object List (non-spatial selection path).
 
-## Step 3 — Zustand Store
-- [ ] Goal: Set up global UI state.
-- Scope: `store/viewer-store.ts`.
+## Step 3 — Zustand Store ✅ Complete
+- [x] Goal: Set up global UI state.
+- Scope: `store/viewer-store.ts`, `store/viewer-store.test.ts`, `store/index.ts`.
+  Also modified: `apps/ai_detection_viewer_client/package.json` (added `zustand@^5.0.13`).
 - Done when:
-  - Store exposes `selectedFrameId`, `selectedObjectId`, `confidenceThreshold`, `visibleClasses`.
-  - Setters work and trigger re-renders.
-  - Frame data is NOT stored here.
+  - [x] Store exposes `selectedFrameId`, `selectedObjectId`, `confidenceThreshold`, `visibleClasses`.
+  - [x] Setters work and trigger re-renders (new `Set` instance from `toggleClass` is the re-render signal).
+  - [x] Frame data is NOT stored here.
 - Tests (required):
-  - [ ] `store/viewer-store.test.ts` — call actions directly (no React) and assert resulting state.
+  - [x] `store/viewer-store.test.ts` — actions called directly (no React); **18 tests passing**, suite total **43/43**.
     - `setSelectedObject(id)` updates `selectedObjectId`; passing `null` clears it.
-    - `setConfidenceThreshold(v)` clamps/sets the value.
-    - `toggleClass(name)` adds/removes the class in `visibleClasses`.
-    - Independent state slices do not mutate each other.
+    - `setSelectedFrame(id)` updates `selectedFrameId`.
+    - `setConfidenceThreshold(v)` clamps to `[0, 1]`; non-finite inputs (`NaN`, `±Infinity`) are rejected with a warn and keep the previous value.
+    - `toggleClass(name)` adds/removes the class in `visibleClasses` and emits a new `Set` instance.
+    - Independent state slices do not mutate each other (3 cross-checks).
+    - `createInitialState()` factory returns a fresh `Set` on every call.
+- Implementation notes:
+  - Zustand `^5.0.13`, React 19 compatible. Installed in the app workspace only.
+  - `initialState` literal was refactored into a `createInitialState()` factory
+    during the edge case audit — see Edge_#3 Case 2.
+- Edge cases (see `docs/edgecases/Edge_#3.md` — 3 cases discovered):
+  - Fixed: NaN/±Infinity poisoning the threshold (Case 1), shared `Set` reference in the initial state (Case 2).
+  - Documented without fix: `setSelectedFrame` has no `null` deselect path (Case 3, defer to Step 8).
 
 <!-- KO (move to a localized file)
 - 테스트 (필수):

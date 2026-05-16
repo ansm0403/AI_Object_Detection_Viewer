@@ -29,7 +29,10 @@ apps/ai_detection_viewer_client/
 │   │   │   └── index.ts    # barrel
 │   │   ├── geometry/       # 2D bbox → 3D bbox/point cloud estimation
 │   │   └── types/          # Frame, Detection2D, Detection3D, Point3D
-│   └── store/              # Zustand store (UI state only)
+│   └── store/          # ✅ Step 3 — Zustand store (UI state only)
+│       ├── viewer-store.ts
+│       ├── viewer-store.test.ts
+│       └── index.ts        # barrel
 ├── public/
 │   └── sample-data/        # sample COCO JSON + frame images
 │       ├── sample.json
@@ -98,6 +101,18 @@ type ViewerStore = {
   toggleClass: (className: string) => void;
 };
 ```
+
+### Store Validation Rules
+
+See `docs/edgecases/Edge_#3.md` for discovery history.
+
+| Setter | Input | Behavior |
+|---|---|---|
+| `setSelectedObject` | `null` | clear selection |
+| `setSelectedFrame` | `string` only | no `null` deselect path until Step 8 |
+| `setConfidenceThreshold` | finite number | clamp to `[0, 1]` |
+| `setConfidenceThreshold` | `NaN` / `±Infinity` | `console.warn`, keep previous value |
+| `toggleClass` | any string | toggle membership; emit a new `Set` instance |
 
 ## 2D → 3D Estimation Strategy
 
