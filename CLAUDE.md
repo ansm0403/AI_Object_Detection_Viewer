@@ -74,6 +74,7 @@ These rules must never be broken. If a request conflicts with them, propose an a
 - Frame with zero detections → render the image/point cloud with no overlays.
 - Confidence threshold filtering happens at the selector level, not at parse time.
 
+
 ## Testing Policy
 
 - Unit tests only until Step 5. Integration tests begin at Step 5 (2D↔3D sync).

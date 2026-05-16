@@ -166,6 +166,7 @@ for the discovery history.
 so that the same input JSON always produces the same ids — critical for the
 2D↔3D selection invariant.
 
+
 ## Sample Data
 
 Sample COCO JSON lives at `public/sample-data/sample.json`. It is a 10-image

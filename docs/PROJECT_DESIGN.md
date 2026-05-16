@@ -436,6 +436,7 @@ Next.js / TypeScript / React Three Fiber(Three.js) / Zustand / Tailwind CSS
 
 \---
 
+
 ## 17\. 테스트 전략
 
 > 이 절은 **테스트 전략의 설계 의도(왜 이렇게 결정했는가)**만 담는다. 운영 규칙(파일 위치, Step별 작성 항목, 작성 규칙)은 `CLAUDE.md`, `.claude/docs/architecture.md`, `.claude/docs/mvp-checklist.md`에서 관리한다.

@@ -28,6 +28,7 @@ Work on ONE step at a time. Mark with [x] when complete.
 - Edge cases discovered and fixed: see `docs/edgecases/Edge_#1.md`.
 - Sample data: 10-image MS COCO val2017 subset (`person`, `bicycle`, `car`), real bboxes.
 
+
 <!-- KO (move to a localized file)
 - 테스트 (필수):
   - [ ] Vitest 도입 (`vitest.config.ts`, npm script `test`).
