@@ -40,4 +40,15 @@ describe('2D ↔ 3D selection sync', () => {
     useViewerStore.getState().setSelectedObject(null);
     expect(querySelectedId()).toBeNull();
   });
+
+  // Case 5 — Edge_#5.md: the store intentionally accepts any string id without
+  // validating against the current frame's detections (store is UI state only;
+  // it has no knowledge of frame data). Components handle unknown ids gracefully
+  // by rendering no highlight (d.id === unknownId is always false).
+  it('setting a nonexistent objectId does not throw and stores the id as-is', () => {
+    expect(() => {
+      useViewerStore.getState().setSelectedObject('does-not-exist-in-any-frame');
+    }).not.toThrow();
+    expect(querySelectedId()).toBe('does-not-exist-in-any-frame');
+  });
 });

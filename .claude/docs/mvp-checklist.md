@@ -173,11 +173,12 @@ Work on ONE step at a time. Mark with [x] when complete.
   - [x] The selected object highlights in BOTH views.
   - [x] Clicking empty space deselects.
 - Tests (integration starts here):
-  - [x] `tests/integration/selection-sync.test.ts` — wire the real store with the selector logic used by both viewers (not the canvases themselves). **4 tests added; suite total 69/69**.
+  - [x] `tests/integration/selection-sync.test.ts` — wire the real store with the selector logic used by both viewers (not the canvases themselves). **5 tests added; suite total 70/70**.
     - Selecting an id "from 2D" produces the same `selectedObjectId` queried "from 3D".
     - Selecting an id "from 3D" produces the same `selectedObjectId` queried "from 2D".
     - Selecting the same id twice does not throw or duplicate state.
     - `setSelectedObject(null)` clears the selection (deselect path).
+    - `setSelectedObject` with a nonexistent id does not throw; id is stored as-is (Case 5 in Edge_#5.md).
   - Still no DOM/canvas rendering tests. Verified data contract only.
 - Implementation notes:
   - Selection is prop-based (controlled component): `selectedId` + `onSelect` props added to both viewers. `page.tsx` is the single wire point.
@@ -186,14 +187,20 @@ Work on ONE step at a time. Mark with [x] when complete.
   - **Empty-space deselect**: 2D via `<svg onClick={() => onSelect?.(null)}>` (rects use `e.stopPropagation()`); 3D via R3F's `<Canvas onPointerMissed>`.
   - Glow impact assessment: 3D Bloom (via `@react-three/postprocessing`) was rejected — new package + scope expansion. SVG glow and `useFrame` pulse have no compatibility issues.
   - `vitest.config.ts` updated: `include` now also covers `tests/**/*.test.ts`.
+  - `THREE.DoubleSide` on invisible click mesh ensures clicks register when camera orbits inside a bbox volume (Edge_#5 Case 11).
+- Edge cases (see `docs/edgecases/Edge_#5.md` — 12 cases analyzed):
+  - Fixed: invisible click mesh used default `FrontSide` — clicks from inside bbox volume didn't register (Case 11; `THREE.DoubleSide` applied to `meshBasicMaterial`).
+  - Test added: `setSelectedObject` with nonexistent id stores id as-is and doesn't throw (Case 5).
+  - Deferred: stale `selectedObjectId` persists when switching frames (Case 6, defer to Step 8 — read Edge_#5 Case 6 before starting Step 8).
 
 <!-- KO (move to a localized file)
 - 테스트 (통합 테스트 시작):
-  - [x] `tests/integration/selection-sync.test.ts` — 두 뷰어가 공유하는 셀렉터 로직을 실제 store와 함께 검증 (캔버스 자체는 테스트하지 않음). **4개 테스트 추가; 전체 69/69**.
+  - [x] `tests/integration/selection-sync.test.ts` — 두 뷰어가 공유하는 셀렉터 로직을 실제 store와 함께 검증 (캔버스 자체는 테스트하지 않음). **5개 테스트 추가; 전체 70/70**.
     - "2D에서" id를 선택하면 "3D에서" 조회한 `selectedObjectId`가 동일하다.
     - "3D에서" id를 선택하면 "2D에서" 조회한 `selectedObjectId`가 동일하다.
     - 같은 id를 두 번 선택해도 예외나 중복 상태가 발생하지 않는다.
     - `setSelectedObject(null)`로 선택이 해제된다.
+    - 존재하지 않는 id로 `setSelectedObject`를 호출해도 예외 없이 id가 그대로 저장된다 (Edge_#5 Case 5).
   - DOM/캔버스 렌더링은 여전히 테스트하지 않는다. 데이터 계약만 검증한다.
 -->
 
