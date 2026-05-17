@@ -5,11 +5,15 @@ import { parseCoco } from '@/lib/coco';
 import { enrichFrame } from '@/lib/geometry';
 import { Viewer2D } from '@/components/viewer-2d';
 import { Viewer3D } from '@/components/viewer-3d';
+import { useViewerStore } from '@/store';
 import type { Frame } from '@/lib/types';
 
 export default function Index() {
   const [frames, setFrames] = useState<Frame[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedObjectId = useViewerStore((s) => s.selectedObjectId);
+  const setSelectedObject = useViewerStore((s) => s.setSelectedObject);
 
   useEffect(() => {
     fetch('/sample-data/sample.json')
@@ -32,11 +36,13 @@ export default function Index() {
     <main className="p-4 max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-4">
       <Viewer2D
         frame={currentFrame}
-        onSelect={(id) => console.log('[Step 2] selected:', id)}
+        selectedId={selectedObjectId}
+        onSelect={setSelectedObject}
       />
       <Viewer3D
         frame={currentFrame}
-        onSelect={(id) => console.log('[Step 4] 3D selected:', id)}
+        selectedId={selectedObjectId}
+        onSelect={setSelectedObject}
       />
     </main>
   );

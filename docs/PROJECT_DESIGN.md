@@ -433,7 +433,7 @@ Next.js / TypeScript / React Three Fiber(Three.js) / Zustand / Tailwind CSS
 4. **데이터 흐름**: COCO JSON 파싱 → 내부 타입 변환 → 뷰어 렌더링의 전체 흐름.
 5. **Zustand store 구체적 구조**: 위 초안을 기반으로 실제 구현 가능한 수준의 store 설계.
 6. **3D 씬 구성 세부 설계**: ✅ 결정 완료 (Step 4). 카메라 `(0, 0, -10)` → +z 방향, OrbitControls target `(0, 0, 4.5)`, FOV 50°. 조명: `ambientLight` + `directionalLight`. Three.js 오른손 좌표계 y-up. 상세는 `architecture.md` "2D → 3D Estimation Strategy" 및 "3D Viewer Component Contract" 참조.
-7. **raycaster 기반 클릭 이벤트 처리 전략**: 3D 오브젝트 클릭 → Zustand 업데이트 → 2D 반응의 구체적 구현 방법.
+7. **raycaster 기반 클릭 이벤트 처리 전략**: ✅ 결정 완료 (Step 5). R3F `mesh.onClick` + invisible `boxGeometry` click target + `store.setSelectedObject`. 2D↔3D 동기화는 prop-based controlled component 패턴으로 구현 (page.tsx가 단일 wire point). 상세: `architecture.md` "3D Viewer Component Contract".
 8. **구현 순서와 의존 관계**: 어떤 것을 먼저 만들어야 다음 것을 만들 수 있는가.
 9. **예상 난이도 병목 구간과 대응 방법**.
 
