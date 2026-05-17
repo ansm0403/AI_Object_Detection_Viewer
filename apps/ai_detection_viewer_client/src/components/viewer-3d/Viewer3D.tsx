@@ -12,7 +12,7 @@ type Viewer3DProps = {
 
 export function Viewer3D({ frame, selectedId, onSelect }: Viewer3DProps) {
   return (
-    <div className="w-full aspect-[4/3] bg-neutral-950 rounded">
+    <div className="relative overflow-hidden w-full aspect-[4/3] bg-neutral-950 rounded">
       <Canvas
         camera={{ position: [0, 0, -10], fov: 50, near: 0.1, far: 100 }}
         dpr={[1, 2]}

@@ -12,7 +12,7 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # fetch → parseCoco → enrichFrame → Viewer2D + Viewer3D + useViewerStore
+│   │   └── page.tsx        # fetch → parseCoco → enrichFrame → Viewer2D + Viewer3D + ObjectList + useViewerStore
 │   ├── components/
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
 │   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?
@@ -23,7 +23,9 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── PointCloud.tsx  # THREE.BufferGeometry via useMemo + dispose
 │   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight
 │   │   │   └── index.ts        # barrel
-│   │   ├── object-list/    # detection list panel
+│   │   ├── object-list/    # ✅ Step 6 — detection list panel; selection sync with 2D/3D
+│   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?
+│   │   │   └── index.ts        # barrel
 │   │   ├── filters/        # confidence / class filters
 │   │   └── timeline/       # frame timeline
 │   ├── lib/
@@ -176,6 +178,7 @@ type Viewer3DProps = {
 | `Scene` | Camera target, lighting, scene root. Passes `isSelected`/`onClick` to each `BBox3D`. |
 | `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. |
 | `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. |
+| `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. |
 
 `Viewer3D` receives an enriched `Frame` (output of `enrichFrame`). It does NOT call `enrichFrame` —
 coordinate math is `lib/geometry/`'s responsibility.

@@ -205,13 +205,36 @@ Work on ONE step at a time. Mark with [x] when complete.
 -->
 
 
-## Step 6 — Object List Panel
-- [ ] Goal: Side panel listing detections in the current frame.
-- Scope: `components/object-list/*`.
+## Step 6 — Object List Panel ✅ Complete
+- [x] Goal: Side panel listing detections in the current frame.
+- Scope: `components/object-list/*` (ObjectList.tsx, index.ts). Modified: `app/page.tsx`.
 - Done when:
-  - List shows class, confidence, id.
-  - Clicking a list item selects that object (sync with 2D/3D).
-  - Selected list item is visually highlighted.
+  - [x] List shows class, confidence, id.
+  - [x] Clicking a list item selects that object (sync with 2D/3D).
+  - [x] Selected list item is visually highlighted.
+- Tests: None added — UI component (no unit/render tests per policy). Integration test not added:
+  ObjectList calls the same `setSelectedObject(id)` as Viewer2D/3D, no new contract to lock.
+  **Suite: 70/70**.
+- Implementation notes:
+  - Props: `frame`, `selectedId?`, `onSelect?` — same controlled-component pattern as Viewer2D/Viewer3D.
+    Single wire point: `page.tsx` passes same `selectedObjectId`/`setSelectedObject` to all three.
+  - **No filtering** — displays all raw `frame.detections2D`. Step 7 owns confidence/class filters.
+    Primary mitigation for `Edge_#4.md` Case 1: list provides non-spatial, unambiguous selection
+    for any detection regardless of 2D bbox overlap.
+  - Selected row: `bg-gray-700` + `ring-1 ring-white/60` inset border.
+  - Each row: class color dot (mirrors `Viewer2D` class colors — inlined for now, Step 9 extracts) + class + confidence + id.
+  - Empty state: "No objects detected in this frame." (CLAUDE.md Error Defaults).
+  - Deselect: panel container `onClick → onSelect(null)`; row `onClick` uses `e.stopPropagation()`.
+  - Layout extensibility: `LAYOUT_CLASS` constant in `page.tsx` — one string change switches column arrangement.
+
+<!-- KO (move to a localized file)
+- 테스트: UI 컴포넌트이므로 테스트 없음. 통합 테스트 미추가 — Viewer2D/3D와 동일한 `setSelectedObject(id)` 호출이라 새로운 계약이 없음. **70/70**.
+- 구현 메모:
+  - Props: `frame`, `selectedId?`, `onSelect?` — Viewer2D/Viewer3D와 동일한 controlled 패턴. `page.tsx` 단일 wire.
+  - 필터링 없이 모든 raw detections 표시. Step 7이 필터 담당. `Edge_#4` Case 1의 1차 해소.
+  - 선택된 행: `bg-gray-700` + `ring-1 ring-white/60`.
+  - 레이아웃: `LAYOUT_CLASS` 상수 한 줄로 배치 변경 가능.
+-->
 
 ## Step 7 — Filters
 - [ ] Goal: Confidence threshold slider + class visibility toggles.
