@@ -12,16 +12,16 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # fetch → parseCoco → enrichFrame → Viewer2D + Viewer3D
+│   │   └── page.tsx        # fetch → parseCoco → enrichFrame → Viewer2D + Viewer3D + useViewerStore
 │   ├── components/
-│   │   ├── viewer-2d/      # ✅ Step 2 — 2D image + SVG bounding box overlay
-│   │   │   ├── Viewer2D.tsx    # props: frame, onSelect?
+│   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
+│   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?
 │   │   │   └── index.ts        # barrel
-│   │   ├── viewer-3d/      # ✅ Step 4 — R3F canvas, point cloud, 3D bboxes
-│   │   │   ├── Viewer3D.tsx    # props: frame, onSelect?; hosts Canvas
-│   │   │   ├── Scene.tsx       # lights + PointCloud + BBox3D + OrbitControls
+│   │   ├── viewer-3d/      # ✅ Step 4, 5 — R3F canvas, point cloud, 3D bboxes, selection sync
+│   │   │   ├── Viewer3D.tsx    # props: frame, selectedId?, onSelect?; hosts Canvas
+│   │   │   ├── Scene.tsx       # lights + PointCloud + BBox3D + OrbitControls; passes selection
 │   │   │   ├── PointCloud.tsx  # THREE.BufferGeometry via useMemo + dispose
-│   │   │   ├── BBox3D.tsx      # THREE.EdgesGeometry wireframe per detection
+│   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight
 │   │   │   └── index.ts        # barrel
 │   │   ├── object-list/    # detection list panel
 │   │   ├── filters/        # confidence / class filters
@@ -44,11 +44,14 @@ apps/ai_detection_viewer_client/
 │       ├── viewer-store.ts
 │       ├── viewer-store.test.ts
 │       └── index.ts        # barrel
+├── tests/
+│   └── integration/        # ✅ Step 5 — cross-module contract tests
+│       └── selection-sync.test.ts  # 5 tests
 ├── public/
 │   └── sample-data/        # sample COCO JSON + frame images
 │       ├── sample.json
 │       └── frame_001.jpg ~ frame_010.jpg
-└── vitest.config.ts
+└── vitest.config.ts        # include: src/**/*.test.ts + tests/**/*.test.ts
 ```
 
 Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
@@ -122,6 +125,7 @@ See `docs/edgecases/Edge_#3.md` for discovery history.
 | Setter | Input | Behavior |
 |---|---|---|
 | `setSelectedObject` | `null` | clear selection |
+| `setSelectedObject` | nonexistent string | stored as-is; no highlight rendered (component id match is always false); see Edge_#5 Case 5 |
 | `setSelectedFrame` | `string` only | no `null` deselect path until Step 8 |
 | `setConfidenceThreshold` | finite number | clamp to `[0, 1]` |
 | `setConfidenceThreshold` | `NaN` / `±Infinity` | `console.warn`, keep previous value |
@@ -313,6 +317,8 @@ Reasons:
 - The test follows the file when refactored.
 - It is obvious at a glance which modules are tested.
 - Import paths stay short (`./parser`).
+
+**Exception: cross-module integration tests** live in `tests/integration/` (not co-located with any single module). `vitest.config.ts` covers both paths: `src/**/*.test.ts` and `tests/**/*.test.ts`.
 
 <!-- KO (move to a localized file)
 ## 테스트 경계

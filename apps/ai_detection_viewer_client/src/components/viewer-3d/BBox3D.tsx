@@ -49,7 +49,8 @@ export function BBox3D({ detection, isSelected = false, onClick }: Props) {
 
   return (
     <group ref={groupRef} position={detection.bbox3D.center}>
-      {/* Invisible full-volume mesh for reliable raycasting — line segments alone are hard to click */}
+      {/* Invisible full-volume mesh for reliable raycasting — line segments alone are hard to click.
+          DoubleSide ensures clicks register from inside the bbox volume when the camera orbits in. */}
       <mesh
         onClick={(e) => {
           e.stopPropagation();
@@ -57,7 +58,7 @@ export function BBox3D({ detection, isSelected = false, onClick }: Props) {
         }}
       >
         <boxGeometry args={[sx, sy, sz]} />
-        <meshBasicMaterial transparent opacity={0} />
+        <meshBasicMaterial side={THREE.DoubleSide} transparent opacity={0} />
       </mesh>
       <lineSegments geometry={geometry}>
         <lineBasicMaterial color={wireColor} />
