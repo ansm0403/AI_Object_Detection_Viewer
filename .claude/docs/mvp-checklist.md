@@ -163,25 +163,35 @@ Work on ONE step at a time. Mark with [x] when complete.
 -->
 
 
-## Step 5 — 2D ↔ 3D Selection Sync
-- [ ] Goal: Clicking an object in 2D highlights it in 3D, and vice versa.
-- Scope: viewer-2d, viewer-3d, store.
+## Step 5 — 2D ↔ 3D Selection Sync ✅ Complete
+- [x] Goal: Clicking an object in 2D highlights it in 3D, and vice versa.
+- Scope: `components/viewer-2d/Viewer2D.tsx`, `components/viewer-3d/` (Viewer3D, Scene, BBox3D),
+  `app/page.tsx`. Also created: `tests/integration/selection-sync.test.ts`. Modified: `vitest.config.ts`.
 - Done when:
-  - Clicking a 2D bbox sets `selectedObjectId`.
-  - Clicking a 3D bbox sets `selectedObjectId`.
-  - The selected object highlights in BOTH views.
-  - Clicking empty space deselects.
+  - [x] Clicking a 2D bbox sets `selectedObjectId`.
+  - [x] Clicking a 3D bbox sets `selectedObjectId`.
+  - [x] The selected object highlights in BOTH views.
+  - [x] Clicking empty space deselects.
 - Tests (integration starts here):
-  - [ ] `tests/integration/selection-sync.test.ts` — wire the real store with the selector logic used by both viewers (not the canvases themselves).
+  - [x] `tests/integration/selection-sync.test.ts` — wire the real store with the selector logic used by both viewers (not the canvases themselves). **4 tests added; suite total 69/69**.
     - Selecting an id "from 2D" produces the same `selectedObjectId` queried "from 3D".
+    - Selecting an id "from 3D" produces the same `selectedObjectId` queried "from 2D".
     - Selecting the same id twice does not throw or duplicate state.
     - `setSelectedObject(null)` clears the selection (deselect path).
-  - Still no DOM/canvas rendering tests. Verify the data contract only.
+  - Still no DOM/canvas rendering tests. Verified data contract only.
+- Implementation notes:
+  - Selection is prop-based (controlled component): `selectedId` + `onSelect` props added to both viewers. `page.tsx` is the single wire point.
+  - **2D highlight**: white stroke (`#ffffff`) + strokeWidth 4 + native SVG `feGaussianBlur` glow filter (defined in `<defs>`; applied only to the one selected element — no performance impact).
+  - **3D highlight**: white wireframe color + `useFrame` scale pulse (±4% at ~0.64 Hz). `linewidth` is skipped — WebGL2 ignores it. An invisible `<mesh><boxGeometry>` provides a full-volume click target (line segments are unreliable for raycasting).
+  - **Empty-space deselect**: 2D via `<svg onClick={() => onSelect?.(null)}>` (rects use `e.stopPropagation()`); 3D via R3F's `<Canvas onPointerMissed>`.
+  - Glow impact assessment: 3D Bloom (via `@react-three/postprocessing`) was rejected — new package + scope expansion. SVG glow and `useFrame` pulse have no compatibility issues.
+  - `vitest.config.ts` updated: `include` now also covers `tests/**/*.test.ts`.
 
 <!-- KO (move to a localized file)
 - 테스트 (통합 테스트 시작):
-  - [ ] `tests/integration/selection-sync.test.ts` — 두 뷰어가 공유하는 셀렉터 로직을 실제 store와 함께 검증 (캔버스 자체는 테스트하지 않음).
+  - [x] `tests/integration/selection-sync.test.ts` — 두 뷰어가 공유하는 셀렉터 로직을 실제 store와 함께 검증 (캔버스 자체는 테스트하지 않음). **4개 테스트 추가; 전체 69/69**.
     - "2D에서" id를 선택하면 "3D에서" 조회한 `selectedObjectId`가 동일하다.
+    - "3D에서" id를 선택하면 "2D에서" 조회한 `selectedObjectId`가 동일하다.
     - 같은 id를 두 번 선택해도 예외나 중복 상태가 발생하지 않는다.
     - `setSelectedObject(null)`로 선택이 해제된다.
   - DOM/캔버스 렌더링은 여전히 테스트하지 않는다. 데이터 계약만 검증한다.

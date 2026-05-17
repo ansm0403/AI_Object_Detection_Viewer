@@ -4,6 +4,7 @@ import type { Frame } from '@/lib/types';
 
 type Viewer2DProps = {
   frame: Frame;
+  selectedId?: string | null;
   onSelect?: (id: string | null) => void;
 };
 
@@ -15,13 +16,29 @@ const CLASS_COLORS: Record<string, string> = {
 
 const DEFAULT_COLOR = '#60a5fa';
 
-export function Viewer2D({ frame, onSelect }: Viewer2DProps) {
+const SELECTED_COLOR = '#ffffff';
+const SELECTED_STROKE_WIDTH = 4;
+const DEFAULT_STROKE_WIDTH = 2;
+
+export function Viewer2D({ frame, selectedId, onSelect }: Viewer2DProps) {
   return (
     <svg
       viewBox={`0 0 ${frame.imageWidth} ${frame.imageHeight}`}
       preserveAspectRatio="xMidYMid meet"
       className="w-full h-auto block"
+      onClick={() => onSelect?.(null)}
     >
+      <defs>
+        {/* Native SVG glow for selected bbox — no external packages needed.
+            Rendered only for the one selected element; performance impact is negligible. */}
+        <filter id="bbox-selected-glow" x="-25%" y="-25%" width="150%" height="150%">
+          <feGaussianBlur stdDeviation="3" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
       <image
         href={frame.imageUrl}
         x={0}
@@ -30,7 +47,9 @@ export function Viewer2D({ frame, onSelect }: Viewer2DProps) {
         height={frame.imageHeight}
       />
       {frame.detections2D.map((d) => {
-        const color = CLASS_COLORS[d.class] ?? DEFAULT_COLOR;
+        const isSelected = d.id === selectedId;
+        const color = isSelected ? SELECTED_COLOR : (CLASS_COLORS[d.class] ?? DEFAULT_COLOR);
+        const strokeWidth = isSelected ? SELECTED_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;
         const labelText = `${d.class} ${d.confidence.toFixed(2)}`;
         // ~7 px/char approximates fontSize=12 sans-serif. Slight overestimate
         // biases toward end-anchoring when in doubt; misclassification is invisible.
@@ -57,7 +76,8 @@ export function Viewer2D({ frame, onSelect }: Viewer2DProps) {
               height={d.bbox.height}
               fill="transparent"
               stroke={color}
-              strokeWidth={2}
+              strokeWidth={strokeWidth}
+              filter={isSelected ? 'url(#bbox-selected-glow)' : undefined}
               className="cursor-pointer"
               onClick={(e) => {
                 e.stopPropagation();
