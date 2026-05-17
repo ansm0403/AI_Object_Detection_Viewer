@@ -161,19 +161,24 @@ For the full rationale, see `docs/edgecases/Edge_#4.md` Case 2.
 ```ts
 type Viewer3DProps = {
   frame: Frame;           // must be enriched (has detections3D + pointCloud)
+  selectedId?: string | null;              // highlights the matching bbox (Step 5)
   onSelect?: (id: string | null) => void;  // wire to store.setSelectedObject in Step 5
 };
 ```
 
 | Component | Responsibility |
 |---|---|
-| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. |
-| `Scene` | Camera target, lighting, scene root. Children: `PointCloud`, `BBox3D[]`, `OrbitControls`. |
+| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. |
+| `Scene` | Camera target, lighting, scene root. Passes `isSelected`/`onClick` to each `BBox3D`. |
 | `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. |
-| `BBox3D` | `THREE.EdgesGeometry` wireframe per detection. Color from class. Disposes on change/unmount. |
+| `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. |
 
 `Viewer3D` receives an enriched `Frame` (output of `enrichFrame`). It does NOT call `enrichFrame` —
 coordinate math is `lib/geometry/`'s responsibility.
+
+Selection highlight: selected BBox3D renders in white (`#ffffff`) and pulses via `useFrame`
+(scale ±4% at ~0.64 Hz). An invisible `<mesh><boxGeometry>` provides a reliable full-volume
+click target (line segments alone are difficult to raycast in WebGL2).
 
 For camera state across frame switches, see `docs/edgecases/Edge_#4.md` Case 6 (defer to Step 8).
 
@@ -241,13 +246,17 @@ with no arithmetic — the browser scales the vector to fit the container automa
 ```ts
 type Viewer2DProps = {
   frame: Frame;
+  selectedId?: string | null;              // highlights the matching bbox (Step 5)
   onSelect?: (id: string | null) => void;  // wire to store.setSelectedObject in Step 5
 };
 ```
 
-`onSelect` is a placeholder through Step 4. In Step 5 it receives `setSelectedObject`
-from the Zustand store. Passing `null` is the deselect path ("Clicking empty space
-deselects" — Step 5 Done when).
+`onSelect` receives `setSelectedObject` from the Zustand store (wired in `page.tsx`).
+`selectedId` comes from `store.selectedObjectId`. Passing `null` to `onSelect` is the
+deselect path ("Clicking empty space deselects" — Step 5 Done when).
+
+Selection highlight: selected bbox renders with white stroke (`#ffffff`), strokeWidth 4,
+and a native SVG `feGaussianBlur` glow filter (defined once in `<defs>`, applied per-element).
 
 For known edge cases in the 2D viewer (label overflow, click ambiguity in overlapping
 bboxes, etc.), see `docs/edgecases/Edge_#2.md`.

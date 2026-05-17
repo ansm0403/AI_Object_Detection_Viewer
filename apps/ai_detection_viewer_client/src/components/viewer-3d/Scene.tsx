@@ -7,6 +7,8 @@ import { BBox3D } from './BBox3D';
 
 type Props = {
   frame: Frame;
+  selectedId?: string | null;
+  onSelect?: (id: string | null) => void;
 };
 
 // Roughly the midpoint of MIN_Z..MAX_Z in bbox-estimator.ts. Both the camera
@@ -14,7 +16,7 @@ type Props = {
 // rather than past it.
 const SCENE_CENTER_Z = 4.5;
 
-export function Scene({ frame }: Props) {
+export function Scene({ frame, selectedId, onSelect }: Props) {
   return (
     <>
       <ambientLight intensity={0.6} />
@@ -23,7 +25,12 @@ export function Scene({ frame }: Props) {
       <PointCloud points={frame.pointCloud} />
 
       {frame.detections3D.map((d) => (
-        <BBox3D key={d.id} detection={d} />
+        <BBox3D
+          key={d.id}
+          detection={d}
+          isSelected={d.id === selectedId}
+          onClick={() => onSelect?.(d.id)}
+        />
       ))}
 
       <OrbitControls
