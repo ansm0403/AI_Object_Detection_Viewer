@@ -1,6 +1,7 @@
 'use client';
 
 import type { Frame } from '@/lib/types';
+import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
 
 type Viewer2DProps = {
   frame: Frame;
@@ -11,15 +12,6 @@ type Viewer2DProps = {
   visibleIds?: Set<string>;
 };
 
-const CLASS_COLORS: Record<string, string> = {
-  person: '#4ade80',
-  bicycle: '#facc15',
-  car: '#f87171',
-};
-
-const DEFAULT_COLOR = '#60a5fa';
-
-const SELECTED_COLOR = '#ffffff';
 const SELECTED_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_WIDTH = 2;
 
@@ -68,7 +60,7 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
       />
       {detections.map((d) => {
         const isSelected = d.id === selectedId;
-        const color = isSelected ? SELECTED_COLOR : (CLASS_COLORS[d.class] ?? DEFAULT_COLOR);
+        const color = isSelected ? SELECTED_COLOR : getClassColor(d.class);
         const strokeWidth = isSelected ? SELECTED_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;
         const labelText = `${d.class} ${d.confidence.toFixed(2)}`;
         // ~7 px/char approximates fontSize=12 sans-serif. Slight overestimate
