@@ -10,6 +10,10 @@
     1. Update all design documents to reflect CURRENT_STEP completion
     2. Generate a ready-to-paste handoff prompt for NEXT_STEP
 
+  Language Policy:
+    - Keep all project documents and document updates in English.
+    - Write the generated NEXT_STEP handoff prompt in Korean.
+
   BEFORE DOING ANYTHING:
   1. Read CLAUDE.md in the project root
   2. Extract:
@@ -78,7 +82,7 @@ Read `CLAUDE.md` now and extract project context and document paths.
 - [ ] No document contradicts another
 - [ ] Checklist completion status matches design doc progress
 
-### 1-3. Summary Format in korean (output in context)
+### 1-3. Summary Format (output in context)
 
 ```
 ## Document Update Summary — CURRENT_STEP
@@ -138,3 +142,4 @@ Output a copyable handoff prompt in this format:
 3. **Phase 1** — Update all documents
 4. **Phase 2** — Generate handoff prompt
 5. Output all results in context
+6. When updating the referenced document, keep the document content in English. However, write the update prompt in Korean.

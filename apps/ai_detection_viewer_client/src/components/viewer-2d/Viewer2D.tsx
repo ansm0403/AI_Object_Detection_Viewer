@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import type { Frame } from '@/lib/types';
 import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
 
@@ -16,6 +17,8 @@ const SELECTED_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_WIDTH = 2;
 
 export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DProps) {
+  const [imageError, setImageError] = useState(false);
+  useEffect(() => { setImageError(false); }, [frame.id]);
   // Paint smaller bboxes first so larger ones land on top. This mirrors the
   // 3D estimator's depth convention (larger bbox area → smaller z → closer to
   // camera) so a click in an overlap region selects the same object the 3D
@@ -34,11 +37,19 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
         a.bbox.width * a.bbox.height - b.bbox.width * b.bbox.height,
     );
   return (
+    // Deselect handler on the wrapper (not the <svg>) so clicks on the
+    // letterbox/pillarbox bands that appear when the image aspect ratio
+    // differs from 4:3 also clear the selection. <rect>s call
+    // stopPropagation so bbox clicks still resolve to select-only.
+    // Edge_#9.5 Case B.
+    <div
+      className="relative w-full aspect-[4/3] bg-zinc-950 rounded overflow-hidden"
+      onClick={() => onSelect?.(null)}
+    >
     <svg
       viewBox={`0 0 ${frame.imageWidth} ${frame.imageHeight}`}
       preserveAspectRatio="xMidYMid meet"
-      className="w-full h-auto block"
-      onClick={() => onSelect?.(null)}
+      className="w-full h-full block"
     >
       <defs>
         {/* Native SVG glow for selected bbox — no external packages needed.
@@ -51,13 +62,37 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
           </feMerge>
         </filter>
       </defs>
-      <image
-        href={frame.imageUrl}
-        x={0}
-        y={0}
-        width={frame.imageWidth}
-        height={frame.imageHeight}
-      />
+      {imageError ? (
+        <>
+          <rect
+            x={0}
+            y={0}
+            width={frame.imageWidth}
+            height={frame.imageHeight}
+            fill="#27272a"
+          />
+          <text
+            x={frame.imageWidth / 2}
+            y={frame.imageHeight / 2}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="#71717a"
+            fontSize={14}
+            fontFamily="sans-serif"
+          >
+            Image unavailable
+          </text>
+        </>
+      ) : (
+        <image
+          href={frame.imageUrl}
+          x={0}
+          y={0}
+          width={frame.imageWidth}
+          height={frame.imageHeight}
+          onError={() => setImageError(true)}
+        />
+      )}
       {detections.map((d) => {
         const isSelected = d.id === selectedId;
         const color = isSelected ? SELECTED_COLOR : getClassColor(d.class);
@@ -111,5 +146,6 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
         );
       })}
     </svg>
+    </div>
   );
 }

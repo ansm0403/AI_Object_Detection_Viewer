@@ -3,9 +3,11 @@
 
 # Architecture
 
-**Current Status: Steps 1–8 complete. Next: Step 9 — UI Cleanup.**
+**Current Status: Steps 1–9 complete. Step 9.5 Phase 1 ✅ complete;
+Phase 2 ✅ complete; Phase 3 planned. Next: Step 9.5 Phase 3 — Analytics Panel.**
 For step-by-step history and per-Step decisions, see `mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
+For Step 9.5 UI feature candidates and adopt/exclude rationale, see `docs/etc/NEW_UI.md`.
 
 ## Folder Structure
 
@@ -16,7 +18,7 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # fetch → parseCoco → enrich all → auto-select frame → Filters + Viewer2D + <Viewer3D key={id}/> + ObjectList + Timeline
+│   │   └── page.tsx        # fetch → parseCoco → enrich all → auto-select frame → Header + Filters + Viewer2D + <Viewer3D key={id}/> + ObjectList + AnalyticsPanel + Timeline (after Step 9.5)
 │   ├── components/
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
 │   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?
@@ -35,9 +37,22 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── ConfidenceSlider.tsx  # 0..1 range input
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
-│   │   └── timeline/       # ✅ Step 8 — horizontal thumbnail strip
-│   │       ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame
-│   │       └── index.ts         # barrel
+│   │   ├── timeline/       # ✅ Step 8 — horizontal thumbnail strip
+│   │   │   ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame
+│   │   │   └── index.ts         # barrel
+│   │   ├── header/         # ✅ Step 9.5 Phase 2 — app title + frame meta line
+│   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount
+│   │   │   └── index.ts
+│   │   ├── analytics/      # 🔜 Step 9.5 Phase 3 — right-rail analytics container
+│   │   │   ├── AnalyticsPanel.tsx  # composes Inspector + charts
+│   │   │   └── index.ts
+│   │   ├── charts/         # 🔜 Step 9.5 Phase 3 — pure SVG / CSS charts (no Recharts)
+│   │   │   ├── ConfidenceHistogram.tsx  # SVG bars + slider-threshold overlay
+│   │   │   ├── ClassCountBar.tsx        # CSS horizontal bars; clicking toggles class
+│   │   │   └── index.ts
+│   │   └── inspector/      # 🔜 Step 9.5 Phase 3 — selected object info card
+│   │       ├── SelectedObjectInfo.tsx   # class / confidence / bbox / frame; placeholder when none
+│   │       └── index.ts
 │   ├── lib/
 │   │   ├── coco/           # COCO JSON parsing → internal Frame[]
 │   │   │   ├── parser.ts
@@ -54,7 +69,13 @@ apps/ai_detection_viewer_client/
 │   │   ├── selectors/      # ✅ Step 7 — pure store derivations
 │   │   │   ├── visible-detections.ts        # filter by threshold + visibleClasses
 │   │   │   ├── visible-detections.test.ts   # 11 tests; locks permissive-empty semantic
+│   │   │   ├── confidence-buckets.ts        # 🔜 Step 9.5 Phase 3 — histogram buckets
+│   │   │   ├── confidence-buckets.test.ts   # 🔜 Step 9.5 Phase 3
+│   │   │   ├── class-counts.ts              # 🔜 Step 9.5 Phase 3 — class → count map
+│   │   │   ├── class-counts.test.ts         # 🔜 Step 9.5 Phase 3
 │   │   │   └── index.ts                     # barrel
+│   │   ├── ui/             # ✅ Step 9 — shared UI-layer constants (no React/Zustand/Three.js)
+│   │   │   └── class-colors.ts              # CLASS_COLORS map, getClassColor(), DEFAULT_COLOR, SELECTED_COLOR
 │   │   └── types/          # Frame, Detection2D, Detection3D, Point3D
 │   └── store/          # ✅ Step 3 — Zustand store (UI state only)
 │       ├── viewer-store.ts
@@ -144,6 +165,7 @@ type ViewerStore = {
   setSelectedObject: (id: string | null) => void;
   setConfidenceThreshold: (v: number) => void;
   toggleClass: (className: string) => void;
+  resetFilters: () => void;            // Step 9.5 Phase 2 — restore filters to defaults
 };
 ```
 
@@ -159,6 +181,7 @@ See `docs/edgecases/Edge_#3.md` for discovery history.
 | `setConfidenceThreshold` | finite number | clamp to `[0, 1]` |
 | `setConfidenceThreshold` | `NaN` / `±Infinity` | `console.warn`, keep previous value |
 | `toggleClass` | any string | toggle membership; emit a new `Set` instance |
+| `resetFilters` | — | atomic: sets `confidenceThreshold = 0` and `visibleClasses = new Set()`; selection slice untouched |
 
 `visibleClasses` semantic (locked by `lib/selectors/visible-detections.test.ts`):
 **empty Set means "show all classes"** (permissive empty). The initial state is
@@ -207,11 +230,11 @@ type Viewer3DProps = {
 
 | Component | Responsibility |
 |---|---|
-| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. |
-| `Scene` | Camera target, lighting, scene root. Passes `isSelected`/`onClick` to each `BBox3D`. |
+| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. |
+| `Scene` | Camera target, lighting (ambient + hemisphere + directional), `<Grid>` floor, `<fog>` for depth, and scene root. The `<Grid>` mesh's `raycast` is no-oped at mount so it does not hijack `<Canvas onPointerMissed>` — without that, empty-space deselect from Step 5 silently breaks. See Edge_#9.5 Case A. Passes `isSelected`/`onClick` to each `BBox3D`. OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6` are tuned here. |
 | `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. |
 | `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. |
-| `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. |
+| `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. **Phase 2:** confidence rendered as a sky-tinted gauge bar; on `selectedId` change the selected row is scrolled into view by manually adjusting the `<ul>` `scrollTop` (NOT `Element.scrollIntoView` — that propagates to outer scroll containers and can move the page; see Edge_#9.5 Case C). |
 
 `Viewer3D` receives an enriched `Frame` (output of `enrichFrame`). It does NOT call `enrichFrame` —
 coordinate math is `lib/geometry/`'s responsibility.
@@ -222,13 +245,62 @@ click target (line segments alone are difficult to raycast in WebGL2).
 
 For camera reset across frame switches, see `docs/edgecases/Edge_#4.md` Case 6 — resolved in Step 8 via `<Viewer3D key={frame.id} />` remount; `page.tsx` is the single wire point.
 
+## Step 9.5 Component Contracts (planned)
+
+These components are scheduled for Step 9.5 (UI Density & Polish). They follow
+the same controlled-component pattern as Step 5+ (props in, callbacks out;
+`page.tsx` is the single wire point). Adopt/exclude rationale lives in
+`docs/etc/NEW_UI.md`.
+
+| Component | Phase | Responsibility |
+|---|---|---|
+| `Header` | 2 ✅ | App title + frame meta (`Frame N/M · X detections`). Pure presentation; reads no store directly. |
+| `HintBox` (inside `Viewer3D`) | 1 ✅ | Small overlay in the 3D viewer corner showing mouse controls. Static text; no state. Mounted as a sibling of `<Canvas>` inside `Viewer3D`'s `relative` wrapper; `pointer-events-none` so OrbitControls still receives drag events over the hint area. |
+| `AnalyticsPanel` | 3 | Right-rail container that composes `SelectedObjectInfo`, `ConfidenceHistogram`, `ClassCountBar`. Holds no state of its own. |
+| `SelectedObjectInfo` | 3 | Renders class / confidence / 2D bbox / 3D bbox / frame id of the selected detection. Shows a placeholder card when `selectedObjectId` is null. |
+| `ConfidenceHistogram` | 3 | Pure SVG bars over fixed buckets of `[0..1]`. Overlays the current `confidenceThreshold` as a vertical guide line. Reads its data from a `lib/selectors/` aggregator. |
+| `ClassCountBar` | 3 | CSS-only horizontal bars (one row per class). Clicking a row dispatches `toggleClass` so it doubles as a class filter. Reads its data from a `lib/selectors/` aggregator. |
+
+### Charting Policy (Step 9.5)
+
+- **Recharts is NOT adopted in Step 9.5.** With ≤10 detections per frame and
+  ≤5 chart elements at any time, hand-rolled SVG/CSS is simpler and avoids a
+  new dependency. PROJECT_DESIGN.md lists Recharts but as a possible stack
+  item, not a binding choice. Re-evaluate only when KITTI or multi-frame
+  aggregation arrives.
+- `ConfidenceHistogram` uses SVG so the slider-threshold overlay shares the
+  same coordinate system as the bars.
+- `ClassCountBar` uses CSS `flex` + width-% bars so it remains a single
+  scannable row per class. Donut/pie was rejected: 3-class dataset makes the
+  arcs hard to compare, and arc math adds SVG complexity for no readability
+  win.
+
+### Layout (after Step 9.5)
+
+Proposal B is the adopted layout. `page.tsx` switches from the Step 6
+three-column grid to a 12-column grid with two content rows:
+
+```
+[ Header (col-span-12) ]
+[ Filters (col-span-12) ]
+[ Viewer2D (md:col-span-5) | Viewer3D (md:col-span-7) ]
+[ ObjectList (md:col-span-5) | AnalyticsPanel (md:col-span-7) ]
+[ Timeline (col-span-12) ]
+```
+
+The 5/7 split intentionally promotes `Viewer3D` as the main view
+(Immutable Rule #5). On mobile (`< md`) all cells stack to full width.
+Both viewers share `aspect-[4/3]`, which is what stabilizes the Timeline
+position across frames — see "2D Viewer SVG Contract" below.
+
 ## Separation of Concerns
 
 | Layer            | Responsibility                         | Must NOT do                       |
 |------------------|----------------------------------------|-----------------------------------|
 | `lib/coco/`      | Parse COCO JSON into `Frame[]`         | Touch React / Zustand             |
 | `lib/geometry/`  | 2D→3D math, point cloud generation     | Touch React / Zustand             |
-| `lib/selectors/` | Pure store derivations (filters etc.)  | Touch React / Zustand / Three.js  |
+| `lib/selectors/` | Pure store derivations: filters (Step 7) and aggregations for charts (Step 9.5) | Touch React / Zustand / Three.js  |
+| `lib/ui/`        | Shared UI-layer constants (colors etc.) | Touch React / Zustand / Three.js |
 | `store/`         | UI state (selection, filters)          | Hold frame data, do parsing       |
 | `components/`    | Rendering, event handling              | Do parsing or coordinate math     |
 
@@ -282,6 +354,24 @@ so that the same input JSON always produces the same ids — critical for the
 `Viewer2D` renders via `<svg viewBox="0 0 {frame.imageWidth} {frame.imageHeight}">`.
 COCO bbox coordinates (`x, y, width, height`) map directly to SVG `<rect>` attributes
 with no arithmetic — the browser scales the vector to fit the container automatically.
+
+**Fixed aspect wrapper (Step 9.5 Phase 1 ✅).** `Viewer2D` is wrapped in an
+`aspect-[4/3]` container (mirroring `Viewer3D`), and the SVG uses
+`w-full h-full` with `preserveAspectRatio="xMidYMid meet"` so the image is
+letter- or pillar-boxed inside a stable cell. The grid row height is
+deterministic and the Timeline no longer jitters when frames are switched.
+
+The deselect handler (`onClick={() => onSelect?.(null)}`) lives on the
+wrapper `<div>` — **not** on the `<svg>`. This is so that clicks on the
+letterbox/pillarbox bands (which appear when the image's aspect ratio
+differs from 4:3) also clear the selection; the `<svg>` itself only covers
+the inner content area and would miss those bands. `<rect>` (bbox) clicks
+still call `stopPropagation`, so bbox clicks resolve to select-only and
+never inadvertently bubble to deselect. See `docs/edgecases/Edge_#9.5.md`
+Case B for the routing-bug discovery.
+
+Before Phase 1 the SVG used `w-full h-auto`, so the row height tracked each
+image's aspect ratio and produced visible Timeline jitter on frame switches.
 
 `Viewer2D` props:
 ```ts

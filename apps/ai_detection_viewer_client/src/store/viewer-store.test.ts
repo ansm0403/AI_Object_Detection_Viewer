@@ -147,6 +147,33 @@ describe('slice independence', () => {
   });
 });
 
+describe('resetFilters', () => {
+  it('restores confidenceThreshold to 0 and visibleClasses to empty', () => {
+    useViewerStore.getState().setConfidenceThreshold(0.7);
+    useViewerStore.getState().toggleClass('person');
+    useViewerStore.getState().toggleClass('car');
+
+    useViewerStore.getState().resetFilters();
+
+    const state = useViewerStore.getState();
+    expect(state.confidenceThreshold).toBe(0);
+    expect(state.visibleClasses.size).toBe(0);
+    expect(state.visibleClasses).toBeInstanceOf(Set);
+  });
+
+  it('does not affect selectedObjectId or selectedFrameId', () => {
+    useViewerStore.getState().setSelectedObject('obj-1');
+    useViewerStore.getState().setSelectedFrame('frame-1');
+    useViewerStore.getState().setConfidenceThreshold(0.5);
+
+    useViewerStore.getState().resetFilters();
+
+    const state = useViewerStore.getState();
+    expect(state.selectedObjectId).toBe('obj-1');
+    expect(state.selectedFrameId).toBe('frame-1');
+  });
+});
+
 // Edge_#3.md Case 2 — the factory must hand out independent Set instances so
 // callers cannot share a mutable visibleClasses Set by accident.
 describe('createInitialState', () => {

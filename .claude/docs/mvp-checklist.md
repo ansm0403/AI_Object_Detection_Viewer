@@ -387,14 +387,175 @@ Work on ONE step at a time. Mark with [x] when complete.
 -->
 
 
-## Step 9 — UI Cleanup
-- [ ] Goal: Polish layout, spacing, colors, responsive behavior.
-- Scope: all components, Tailwind classes.
+## Step 9 — UI Cleanup ✅ Complete
+- [x] Goal: Polish layout, spacing, colors, responsive behavior.
+- Scope: `lib/ui/class-colors.ts` (new), `app/page.tsx`, `app/global.css`,
+  `app/layout.tsx`, `components/viewer-2d/Viewer2D.tsx`,
+  `components/viewer-3d/{BBox3D, Scene}.tsx`,
+  `components/object-list/ObjectList.tsx`,
+  `components/filters/{Filters, ClassToggles}.tsx`,
+  `components/timeline/Timeline.tsx`.
 - Done when:
-  - Layout looks clean on desktop.
-  - No visible debug logs or temporary styles.
+  - [x] Layout looks clean on desktop.
+  - [x] No visible debug logs or temporary styles.
+- Decisions:
+  - **CLASS_COLORS → `lib/ui/class-colors.ts`**: 4-file inline duplication removed.
+    `getClassColor()`, `DEFAULT_COLOR`, `SELECTED_COLOR` exported from one place.
+  - **Deselect consistency**: ObjectList header `stopPropagation` (Edge_#6 Case 3);
+    Filters bar background deselects (Edge_#7 Case 2, decided: consistent with other panels).
+  - **Fetch cleanup**: `AbortController` added to `page.tsx` fetch; `AbortError` silenced (Edge_#8 Case 2).
+  - **Image fallback (shared visual language)**: Viewer2D — `imageError` state + SVG placeholder;
+    Timeline — HTML `onError` + `span` placeholder. Each inline; same gray/text aesthetic.
+    Resolves Edge_#2 Case 5 and Edge_#8 Case 3 together.
+  - **Loading/Error UI**: `animate-pulse` skeleton replaces "Loading…"; centered error + Retry button.
+  - **Mobile**: ObjectList `max-h-[60vh] md:max-h-none` (Edge_#6 Case 2).
+  - **Global CSS**: Body dark background; NX scaffold dead CSS removed. Title → "AI Detection Viewer".
+- Tests: None added (UI polish, no pure functions extracted). **Suite: 85/85**.
+- GPU audit (Step 8 deferred): `geometries` oscillated 9 ↔ 13 across 10-frame
+  round-trip — matches per-frame detection count variance. No monotonic growth.
+  Dispose pattern (`useEffect` cleanup in BBox3D/PointCloud + `key` remount) confirmed effective.
+- Edge cases: see `docs/edgecases/Edge_#9.md`.
 
-## Step 10 — README & Deployment
+<!-- KO (move to a localized file)
+- 결정: CLASS_COLORS → lib/ui/ 통합; deselect 일관화; AbortController; 이미지 fallback 동일 시각 언어;
+  Loading skeleton/Error UI; ObjectList 모바일 높이 제한; body 다크 배경; NX CSS 제거.
+- GPU audit: geometries 9↔13 진동, 누수 없음 확인.
+- 테스트: 신규 없음. 85/85.
+-->
+
+
+## Step 9.5 — UI Density & Polish
+
+UI density and visual completeness pass before Step 10 ships. Rationale, full
+candidate list, and adopt/exclude reasoning live in `docs/etc/NEW_UI.md`.
+Architecture impact is recorded in `.claude/docs/architecture.md`
+("Step 9.5 Component Contracts (planned)" + "Layout (after Step 9.5)").
+
+**Step 9.5 stop-points are intentionally aligned with phase boundaries.**
+Each phase is self-contained: after Phase 1 the project can ship to Step 10
+even if Phase 2/3 are skipped.
+
+### Phase 1 — Stabilization + Tone ✅ Complete
+
+- [x] Goal: Remove the blue cast, stabilize Timeline position across frames,
+  and give the 3D viewer real spatial cues.
+- Scope: Viewer2D `aspect-[4/3]` wrapper; gray → zinc/neutral 3-layer dark +
+  sky accent; class colors retuned one step; 3D `<Grid>` + `<fog>` +
+  hemisphere light; OrbitControls sensitivity props; `HintBox` overlay.
+- Done when:
+  - [x] Switching frames no longer moves the Timeline vertically.
+  - [x] No `bg-gray-*` blue-cast classes remain; panels share zinc/neutral; `sky` is the single accent.
+  - [x] 3D viewer shows a grid floor; objects feel grounded.
+  - [x] Mouse interaction with the 3D scene feels noticeably less twitchy.
+- Decisions:
+  - 3-layer dark: page `zinc-950` / panels `zinc-900` / 3D canvas `neutral-950`. `SELECTED_COLOR = #ffffff` kept (white = "selected object", sky = "active container").
+  - Class colors `person/bicycle/car` `-400` → `-300`; `DEFAULT_COLOR` blue-400 → sky-400.
+  - Viewer2D deselect handler moved from `<svg>` to wrapper `<div>` so letterbox bands also deselect (Edge_#9.5 Case B).
+  - drei `<Grid>` raycast no-oped (`mesh.raycast = () => {}` via ref) so it doesn't hijack `<Canvas onPointerMissed>` (Edge_#9.5 Case A).
+  - OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6`.
+  - `<fog args={['#0a0a0a', 10, 28]}>` matches canvas background; `<hemisphereLight>` added on top of existing ambient/directional.
+  - `HintBox` mounts as `<Canvas>` sibling with `pointer-events-none`.
+- Tests: None added. **Suite: 85/85**.
+- Edge cases (see `docs/edgecases/Edge_#9.5.md` — 2 cases, both fixed):
+  - Case A: drei `<Grid>` raycast steals 3D empty-space deselect.
+  - Case B: Viewer2D letterbox bands outside `<svg>` couldn't trigger SVG `onClick`.
+
+### Phase 2 — Identity + Interaction ✅ Complete
+
+- [x] Goal: Give the app a visible identity and tighten interaction feedback
+  on the non-spatial selection path.
+- Scope: new `components/header/Header.tsx`; ObjectList confidence gauge bar
+  + selected-row auto-scroll; Filters `Reset` button + `N/total visible`
+  counter; Timeline per-thumbnail detection-count badge; new
+  `resetFilters` store action.
+- Done when:
+  - [x] Brand and per-frame meta are always visible above the fold.
+  - [x] Confidence values in the object list are visually scannable, not only textual.
+  - [x] A single click restores filters to "show everything".
+  - [x] Each timeline thumbnail shows how many detections live in that frame.
+- Decisions:
+  - Reset surface lives in the store (`resetFilters`) — atomic two-slice
+    init inside the filters domain. Different from Edge_#5 Case 6's
+    `handleSelectFrame` (cross-domain composite stays in `page.tsx`).
+  - Detection count split: Header shows raw `frame.detections2D.length`;
+    Filters counter shows filtered `visibleIds.size / total`. Avoids two
+    competing widgets.
+  - Timeline badge renders for count = 0 too — consistency over noise.
+- Tests: `resetFilters` 2 unit tests (restore + slice independence). **Suite: 87/87**.
+- Edge cases (see `docs/edgecases/Edge_#9.5.md` Phase 2 section — 1 case):
+  - Case C: ObjectList `scrollIntoView({ block: 'nearest' })` chained up to
+    outer scroll containers and could move the page on short viewports.
+    Replaced with manual `ul.scrollTop` adjustment scoped to the list.
+
+### Phase 3 — Analytics Panel
+
+- Goal: Replace the right-rail single-column with a Spatial / Analytics
+  split that visualizes selection state, confidence distribution, and class
+  composition.
+- Scope:
+  - Layout switch to Proposal B (architecture.md "Layout (after Step 9.5)"):
+    12-column grid, 5/7 split for row 1 (`Viewer2D` / `Viewer3D`) and row 2
+    (`ObjectList` / `AnalyticsPanel`). Timeline stays full-width below.
+  - `components/inspector/SelectedObjectInfo.tsx`: class, confidence, 2D
+    bbox, 3D bbox, frame id. Placeholder when `selectedObjectId === null`
+    so the panel layout stays stable.
+  - `components/charts/ConfidenceHistogram.tsx`: pure SVG, fixed buckets
+    over `[0..1]`, overlay line at the current `confidenceThreshold`.
+  - `components/charts/ClassCountBar.tsx`: CSS-only horizontal bars; row
+    click dispatches `toggleClass` (chart doubles as a filter).
+  - `components/analytics/AnalyticsPanel.tsx`: container composing the
+    three above; holds no state.
+  - `lib/selectors/confidence-buckets.ts`: pure function turning a frame's
+    detections into a fixed-length bucket array.
+  - `lib/selectors/class-counts.ts`: pure function returning a `Map<class,
+    count>` for a frame.
+- Done when:
+  - `Viewer3D` occupies more than half of the main row width.
+  - Selecting any detection (from 2D / 3D / list) updates the info card.
+  - Moving the confidence slider visibly shifts the threshold line across
+    the histogram.
+  - Clicking a class bar toggles that class in the existing class filter.
+- Tests (required):
+  - `lib/selectors/confidence-buckets.test.ts` — pin bucket count, empty
+    input → all-zero buckets, boundary classification (e.g. value exactly
+    on bucket edge), and that aggregation ignores `visibleIds` if not
+    passed (semantic decided at implementation time and locked here).
+  - `lib/selectors/class-counts.test.ts` — empty input → empty map, count
+    correctness, class identity preservation.
+
+### Excluded from Step 9.5 (rationale: see `docs/etc/NEW_UI.md`)
+
+- Light-theme switch — would force re-design of 2D class colors,
+  `SELECTED_COLOR`, and the SVG glow filter at the same time as the rest
+  of Step 9.5; scope blows up.
+- Recharts adoption — overkill for ≤10 detections per frame and ≤5 chart
+  elements; hand-rolled SVG/CSS keeps the dependency surface small.
+- Donut chart for class composition — arc math adds SVG complexity for no
+  readability win at 3 classes; horizontal bar is more scannable and
+  scales naturally to KITTI's 8 classes.
+- Per-frame detection-count line chart — current sample frames are
+  independent COCO val2017 images, not a video sequence; a time axis would
+  invite misreading. The Timeline detection-count badge (Phase 2) covers
+  the same information without implying continuity.
+- Inter-frame object tween — COCO has no `Detection2D.id` continuity
+  across frames; tween requires real tracking.
+- Heuristic / fake tracking — would conflict with Step 4/5/8 contracts
+  (camera reset on key remount, selection clear on frame switch, GPU
+  dispose) and adds risk for a portfolio gain that is undermined by the
+  word "fake".
+- 3D fade transition on frame switch — would force replacing the
+  `<Viewer3D key={frame.id}>` remount strategy adopted in Step 8
+  (Edge_#4 Case 6); cost outweighs the visual gain.
+
+<!-- KO (move to a localized file)
+- Phase 1 — 안정화 + 톤: Viewer2D fixed-aspect, 다크 톤 zinc/neutral 베이스로 교체 + sky 액센트, 3D Scene grid/fog/hemisphere light, 카메라 민감도 완화, 3D hint box.
+- Phase 2 — 정체성 + 인터랙션: Header, ObjectList 신뢰도 게이지 + hover/selected ring, Filters reset 버튼 + 가시 카운트, Timeline 객체 수 뱃지.
+- Phase 3 — Analytics: 12-col 5/7 레이아웃, SelectedObjectInfo, ConfidenceHistogram(SVG, 슬라이더 overlay), ClassCountBar(CSS, 클릭 시 toggleClass), lib/selectors에 confidence-buckets / class-counts 추가 + unit test.
+- 제외(요약): 라이트 테마 / Recharts / 도넛 / 프레임 라인 차트 / 객체 tween / 가짜 tracking / 3D fade.
+-->
+
+
+
 - [ ] Goal: Write README, deploy to Vercel.
 - Done when:
   - README explains project goal, tech stack, how to run, and known limitations

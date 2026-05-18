@@ -20,7 +20,7 @@ export function ClassToggles({ classes, visibleClasses, onToggle }: Props) {
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <span className="font-semibold uppercase tracking-wide text-xs text-gray-400">
+      <span className="font-semibold uppercase tracking-wide text-xs text-zinc-400">
         Classes
       </span>
       {classes.map((name) => {
@@ -36,13 +36,13 @@ export function ClassToggles({ classes, visibleClasses, onToggle }: Props) {
               'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs select-none',
               'border transition-colors',
               active
-                ? 'border-white/40 bg-white/5 text-gray-100'
-                : 'border-gray-700 bg-gray-900 text-gray-500 hover:text-gray-300',
+                ? 'border-sky-400/50 bg-sky-400/10 text-zinc-100'
+                : 'border-zinc-800 bg-zinc-900 text-zinc-500 hover:text-zinc-300',
             ].join(' ')}
           >
             <span
               className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: active ? color : '#374151' }}
+              style={{ backgroundColor: active ? color : '#3f3f46' }}
             />
             {name}
           </button>

@@ -8,6 +8,7 @@ import { Viewer2D } from '@/components/viewer-2d';
 import { Viewer3D } from '@/components/viewer-3d';
 import { ObjectList } from '@/components/object-list';
 import { Filters } from '@/components/filters';
+import { Header } from '@/components/header';
 import { Timeline } from '@/components/timeline';
 import { useViewerStore } from '@/store';
 import type { Frame } from '@/lib/types';
@@ -25,12 +26,18 @@ export default function Index() {
   const setConfidenceThreshold = useViewerStore((s) => s.setConfidenceThreshold);
   const visibleClasses = useViewerStore((s) => s.visibleClasses);
   const toggleClass = useViewerStore((s) => s.toggleClass);
+  const resetFilters = useViewerStore((s) => s.resetFilters);
 
   useEffect(() => {
-    fetch('/sample-data/sample.json')
+    const ac = new AbortController();
+    fetch('/sample-data/sample.json', { signal: ac.signal })
       .then((r) => r.json())
       .then((raw) => setFrames(parseCoco(raw)))
-      .catch((err) => setError(String(err)));
+      .catch((err) => {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+        setError(String(err));
+      });
+    return () => ac.abort();
   }, []);
 
   // Eager enrich: 10 frames × ~5 detections × ~80 points is trivial memory.
@@ -78,6 +85,11 @@ export default function Index() {
     return out;
   }, [enrichedFrames]);
 
+  const frameIndex = useMemo(() => {
+    if (!enrichedFrames || !currentFrame) return 0;
+    return enrichedFrames.findIndex((f) => f.id === currentFrame.id) + 1;
+  }, [enrichedFrames, currentFrame]);
+
   const visibleIds = useMemo(
     () =>
       currentFrame
@@ -99,24 +111,64 @@ export default function Index() {
     [selectedFrameId, setSelectedFrame, setSelectedObject],
   );
 
-  if (error) return <main className="p-4 text-red-500">Failed to load: {error}</main>;
-  if (!enrichedFrames) return <main className="p-4 text-gray-400">Loading…</main>;
+  if (error) {
+    return (
+      <main className="min-h-screen flex items-center justify-center p-8">
+        <div className="text-center space-y-4">
+          <p className="text-rose-400 text-sm">Failed to load sample data</p>
+          <p className="text-zinc-600 text-xs font-mono">{error}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-3 py-1.5 rounded text-xs bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!enrichedFrames) {
+    return (
+      <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
+        <div className="h-12 rounded-lg bg-zinc-900 animate-pulse" />
+        <div className="h-14 rounded-lg bg-zinc-900 animate-pulse" />
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_280px] gap-4">
+          <div className="aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
+          <div className="aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
+          <div className="rounded-lg bg-zinc-900 animate-pulse h-64 md:h-auto" />
+        </div>
+        <div className="h-28 rounded-lg bg-zinc-900 animate-pulse" />
+      </main>
+    );
+  }
+
   if (enrichedFrames.length === 0)
-    return <main className="p-4 text-gray-400">No frames.</main>;
+    return <main className="p-4 text-zinc-400">No frames.</main>;
   // selectedFrameId is null for one render between enrichedFrames arriving
   // and the auto-select effect firing; render a placeholder rather than crash.
-  if (!currentFrame) return <main className="p-4 text-gray-400">Selecting frame…</main>;
+  if (!currentFrame) return <main className="p-4 text-zinc-400">Selecting frame…</main>;
 
   // Layout: change grid-cols classes here to switch column arrangement.
   // e.g. "md:grid-cols-2" (2D+3D only), "md:grid-cols-[280px_1fr_1fr]" (list left)
   return (
     <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
+      <Header
+        frameIndex={frameIndex}
+        frameCount={enrichedFrames.length}
+        detectionCount={currentFrame.detections2D.length}
+      />
       <Filters
         classes={allClasses}
         confidenceThreshold={confidenceThreshold}
         visibleClasses={visibleClasses}
+        visibleCount={visibleIds.size}
+        totalCount={currentFrame.detections2D.length}
         onChangeThreshold={setConfidenceThreshold}
         onToggleClass={toggleClass}
+        onReset={resetFilters}
+        onDeselect={() => setSelectedObject(null)}
       />
       <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_280px] gap-4">
         <Viewer2D

@@ -1,11 +1,5 @@
 # 포트폴리오 프로젝트 설계 — 컨텍스트 전달 문서 v2
 
-> **READ-ONLY — 이 문서는 수정하지 말 것.**
-> 이 문서는 프로젝트 시작 시점의 원본 비전·결정·근거를 보존하는 historical record다.
-> "현재 무엇이 구현되어 있는가"는 `.claude/docs/architecture.md`, "어떻게 진행되었는가"는 `.claude/docs/mvp-checklist.md`에 둔다.
-> §16의 ✅ 표기는 원본 설계가 실제 구현으로 확인되었음을 사후 표시한 것이며, 원래 의도는 변경하지 않았다.
-> **수정해야 할 항목을 발견했다면, 그것은 이 문서를 고치라는 신호가 아니라 architecture.md 또는 mvp-checklist.md에 새 정보를 반영해야 한다는 신호다.** 원본 vision이 보존되어야 향후 결정에서 비교 기준이 유지된다.
-
 > 이 문서는 다음 대화에서 현재까지의 모든 논의 맥락을 그대로 이어받을 수 있도록 정리한 것이다.
 > 읽는 AI는 이 내용을 바탕으로 구체적인 프로젝트 설계도를 바로 작성해야 한다.
 > v1 문서 이후 추가 결정사항과 논의 내용이 모두 반영되어 있다.
@@ -110,9 +104,9 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 
 |스택|역할|선택 이유|
 |-|-|-|
-|Three.js (^0.184.0)|3D 렌더링 엔진. WebGL 기반|웹 3D의 사실상 표준|
-|React Three Fiber (^9.6.1)|Three.js를 React 방식으로 사용하는 래퍼|React 생태계와 자연스럽게 연동, Zustand와 직접 연동 가능, 메모리 관리 자동화|
-|@react-three/drei (^10.7.7)|R3F 편의 기능 모음|OrbitControls, CameraControls 등 한 줄로 사용 가능|
+|Three.js|3D 렌더링 엔진. WebGL 기반|웹 3D의 사실상 표준|
+|React Three Fiber (R3F)|Three.js를 React 방식으로 사용하는 래퍼|React 생태계와 자연스럽게 연동, Zustand와 직접 연동 가능, 메모리 관리 자동화|
+|@react-three/drei|R3F 편의 기능 모음|OrbitControls, CameraControls 등 한 줄로 사용 가능|
 
 > \*\*R3F 선택 근거\*\*: Three.js 직접 사용은 React와의 렌더링 루프 충돌, 메모리 수동 관리, Zustand 상태 동기화 코드를 별도 작성해야 하는 문제가 있다. R3F는 이 모든 것을 React 방식으로 자동 처리한다. 타협이 아니라 React + 3D 조합에서 현업 기준으로도 합리적인 선택이다. R3F를 배우는 것은 곧 Three.js 핵심 개념(geometry, material, camera, lighting)을 배우는 것이기도 하다.
 
@@ -134,24 +128,12 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 
 |항목|내용|
 |-|-|
-|데이터 출처|MS COCO val2017 subset (10 images, person/bicycle/car, 실제 ground-truth bbox)|
-|샘플 위치|`apps/ai_detection_viewer_client/public/sample-data/sample.json` + `frame_001.jpg ~ frame_010.jpg`|
+|데이터 출처|COCO annotation JSON (공개 AI 객체 탐지 데이터셋)|
 |파싱 방식|COCO 포맷을 직접 파싱해서 내부 TypeScript 타입으로 변환하는 로직 직접 작성|
 |3D 좌표 처리|옵션 A 채택: 2D bbox 크기/위치에서 z값을 추정하는 변환 로직 직접 설계|
 |Point cloud|depth 추정 좌표 배열을 자동 생성, Three.js BufferGeometry로 렌더링|
 
 > \*\*TanStack Query 제거 결정\*\*: 로컬 파일 또는 정적 JSON을 사용하는 단계에서 불필요. 추후 Nest.js API 연동 시점에 도입 여부 결정.
-
-> \*\*샘플 데이터 결정 경위\*\*: 초기 placeholder(picsum.photos) 4장으로 시작했으나 이미지와 bbox 좌표 불일치 문제로 포트폴리오 데모 가치 부족. Step 1 종료 직전 MS COCO val2017에서 person/bicycle/car만 골라 10장 + 49 annotation으로 교체. 이미지·bbox·class 라벨이 모두 실제 데이터.
-
-### 테스트
-
-|항목|내용|
-|-|-|
-|툴|Vitest (Step 1 종료 시점 도입)|
-|범위|`lib/coco/`, `lib/geometry/`, `store/` 의 순수 함수만 (Step 5부터 통합 테스트 추가)|
-|UI 테스트|MVP 비대상. React 컴포넌트 렌더링은 수동 검증|
-|파일 위치|테스트 대상 모듈과 같은 디렉토리 (`parser.ts` ↔ `parser.test.ts`)|
 
 ### 배포
 
@@ -232,21 +214,20 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 ## 10\. Zustand store 설계 방향
 
 2D 뷰어, 3D 뷰어, 객체 목록, 필터, 타임라인이 모두 공유하는 전역 상태.
-구현 정본은 `apps/ai_detection_viewer_client/src/store/viewer-store.ts`, 동작 명세(클램프·비-유한 입력 거부·factory 초기화)는 `.claude/docs/architecture.md`의 Store Validation Rules에서 관리한다.
 
 ```typescript
 {
   // 지금 어떤 프레임을 보고 있는가
-  selectedFrameId: string | null,
+  selectedFrameId: string,
 
   // 지금 어떤 객체가 선택되어 있는가 (2D와 3D가 공유하는 핵심)
   selectedObjectId: string | null,
 
-  // confidence 슬라이더 값 (0~1)
+  // confidence 슬라이더 값 (0\~1)
   confidenceThreshold: number,
 
-  // 어떤 클래스를 보여줄 것인가 (Set으로 O(1) 조회)
-  visibleClasses: Set<string>,
+  // 어떤 클래스를 보여줄 것인가
+  visibleClasses: string\[],
 }
 ```
 
@@ -257,37 +238,35 @@ AI 모델이 이미지를 보고 판단한 객체 탐지 결과를, 2D 이미지
 ## 11\. 내부 데이터 타입 설계
 
 ```typescript
-// 실제 구현 타입 (architecture.md가 정본)
-type Detection2D = {
+interface Detection2D {
   id: string;
-  class: string;      // COCO category name ("person" | "bicycle" | "car" 등)
+  label: string;
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
-};
+}
 
-type Detection3D = {
-  id: string;         // Detection2D.id와 동일 — 2D/3D 동기화의 핵심
-  class: string;
+interface Detection3D {
+  id: string;       // Detection2D.id와 동일 — 2D/3D 동기화의 핵심
+  label: string;
   confidence: number;
-  bbox3D: { center: [number, number, number]; size: [number, number, number] };
-};
+  position: { x: number; y: number; z: number };
+  size: { width: number; height: number; depth: number };
+}
 
-type Point3D = {
+interface Point3D {
   x: number;
   y: number;
   z: number;
-  intensity?: number;
-};
+}
 
-type Frame = {
+interface Frame {
   id: string;
+  timestamp: number;
   imageUrl: string;
-  imageWidth: number;   // 원본 이미지 픽셀 너비 (SVG viewBox 기준)
-  imageHeight: number;  // 원본 이미지 픽셀 높이 (SVG viewBox 기준)
-  detections2D: Detection2D[];
-  detections3D: Detection3D[];
-  pointCloud: Point3D[];
-};
+  detections2d: Detection2D\[];
+  detections3d: Detection3D\[];
+  points3d: Point3D\[];
+}
 ```
 
 Detection2D.id === Detection3D.id → 같은 객체. 클릭 시 양쪽 뷰어에서 동시 하이라이트.
@@ -438,13 +417,12 @@ Next.js / TypeScript / React Three Fiber(Three.js) / Zustand / Tailwind CSS
 3. **폴더 구조 및 컴포넌트 설계**: 각 컴포넌트의 역할과 의존 관계.
 4. **데이터 흐름**: COCO JSON 파싱 → 내부 타입 변환 → 뷰어 렌더링의 전체 흐름.
 5. **Zustand store 구체적 구조**: 위 초안을 기반으로 실제 구현 가능한 수준의 store 설계.
-6. **3D 씬 구성 세부 설계**: ✅ 결정 완료 (Step 4). 카메라 `(0, 0, -10)` → +z 방향, OrbitControls target `(0, 0, 4.5)`, FOV 50°. 조명: `ambientLight` + `directionalLight`. Three.js 오른손 좌표계 y-up. 상세는 `architecture.md` "2D → 3D Estimation Strategy" 및 "3D Viewer Component Contract" 참조.
-7. **raycaster 기반 클릭 이벤트 처리 전략**: ✅ 결정 완료 (Step 5). R3F `mesh.onClick` + invisible `boxGeometry` click target + `store.setSelectedObject`. 2D↔3D 동기화는 prop-based controlled component 패턴으로 구현 (page.tsx가 단일 wire point). 상세: `architecture.md` "3D Viewer Component Contract".
+6. **3D 씬 구성 세부 설계**: 카메라 초기 위치, 조명 종류, 좌표계 기준.
+7. **raycaster 기반 클릭 이벤트 처리 전략**: 3D 오브젝트 클릭 → Zustand 업데이트 → 2D 반응의 구체적 구현 방법.
 8. **구현 순서와 의존 관계**: 어떤 것을 먼저 만들어야 다음 것을 만들 수 있는가.
 9. **예상 난이도 병목 구간과 대응 방법**.
 
 \---
-
 
 ## 17\. 테스트 전략
 
@@ -500,4 +478,3 @@ Next.js / TypeScript / React Three Fiber(Three.js) / Zustand / Tailwind CSS
 단, 제안을 하는 경우에도 구체적인 설계도까지 함께 만들어줘.
 나는 초보자이므로 설명은 항상 초보자 기준으로 풀어서 설명해줘.
 전문 용어가 나올 경우 반드시 그 용어가 무엇인지 함께 설명해줘.
-

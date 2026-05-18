@@ -3,6 +3,7 @@
 import { Canvas } from '@react-three/fiber';
 import type { Frame } from '@/lib/types';
 import { Scene, SCENE_CENTER_Z } from './Scene';
+import { HintBox } from './HintBox';
 
 type Viewer3DProps = {
   frame: Frame;
@@ -27,6 +28,7 @@ export function Viewer3D({ frame, selectedId, onSelect, visibleIds }: Viewer3DPr
           visibleIds={visibleIds}
         />
       </Canvas>
+      <HintBox />
       <span className="sr-only">
         3D scene centered near z={SCENE_CENTER_Z}; drag to orbit, scroll to
         zoom.

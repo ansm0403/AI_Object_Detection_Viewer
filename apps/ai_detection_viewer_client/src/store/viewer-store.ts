@@ -12,6 +12,7 @@ type ViewerActions = {
   setSelectedObject: (id: string | null) => void;
   setConfidenceThreshold: (v: number) => void;
   toggleClass: (className: string) => void;
+  resetFilters: () => void;
 };
 
 export type ViewerStore = ViewerState & ViewerActions;
@@ -54,4 +55,5 @@ export const useViewerStore = create<ViewerStore>((set) => ({
       }
       return { visibleClasses: next };
     }),
+  resetFilters: () => set({ confidenceThreshold: 0, visibleClasses: new Set() }),
 }));
