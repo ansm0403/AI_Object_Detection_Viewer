@@ -304,6 +304,14 @@ Work on ONE step at a time. Mark with [x] when complete.
   bbox.height` ascending in `Viewer2D.tsx`, so the 2D paint order matches the
   3D estimator's "larger area → smaller z → closer" convention. Long-form
   walkthrough: `docs/etc/blog-svg-paint-order-and-click-priority.md`.
+- Edge cases (see `docs/edgecases/Edge_#7.md` — 2 deferred):
+  - Defer to Step 8: `Filters` derives chip set from current frame only; with
+    persistent `visibleClasses` this leaves toggled-on classes unreachable in
+    frames that lack them. **Read `Edge_#7.md` Case 1 before starting Step 8.**
+    Recommended: derive `classes` from the union across all frames.
+  - Defer to Step 9: clicking the Filters bar background does not deselect
+    (inconsistent with Viewer2D / Viewer3D / ObjectList). UX consistency call
+    that fits the Step 9 polish pass.
 
 <!-- KO (move to a localized file)
 - 결정:

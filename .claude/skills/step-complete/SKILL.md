@@ -78,7 +78,7 @@ Read `CLAUDE.md` now and extract project context and document paths.
 - [ ] No document contradicts another
 - [ ] Checklist completion status matches design doc progress
 
-### 1-3. Summary Format (output in context)
+### 1-3. Summary Format in korean (output in context)
 
 ```
 ## Document Update Summary — CURRENT_STEP
