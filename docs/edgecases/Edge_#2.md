@@ -19,7 +19,7 @@ steps or has no clean fix at the current layer.
 
 ---
 
-## Case 1 — Click selection in overlapping bboxes (DOCUMENTED, no fix)
+## Case 1 — Click selection in overlapping bboxes (FIXED in Step 7 follow-up)
 
 **Discovery reason.** User clicked inside the area where the person bbox
 (id=1-5) and the small car bbox (id=1-6) overlap in frame_001. The car was
@@ -80,9 +80,67 @@ annotation-order semantics and break the moment we revisit it.
 | Step | Relevance | Note |
 |---|---|---|
 | Step 5 (2D↔3D sync) | Orthogonal | The id flows through to 3D unchanged; sync correctness is not affected. |
-| **Step 6 (Object List)** | **Primary mitigation** | Users get a non-spatial selection path. After Step 6 this issue is largely cosmetic. |
+| Step 6 (Object List) | Mitigation | Users get a non-spatial selection path — preserved as a fallback for heuristic mismatches. |
 | Step 7 (Filters) | Partial mitigation | Class-visibility toggles can remove the overlapping bbox from the scene. |
-| Step 9 (UI Cleanup) | Re-evaluation point | If the issue still feels rough after Step 6, revisit with a concrete heuristic (e.g. paint order = area descending). |
+| **Step 7 follow-up** | **Resolution** | Paint-order sort applied. See "Resolution" below. |
+
+---
+
+### Resolution (Step 7 follow-up)
+
+**Discovery path.** Re-surfaced by the user during Step 7 manual verification:
+clicking what visually looks like the bicycle's front wheel selected the
+person bbox instead. This was the first edge case found through direct
+hands-on use rather than through code review / data audit, so the heuristic
+question moved from "theoretical" to "concrete UX bug."
+
+**Fix.** Sort `frame.detections2D` by bbox area ascending before mapping to
+`<rect>` in `Viewer2D.tsx`. Larger bboxes are painted last and therefore land
+on top of the SVG paint stack, capturing clicks in overlap regions.
+
+```diff
+- const detections = visibleIds
+-   ? frame.detections2D.filter((d) => visibleIds.has(d.id))
+-   : frame.detections2D;
++ const detections = (
++   visibleIds
++     ? frame.detections2D.filter((d) => visibleIds.has(d.id))
++     : frame.detections2D
++ )
++   .slice()
++   .sort(
++     (a, b) =>
++       a.bbox.width * a.bbox.height - b.bbox.width * b.bbox.height,
++   );
+```
+
+**Why area ascending and not annotation-order, descending, or 3D z.**
+
+- The 3D estimator already encodes "larger bbox area → smaller z → closer"
+  (see `lib/geometry/bbox-estimator.ts` and `Edge_#4.md` Case 2). Sorting 2D
+  paint order by the *same* proxy makes the two viewers share one depth
+  model: a click on the 2D overlap region now selects the same object the
+  3D viewer shows as front-most.
+- Using `detections3D[].bbox3D.center[2]` directly would be more semantically
+  honest but couples `Viewer2D` to the enrichment pipeline. `bbox.area` is
+  monotonic with that z by construction, so the cheaper proxy gives an
+  identical result.
+
+**Heuristic limits (accepted).**
+
+- A frame where a *larger* background object visually sits *behind* a
+  *smaller* foreground object will be ranked wrong — area is a proxy, not
+  ground truth. The 3D viewer also gets this case wrong in the same
+  direction, so the two views remain *consistent* even when both are
+  wrong. ObjectList is the documented escape hatch.
+- Sub-object depth (e.g. bicycle front wheel vs. back wheel as separate
+  click targets) is impossible at this data model — every detection carries
+  a single z. Resolving this would require COCO segmentation polygons or
+  instance masks, which is out of MVP scope. See `docs/etc/` blog write-up
+  for the long-form analysis.
+
+**Tests.** None added — UI rendering is not in the unit-test scope (CLAUDE.md
+Testing Policy). Suite remains 82/82.
 
 ---
 
@@ -262,7 +320,7 @@ provides the natural escape hatch for small targets too.
 
 | # | Symptom | Decision | Note |
 |---|---------|----------|------|
-| 1 | Click selection ambiguous in overlapping bboxes | Document | Strategy depends on Step 6; rerun decision at Step 9. |
+| 1 | Click selection ambiguous in overlapping bboxes | **Fixed in Step 7 follow-up** | Paint order sorted by bbox area ascending — mirrors 3D estimator's z proxy. |
 | 2 | Label clips past the bottom of the image | **Fixed** | Inside-top fallback added (id=9-40). |
 | 3 | Label clips past the right edge of the image | **Fixed** | Switch to `text-anchor="end"` (id=2-11, 10-49). |
 | 4 | Click on label text falls through | Document | All three fixes worsen Case 1. |

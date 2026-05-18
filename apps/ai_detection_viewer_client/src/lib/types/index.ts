@@ -26,5 +26,9 @@ export type Point3D = {
   x: number;
   y: number;
   z: number;
+  // Source detection id — required so the 3D viewer can filter the point cloud
+  // by the same visibility rules as the bboxes (Edge_#4 Case 5). Always set
+  // by `generatePointCloud` from the owning detection's id.
+  detectionId: string;
   intensity?: number;
 };

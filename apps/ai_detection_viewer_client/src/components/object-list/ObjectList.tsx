@@ -6,6 +6,10 @@ type ObjectListProps = {
   frame: Frame;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  // Ids that pass the current filters. The list keeps showing ALL detections
+  // (so the non-spatial selection path from Edge_#4 Case 1 still works for
+  // filtered-out objects); hidden rows are dimmed instead.
+  visibleIds?: Set<string>;
 };
 
 // Mirrors Viewer2D CLASS_COLORS — consolidated in Step 9 UI Cleanup.
@@ -16,7 +20,7 @@ const CLASS_COLORS: Record<string, string> = {
 };
 const DEFAULT_COLOR = '#60a5fa';
 
-export function ObjectList({ frame, selectedId, onSelect }: ObjectListProps) {
+export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectListProps) {
   return (
     <div
       className="flex flex-col h-full bg-gray-900 rounded-lg overflow-hidden"
@@ -39,6 +43,7 @@ export function ObjectList({ frame, selectedId, onSelect }: ObjectListProps) {
         <ul className="flex-1 overflow-y-auto divide-y divide-gray-800">
           {frame.detections2D.map((d) => {
             const isSelected = d.id === selectedId;
+            const isHidden = visibleIds ? !visibleIds.has(d.id) : false;
             const color = CLASS_COLORS[d.class] ?? DEFAULT_COLOR;
 
             return (
@@ -54,6 +59,9 @@ export function ObjectList({ frame, selectedId, onSelect }: ObjectListProps) {
                   isSelected
                     ? 'bg-gray-700 ring-1 ring-inset ring-white/60'
                     : 'hover:bg-gray-800',
+                  // Filtered-out rows: dimmed but still clickable so they
+                  // remain a non-spatial selection path (Edge_#4 Case 1).
+                  isHidden ? 'opacity-40' : '',
                 ].join(' ')}
               >
                 <span

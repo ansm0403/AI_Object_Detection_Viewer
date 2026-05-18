@@ -6,6 +6,9 @@ type Viewer2DProps = {
   frame: Frame;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  // Ids that pass the current filters. `undefined` means "no filter" so the
+  // component works standalone (e.g. tests, demos).
+  visibleIds?: Set<string>;
 };
 
 const CLASS_COLORS: Record<string, string> = {
@@ -20,7 +23,24 @@ const SELECTED_COLOR = '#ffffff';
 const SELECTED_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_WIDTH = 2;
 
-export function Viewer2D({ frame, selectedId, onSelect }: Viewer2DProps) {
+export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DProps) {
+  // Paint smaller bboxes first so larger ones land on top. This mirrors the
+  // 3D estimator's depth convention (larger bbox area → smaller z → closer to
+  // camera) so a click in an overlap region selects the same object the 3D
+  // viewer shows as front-most. See docs/edgecases/Edge_#2.md Case 1 and
+  // docs/edgecases/Edge_#4.md Case 1. Heuristic limit: frames where a larger
+  // background object encloses a smaller foreground object will be wrong;
+  // ObjectList remains the non-spatial fallback.
+  const detections = (
+    visibleIds
+      ? frame.detections2D.filter((d) => visibleIds.has(d.id))
+      : frame.detections2D
+  )
+    .slice()
+    .sort(
+      (a, b) =>
+        a.bbox.width * a.bbox.height - b.bbox.width * b.bbox.height,
+    );
   return (
     <svg
       viewBox={`0 0 ${frame.imageWidth} ${frame.imageHeight}`}
@@ -46,7 +66,7 @@ export function Viewer2D({ frame, selectedId, onSelect }: Viewer2DProps) {
         width={frame.imageWidth}
         height={frame.imageHeight}
       />
-      {frame.detections2D.map((d) => {
+      {detections.map((d) => {
         const isSelected = d.id === selectedId;
         const color = isSelected ? SELECTED_COLOR : (CLASS_COLORS[d.class] ?? DEFAULT_COLOR);
         const strokeWidth = isSelected ? SELECTED_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;

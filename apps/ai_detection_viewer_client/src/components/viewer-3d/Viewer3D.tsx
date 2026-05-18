@@ -8,9 +8,10 @@ type Viewer3DProps = {
   frame: Frame;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
+  visibleIds?: Set<string>;
 };
 
-export function Viewer3D({ frame, selectedId, onSelect }: Viewer3DProps) {
+export function Viewer3D({ frame, selectedId, onSelect, visibleIds }: Viewer3DProps) {
   return (
     <div className="relative overflow-hidden w-full aspect-[4/3] bg-neutral-950 rounded">
       <Canvas
@@ -19,7 +20,12 @@ export function Viewer3D({ frame, selectedId, onSelect }: Viewer3DProps) {
         onPointerMissed={() => onSelect?.(null)}
       >
         <color attach="background" args={['#0a0a0a']} />
-        <Scene frame={frame} selectedId={selectedId} onSelect={onSelect} />
+        <Scene
+          frame={frame}
+          selectedId={selectedId}
+          onSelect={onSelect}
+          visibleIds={visibleIds}
+        />
       </Canvas>
       <span className="sr-only">
         3D scene centered near z={SCENE_CENTER_Z}; drag to orbit, scroll to

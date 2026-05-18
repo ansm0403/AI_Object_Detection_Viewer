@@ -18,7 +18,7 @@ rendered output. Cases 3–6 were identified through a systematic code review of
 
 ---
 
-## Case 1 — SVG bbox click priority fixed by paint order (DOCUMENTED, defer to Step 6)
+## Case 1 — SVG bbox click priority fixed by paint order (FIXED in Step 7 follow-up)
 
 **Discovery.** Reported by user. Clicking a visually-front object selects the wrong
 detection because SVG has no CSS z-index — the last element in the JSX `map` result
@@ -37,9 +37,9 @@ files. Stay within the scope of the current step."
 
 | Step | Relevance | Required action |
 |---|---|---|
-| **Step 6 (Object List)** | **Primary resolution** | Introduce a non-spatial selection path (list click) that bypasses 2D bbox ambiguity entirely. Read `Edge_#4.md` Case 1 before starting Step 6. |
+| Step 6 (Object List) | Mitigation | Non-spatial selection path retained as the escape hatch for frames where the area heuristic fails. |
 | Step 7 (Filters) | Partial mitigation | Class visibility toggles reduce the number of rendered bboxes and therefore overlaps. |
-| Step 9 (UI Cleanup) | Re-evaluate | If ambiguity is still noticeable after Steps 6–7, consider (a) hover-cycle between candidates, (b) bring-to-front on hover, or (c) accept as intentional. Re-read `Edge_#2.md` + `Edge_#4.md` Case 1 before deciding. |
+| **Step 7 follow-up** | **Spatial resolution** | Paint-order sort by bbox area ascending — applied. See `Edge_#2.md` Case 1 "Resolution" section for the diff and rationale. |
 
 ---
 
@@ -195,7 +195,7 @@ after navigating multiple frames in Step 8.
 
 ---
 
-## Case 5 — `pointCloud` locked at `enrichFrame` time, ignores future filters (DOCUMENTED, defer to Step 7)
+## Case 5 — `pointCloud` locked at `enrichFrame` time, ignores future filters (FIXED in Step 7)
 
 **Discovery.** Code review of `frame-enricher.ts` → `generatePointCloud` call chain.
 
@@ -218,6 +218,27 @@ after filtering. No data corruption or crash.
 | C. Redefine point cloud as scene-wide background scatter (not per-detection) | Solves the mismatch by removing the per-detection relationship entirely; changes the visual intent |
 
 Recommended first candidate: **Option A**. Read `Edge_#4.md` Case 5 when starting Step 7.
+
+**Resolution (Step 7, Option A applied).**
+
+- `Point3D.detectionId` is now a **required** field (not optional). `generatePointCloud`
+  always populates it from the owning detection's id. Locked by a new
+  `pointcloud-generator.test.ts` assertion.
+- `PointCloud` accepts an optional `visibleIds: Set<string>` prop and filters points
+  inside its `useMemo` before building the `BufferGeometry`. When the filter changes,
+  the geometry rebuilds and the `useEffect` cleanup added in Case 4 disposes the
+  previous one — no leak.
+- The same `visibleIds` set drives `Scene`'s `BBox3D` rendering, so points and boxes
+  share a single source of truth for visibility.
+- A new pure selector `lib/selectors/visible-detections.ts` computes
+  `visibleIds` from `(frame, confidenceThreshold, visibleClasses)`. It is called once
+  in `page.tsx` and passed down — selectors stay outside React/Zustand per the
+  Separation of Concerns table.
+
+Why not Option B/C in the end: B re-runs the scatter-RNG on every slider drag
+(noticeable cost for ~80 points × N detections × per-tick re-render); C changes the
+visual intent of the point cloud from per-object scatter to background ambience, which
+is a Step 9 design decision rather than a Step 7 mechanical fix.
 
 ---
 
@@ -258,11 +279,11 @@ is unacceptable.
 
 | # | Symptom | Root cause | Decision | Fix site |
 |---|---------|-----------|----------|----------|
-| 1 | Overlapping 2D bboxes: wrong object selected | SVG paint order = array order | **Defer to Step 6** (Object List provides non-spatial selection) | — |
+| 1 | Overlapping 2D bboxes: wrong object selected | SVG paint order = array order | **Fixed in Step 7 follow-up** | `Viewer2D.tsx` — sort detections by `bbox.width * bbox.height` ascending so the visually-front object paints last. Cross-ref `Edge_#2.md` Case 1 Resolution. |
 | 2 | Large objects appear at back in 3D | Camera at +z; estimator z is distance (small=close), but +z camera reads small-z as far | **Fixed** | `Viewer3D.tsx` camera `[0,0,-10]` |
 | 3 | Small/edge-of-image detections clipped from view | Same camera config creates narrow frustum near scene | **Fixed** (Case 2 fix resolves) | — |
 | 4 | GPU memory leak on geometry changes / frame switch | Imperative `BufferGeometry`/`EdgesGeometry` never `dispose()`d | **Fixed** | `PointCloud.tsx`, `BBox3D.tsx` — `useEffect` cleanup |
-| 5 | Post-filter: orphan points visible for hidden detections | `pointCloud` generated once at enrich; `Point3D` has no `detectionId` | **Defer to Step 7** | — |
+| 5 | Post-filter: orphan points visible for hidden detections | `pointCloud` generated once at enrich; `Point3D` has no `detectionId` | **Fixed in Step 7 (Option A)** | `Point3D.detectionId` required; `PointCloud` filters by `visibleIds`; new `lib/selectors/visible-detections.ts` |
 | 6 | Camera state (orbit/zoom) carries over to next frame | `<Canvas>` camera is one-time init; `OrbitControls` owns state | **Defer to Step 8** | — |
 
 Cases 2 and 3 share a single root cause (camera placement relative to scene scale).

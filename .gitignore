@@ -48,3 +48,7 @@ test-output
 # Next.js
 .next
 out
+
+# 기타 문서
+
+docs/etc
