@@ -487,41 +487,42 @@ even if Phase 2/3 are skipped.
     outer scroll containers and could move the page on short viewports.
     Replaced with manual `ul.scrollTop` adjustment scoped to the list.
 
-### Phase 3 — Analytics Panel
+### Phase 3 — Analytics Panel ✅ Complete
 
-- Goal: Replace the right-rail single-column with a Spatial / Analytics
+- [x] Goal: Replace the right-rail single column with a Spatial / Analytics
   split that visualizes selection state, confidence distribution, and class
   composition.
-- Scope:
-  - Layout switch to Proposal B (architecture.md "Layout (after Step 9.5)"):
-    12-column grid, 5/7 split for row 1 (`Viewer2D` / `Viewer3D`) and row 2
-    (`ObjectList` / `AnalyticsPanel`). Timeline stays full-width below.
-  - `components/inspector/SelectedObjectInfo.tsx`: class, confidence, 2D
-    bbox, 3D bbox, frame id. Placeholder when `selectedObjectId === null`
-    so the panel layout stays stable.
-  - `components/charts/ConfidenceHistogram.tsx`: pure SVG, fixed buckets
-    over `[0..1]`, overlay line at the current `confidenceThreshold`.
-  - `components/charts/ClassCountBar.tsx`: CSS-only horizontal bars; row
-    click dispatches `toggleClass` (chart doubles as a filter).
-  - `components/analytics/AnalyticsPanel.tsx`: container composing the
-    three above; holds no state.
-  - `lib/selectors/confidence-buckets.ts`: pure function turning a frame's
-    detections into a fixed-length bucket array.
-  - `lib/selectors/class-counts.ts`: pure function returning a `Map<class,
-    count>` for a frame.
+- Scope: Proposal B layout in `page.tsx`; new `components/inspector/`,
+  `components/charts/`, `components/analytics/`; new selectors
+  `lib/selectors/{confidence-buckets, class-counts}.ts`.
 - Done when:
-  - `Viewer3D` occupies more than half of the main row width.
-  - Selecting any detection (from 2D / 3D / list) updates the info card.
-  - Moving the confidence slider visibly shifts the threshold line across
-    the histogram.
-  - Clicking a class bar toggles that class in the existing class filter.
-- Tests (required):
-  - `lib/selectors/confidence-buckets.test.ts` — pin bucket count, empty
-    input → all-zero buckets, boundary classification (e.g. value exactly
-    on bucket edge), and that aggregation ignores `visibleIds` if not
-    passed (semantic decided at implementation time and locked here).
-  - `lib/selectors/class-counts.test.ts` — empty input → empty map, count
-    correctness, class identity preservation.
+  - [x] `Viewer3D` occupies more than half of the main row width (5/7 split).
+  - [x] Selecting any detection (2D / 3D / list) updates the info card.
+  - [x] Moving the confidence slider shifts the histogram threshold line.
+  - [x] Clicking a class bar toggles that class in the existing filter.
+- Decisions:
+  - Selectors take **`frame` only, no `visibleIds`**. Filtering the
+    histogram or class bar would erase the very information the threshold
+    overlay / toggle interaction is meant to expose. Locked by tests.
+  - `BUCKET_COUNT = 10`, half-open `[i/10, (i+1)/10)`; **last bucket
+    closed on the right** so `confidence === 1.0` is counted.
+  - `selectClassCounts` returns a `Map` whose iteration order is
+    first-appearance in `frame.detections2D` — `ClassCountBar` renders
+    rows in that order with no extra sort.
+  - `ClassCountBar` permissive-empty visual matches `ClassToggles`
+    (empty `visibleClasses` ⇒ all rows active). Both surfaces dispatch
+    the same `toggleClass` action — no new store action introduced.
+  - `AnalyticsPanel` has no background-deselect handler — Phase 2's
+    deselect surfaces (Filters / ObjectList / Viewer empty-space) stay
+    the only entry points. No `Element.scrollIntoView` (Edge_#9.5 Case C).
+  - **Timeline** moved between row 1 and row 2 (`md:col-span-12` inside
+    the grid) so frame-switch stays next to the viewers it drives.
+  - **Viewer2D wrapper** tone aligned with other panels (`bg-zinc-900
+    rounded-lg ring-1 ring-inset ring-zinc-800`); `ring-inset` keeps
+    outer size unchanged so bbox / aspect contracts are unaffected.
+- Tests: confidence-buckets **7** + class-counts **5**. **Suite: 99/99**.
+- Edge cases: none discovered. Phase 3 adds rendering-only surfaces; no
+  new event routing that could break the selection contract.
 
 ### Excluded from Step 9.5 (rationale: see `docs/etc/NEW_UI.md`)
 

@@ -3,13 +3,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseCoco } from '@/lib/coco';
 import { enrichFrame } from '@/lib/geometry';
-import { selectVisibleDetectionIds } from '@/lib/selectors';
+import {
+  selectClassCounts,
+  selectConfidenceBuckets,
+  selectVisibleDetectionIds,
+} from '@/lib/selectors';
 import { Viewer2D } from '@/components/viewer-2d';
 import { Viewer3D } from '@/components/viewer-3d';
 import { ObjectList } from '@/components/object-list';
 import { Filters } from '@/components/filters';
 import { Header } from '@/components/header';
 import { Timeline } from '@/components/timeline';
+import { AnalyticsPanel } from '@/components/analytics';
 import { useViewerStore } from '@/store';
 import type { Frame } from '@/lib/types';
 
@@ -98,6 +103,18 @@ export default function Index() {
     [currentFrame, confidenceThreshold, visibleClasses],
   );
 
+  // Phase 3 analytics aggregations. Selectors are intentionally unfiltered:
+  // the histogram threshold line and class-bar toggles only carry meaning
+  // when painted on top of the frame's raw distribution.
+  const confidenceBuckets = useMemo(
+    () => (currentFrame ? selectConfidenceBuckets(currentFrame) : []),
+    [currentFrame],
+  );
+  const classCounts = useMemo(
+    () => (currentFrame ? selectClassCounts(currentFrame) : new Map<string, number>()),
+    [currentFrame],
+  );
+
   // Frame switch clears the object selection so a stale id from frame N
   // cannot ghost-highlight in frame M (or accidentally re-highlight if
   // M happens to share the id). Edge_#5.md Case 6. Kept in page.tsx
@@ -134,12 +151,13 @@ export default function Index() {
       <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
         <div className="h-12 rounded-lg bg-zinc-900 animate-pulse" />
         <div className="h-14 rounded-lg bg-zinc-900 animate-pulse" />
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_280px] gap-4">
-          <div className="aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
-          <div className="aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
-          <div className="rounded-lg bg-zinc-900 animate-pulse h-64 md:h-auto" />
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          <div className="md:col-span-5 aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
+          <div className="md:col-span-7 aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
+          <div className="md:col-span-12 h-28 rounded-lg bg-zinc-900 animate-pulse" />
+          <div className="md:col-span-5 rounded-lg bg-zinc-900 animate-pulse h-64 md:h-72" />
+          <div className="md:col-span-7 rounded-lg bg-zinc-900 animate-pulse h-64 md:h-72" />
         </div>
-        <div className="h-28 rounded-lg bg-zinc-900 animate-pulse" />
       </main>
     );
   }
@@ -150,8 +168,17 @@ export default function Index() {
   // and the auto-select effect firing; render a placeholder rather than crash.
   if (!currentFrame) return <main className="p-4 text-zinc-400">Selecting frame…</main>;
 
-  // Layout: change grid-cols classes here to switch column arrangement.
-  // e.g. "md:grid-cols-2" (2D+3D only), "md:grid-cols-[280px_1fr_1fr]" (list left)
+  // Layout: 12-column grid with Timeline wedged between row 1 (viewers) and
+  // row 2 (list + analytics) so frame navigation stays within reach of the
+  // viewers it controls.
+  // Row 1 — Viewer2D (5) | Viewer3D (7): the 7-wide Viewer3D promotes it as
+  //   the main view per Immutable Rule #5.
+  // Timeline (full width) — placed here, not at the bottom, because it is the
+  //   primary frame-switch control and belongs next to the viewers it drives.
+  // Row 2 — ObjectList (5) | AnalyticsPanel (7): downstream views of the
+  //   currently selected frame; living below the Timeline matches the
+  //   "select frame → inspect" reading order.
+  // Header / Filters span the full width above.
   return (
     <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
       <Header
@@ -170,34 +197,53 @@ export default function Index() {
         onReset={resetFilters}
         onDeselect={() => setSelectedObject(null)}
       />
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_280px] gap-4">
-        <Viewer2D
-          frame={currentFrame}
-          selectedId={selectedObjectId}
-          onSelect={setSelectedObject}
-          visibleIds={visibleIds}
-        />
-        {/* key forces full Canvas remount on frame change so the OrbitControls
-            camera resets cleanly. Edge_#4.md Case 6 (remount option). */}
-        <Viewer3D
-          key={currentFrame.id}
-          frame={currentFrame}
-          selectedId={selectedObjectId}
-          onSelect={setSelectedObject}
-          visibleIds={visibleIds}
-        />
-        <ObjectList
-          frame={currentFrame}
-          selectedId={selectedObjectId}
-          onSelect={setSelectedObject}
-          visibleIds={visibleIds}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <div className="md:col-span-5">
+          <Viewer2D
+            frame={currentFrame}
+            selectedId={selectedObjectId}
+            onSelect={setSelectedObject}
+            visibleIds={visibleIds}
+          />
+        </div>
+        <div className="md:col-span-7">
+          {/* key forces full Canvas remount on frame change so the OrbitControls
+              camera resets cleanly. Edge_#4.md Case 6 (remount option). */}
+          <Viewer3D
+            key={currentFrame.id}
+            frame={currentFrame}
+            selectedId={selectedObjectId}
+            onSelect={setSelectedObject}
+            visibleIds={visibleIds}
+          />
+        </div>
+        <div className="md:col-span-12">
+          <Timeline
+            frames={enrichedFrames}
+            selectedFrameId={selectedFrameId}
+            onSelectFrame={handleSelectFrame}
+          />
+        </div>
+        <div className="md:col-span-5">
+          <ObjectList
+            frame={currentFrame}
+            selectedId={selectedObjectId}
+            onSelect={setSelectedObject}
+            visibleIds={visibleIds}
+          />
+        </div>
+        <div className="md:col-span-7">
+          <AnalyticsPanel
+            frame={currentFrame}
+            selectedId={selectedObjectId}
+            buckets={confidenceBuckets}
+            threshold={confidenceThreshold}
+            counts={classCounts}
+            visibleClasses={visibleClasses}
+            onToggleClass={toggleClass}
+          />
+        </div>
       </div>
-      <Timeline
-        frames={enrichedFrames}
-        selectedFrameId={selectedFrameId}
-        onSelectFrame={handleSelectFrame}
-      />
     </main>
   );
 }

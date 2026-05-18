@@ -1,0 +1,1 @@
+export { SelectedObjectInfo } from './SelectedObjectInfo';

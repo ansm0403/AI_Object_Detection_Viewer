@@ -43,7 +43,7 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
     // stopPropagation so bbox clicks still resolve to select-only.
     // Edge_#9.5 Case B.
     <div
-      className="relative w-full aspect-[4/3] bg-zinc-950 rounded overflow-hidden"
+      className="relative w-full aspect-[4/3] bg-zinc-900 rounded-lg ring-1 ring-inset ring-zinc-800 overflow-hidden"
       onClick={() => onSelect?.(null)}
     >
     <svg

@@ -4,7 +4,7 @@
 # Architecture
 
 **Current Status: Steps 1–9 complete. Step 9.5 Phase 1 ✅ complete;
-Phase 2 ✅ complete; Phase 3 planned. Next: Step 9.5 Phase 3 — Analytics Panel.**
+Phase 2 ✅ complete; Phase 3 ✅ complete. Next: Step 10 — README + Deploy.**
 For step-by-step history and per-Step decisions, see `mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
 For Step 9.5 UI feature candidates and adopt/exclude rationale, see `docs/etc/NEW_UI.md`.
@@ -43,14 +43,14 @@ apps/ai_detection_viewer_client/
 │   │   ├── header/         # ✅ Step 9.5 Phase 2 — app title + frame meta line
 │   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount
 │   │   │   └── index.ts
-│   │   ├── analytics/      # 🔜 Step 9.5 Phase 3 — right-rail analytics container
+│   │   ├── analytics/      # ✅ Step 9.5 Phase 3 — right-rail analytics container
 │   │   │   ├── AnalyticsPanel.tsx  # composes Inspector + charts
 │   │   │   └── index.ts
-│   │   ├── charts/         # 🔜 Step 9.5 Phase 3 — pure SVG / CSS charts (no Recharts)
+│   │   ├── charts/         # ✅ Step 9.5 Phase 3 — pure SVG / CSS charts (no Recharts)
 │   │   │   ├── ConfidenceHistogram.tsx  # SVG bars + slider-threshold overlay
 │   │   │   ├── ClassCountBar.tsx        # CSS horizontal bars; clicking toggles class
 │   │   │   └── index.ts
-│   │   └── inspector/      # 🔜 Step 9.5 Phase 3 — selected object info card
+│   │   └── inspector/      # ✅ Step 9.5 Phase 3 — selected object info card
 │   │       ├── SelectedObjectInfo.tsx   # class / confidence / bbox / frame; placeholder when none
 │   │       └── index.ts
 │   ├── lib/
@@ -69,10 +69,10 @@ apps/ai_detection_viewer_client/
 │   │   ├── selectors/      # ✅ Step 7 — pure store derivations
 │   │   │   ├── visible-detections.ts        # filter by threshold + visibleClasses
 │   │   │   ├── visible-detections.test.ts   # 11 tests; locks permissive-empty semantic
-│   │   │   ├── confidence-buckets.ts        # 🔜 Step 9.5 Phase 3 — histogram buckets
-│   │   │   ├── confidence-buckets.test.ts   # 🔜 Step 9.5 Phase 3
-│   │   │   ├── class-counts.ts              # 🔜 Step 9.5 Phase 3 — class → count map
-│   │   │   ├── class-counts.test.ts         # 🔜 Step 9.5 Phase 3
+│   │   │   ├── confidence-buckets.ts        # ✅ Step 9.5 Phase 3 — histogram buckets (BUCKET_COUNT=10)
+│   │   │   ├── confidence-buckets.test.ts   # 7 tests; locks bucket count + boundary rules
+│   │   │   ├── class-counts.ts              # ✅ Step 9.5 Phase 3 — class → count map (first-appearance order)
+│   │   │   ├── class-counts.test.ts         # 5 tests; locks key-by-class + iteration order
 │   │   │   └── index.ts                     # barrel
 │   │   ├── ui/             # ✅ Step 9 — shared UI-layer constants (no React/Zustand/Three.js)
 │   │   │   └── class-colors.ts              # CLASS_COLORS map, getClassColor(), DEFAULT_COLOR, SELECTED_COLOR
@@ -245,21 +245,20 @@ click target (line segments alone are difficult to raycast in WebGL2).
 
 For camera reset across frame switches, see `docs/edgecases/Edge_#4.md` Case 6 — resolved in Step 8 via `<Viewer3D key={frame.id} />` remount; `page.tsx` is the single wire point.
 
-## Step 9.5 Component Contracts (planned)
+## Step 9.5 Component Contracts
 
-These components are scheduled for Step 9.5 (UI Density & Polish). They follow
-the same controlled-component pattern as Step 5+ (props in, callbacks out;
-`page.tsx` is the single wire point). Adopt/exclude rationale lives in
-`docs/etc/NEW_UI.md`.
+All Step 9.5 components follow the same controlled-component pattern as
+Step 5+ (props in, callbacks out; `page.tsx` is the single wire point).
+Adopt/exclude rationale lives in `docs/etc/NEW_UI.md`.
 
 | Component | Phase | Responsibility |
 |---|---|---|
 | `Header` | 2 ✅ | App title + frame meta (`Frame N/M · X detections`). Pure presentation; reads no store directly. |
 | `HintBox` (inside `Viewer3D`) | 1 ✅ | Small overlay in the 3D viewer corner showing mouse controls. Static text; no state. Mounted as a sibling of `<Canvas>` inside `Viewer3D`'s `relative` wrapper; `pointer-events-none` so OrbitControls still receives drag events over the hint area. |
-| `AnalyticsPanel` | 3 | Right-rail container that composes `SelectedObjectInfo`, `ConfidenceHistogram`, `ClassCountBar`. Holds no state of its own. |
-| `SelectedObjectInfo` | 3 | Renders class / confidence / 2D bbox / 3D bbox / frame id of the selected detection. Shows a placeholder card when `selectedObjectId` is null. |
-| `ConfidenceHistogram` | 3 | Pure SVG bars over fixed buckets of `[0..1]`. Overlays the current `confidenceThreshold` as a vertical guide line. Reads its data from a `lib/selectors/` aggregator. |
-| `ClassCountBar` | 3 | CSS-only horizontal bars (one row per class). Clicking a row dispatches `toggleClass` so it doubles as a class filter. Reads its data from a `lib/selectors/` aggregator. |
+| `AnalyticsPanel` | 3 ✅ | Right-rail container that composes `SelectedObjectInfo`, `ConfidenceHistogram`, `ClassCountBar`. Holds no state of its own. Has no background-deselect handler — deselection stays scoped to Filters / ObjectList / Viewer empty-space (information panels deselecting on background click feels accidental). |
+| `SelectedObjectInfo` | 3 ✅ | Renders class / confidence / 2D bbox / 3D bbox / frame id / detection id of the selected detection. Shows a placeholder card when `selectedObjectId` is null OR when the id is not found in the current frame (defensive — `handleSelectFrame` already clears on frame switch). |
+| `ConfidenceHistogram` | 3 ✅ | Pure SVG bars over `BUCKET_COUNT=10` buckets of `[0..1]`. Bars above the current `confidenceThreshold` render in sky; below-threshold bars in zinc. Threshold itself drawn as a dashed vertical line. Bucket data comes from `selectConfidenceBuckets(frame)`. |
+| `ClassCountBar` | 3 ✅ | CSS-only horizontal bars (one row per class), iteration order = `selectClassCounts` Map order (first-appearance). Clicking a row dispatches `toggleClass`, the same action `ClassToggles` uses — the chart is a second entry point to the same store slice. Permissive-empty visual matches `ClassToggles`. |
 
 ### Charting Policy (Step 9.5)
 
@@ -277,21 +276,25 @@ the same controlled-component pattern as Step 5+ (props in, callbacks out;
 
 ### Layout (after Step 9.5)
 
-Proposal B is the adopted layout. `page.tsx` switches from the Step 6
-three-column grid to a 12-column grid with two content rows:
+Proposal B is the adopted layout, in place since Phase 3. `page.tsx`
+switched from the Step 6 three-column grid to a 12-column grid with two
+content rows:
 
 ```
 [ Header (col-span-12) ]
 [ Filters (col-span-12) ]
 [ Viewer2D (md:col-span-5) | Viewer3D (md:col-span-7) ]
+[ Timeline (md:col-span-12) ]
 [ ObjectList (md:col-span-5) | AnalyticsPanel (md:col-span-7) ]
-[ Timeline (col-span-12) ]
 ```
 
 The 5/7 split intentionally promotes `Viewer3D` as the main view
-(Immutable Rule #5). On mobile (`< md`) all cells stack to full width.
-Both viewers share `aspect-[4/3]`, which is what stabilizes the Timeline
-position across frames — see "2D Viewer SVG Contract" below.
+(Immutable Rule #5). Timeline sits directly under the viewers, not at the
+page bottom, so frame-switch controls stay within reach of the viewers
+they drive — the downstream `ObjectList` / `AnalyticsPanel` follow below.
+On mobile (`< md`) all cells stack to full width. Both viewers share
+`aspect-[4/3]`, which is what stabilizes the Timeline position across
+frames — see "2D Viewer SVG Contract" below.
 
 ## Separation of Concerns
 
