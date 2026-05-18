@@ -205,33 +205,122 @@ Work on ONE step at a time. Mark with [x] when complete.
 -->
 
 
-## Step 6 — Object List Panel
-- [ ] Goal: Side panel listing detections in the current frame.
-- Scope: `components/object-list/*`.
+## Step 6 — Object List Panel ✅ Complete
+- [x] Goal: Side panel listing detections in the current frame.
+- Scope: `components/object-list/*` (ObjectList.tsx, index.ts).
+  Modified: `app/page.tsx` (3-column grid + wire), `components/viewer-3d/Viewer3D.tsx`
+  (defensive `relative overflow-hidden` on wrapper — see Edge_#6 Case 1).
 - Done when:
-  - List shows class, confidence, id.
-  - Clicking a list item selects that object (sync with 2D/3D).
-  - Selected list item is visually highlighted.
-
-## Step 7 — Filters
-- [ ] Goal: Confidence threshold slider + class visibility toggles.
-- Scope: `components/filters/*`, store.
-- Done when:
-  - Slider updates `confidenceThreshold` in store.
-  - Class toggles update `visibleClasses` in store.
-  - Both 2D and 3D viewers respect these filters.
-- Tests (required):
-  - [ ] Selector unit tests — given a `Frame` and store state, the visible-detections selector returns only detections that:
-    - have `confidence >= confidenceThreshold`, AND
-    - have `class` in `visibleClasses` (or `visibleClasses` empty means "show all" — pick one and lock it with a test).
-  - Threshold = 0 returns all detections; threshold = 1 returns only confidence-1.0 detections.
+  - [x] List shows class, confidence, id.
+  - [x] Clicking a list item selects that object (sync with 2D/3D).
+  - [x] Selected list item is visually highlighted.
+- Tests: None added — UI component (no unit/render tests per policy). Integration test not added:
+  ObjectList calls the same `setSelectedObject(id)` as Viewer2D/3D, no new contract to lock.
+  **Suite: 70/70**.
+- Implementation notes:
+  - Props: `frame`, `selectedId?`, `onSelect?` — same controlled-component pattern as Viewer2D/Viewer3D.
+    Single wire point: `page.tsx` passes same `selectedObjectId`/`setSelectedObject` to all three.
+  - **No filtering** — displays all raw `frame.detections2D`. Step 7 owns confidence/class filters.
+    Primary mitigation for `Edge_#4.md` Case 1: list provides non-spatial, unambiguous selection
+    for any detection regardless of 2D bbox overlap.
+  - Selected row: `bg-gray-700` + `ring-1 ring-white/60` inset border.
+  - Each row: class color dot (mirrors `Viewer2D` class colors — inlined for now, Step 9 extracts) + class + confidence + id.
+  - Empty state: "No objects detected in this frame." (CLAUDE.md Error Defaults).
+  - Deselect: panel container `onClick → onSelect(null)`; row `onClick` uses `e.stopPropagation()`.
+  - Layout: grid template lives as a JSX literal in `page.tsx` (`md:grid-cols-[1fr_1fr_280px]`)
+    with a one-line comment showing alternates. Earlier `LAYOUT_CLASS` const was removed
+    because Tailwind JIT extraction of arbitrary-value classes from a const string is unreliable
+    (Edge_#6 Case 1).
+- Edge cases (see `docs/edgecases/Edge_#6.md` — 4 cases):
+  - Fixed: 2D viewer hidden behind 3D Canvas (Case 1) — Tailwind JIT + R3F absolute canvas
+    overflow combined. Two-part fix in `page.tsx` and `Viewer3D.tsx`.
+  - Deferred to Step 9: mobile list scrolling (Case 2), header click deselects (Case 3).
+  - Latent only, no fix needed now: id column overflow risk (Case 4).
 
 <!-- KO (move to a localized file)
-- 테스트 (필수):
-  - [ ] 셀렉터 유닛 테스트 — `Frame`과 store 상태가 주어졌을 때, 가시 detections 셀렉터가 다음 조건을 모두 만족하는 detection만 반환한다.
-    - `confidence >= confidenceThreshold`이고,
-    - `class`가 `visibleClasses`에 포함된다 (또는 `visibleClasses`가 비었으면 "모두 표시" — 한 가지 의미로 정하고 테스트로 잠근다).
-  - threshold = 0이면 모든 detection이, threshold = 1이면 confidence가 1.0인 것만 반환된다.
+- 테스트: UI 컴포넌트이므로 테스트 없음. 통합 테스트 미추가 — Viewer2D/3D와 동일한 `setSelectedObject(id)` 호출이라 새로운 계약이 없음. **70/70**.
+- 구현 메모:
+  - Props: `frame`, `selectedId?`, `onSelect?` — Viewer2D/Viewer3D와 동일한 controlled 패턴. `page.tsx` 단일 wire.
+  - 필터링 없이 모든 raw detections 표시. Step 7이 필터 담당. `Edge_#4` Case 1의 1차 해소.
+  - 선택된 행: `bg-gray-700` + `ring-1 ring-white/60`.
+  - 레이아웃: grid 클래스는 `page.tsx` JSX className에 직접 기입 (`md:grid-cols-[1fr_1fr_280px]`).
+    이전 `LAYOUT_CLASS` 상수는 Tailwind JIT arbitrary value 추출 신뢰성 문제로 제거 (Edge_#6 Case 1).
+- 엣지 케이스 (`docs/edgecases/Edge_#6.md` — 4건):
+  - 해결: 2D 뷰어가 3D Canvas 뒤로 숨음 (Case 1) — `page.tsx` + `Viewer3D.tsx` 2단 fix.
+  - Step 9로 미룸: 모바일 리스트 스크롤 (Case 2), 헤더 클릭 시 선택 해제 (Case 3).
+  - 현재 트리거 없음, 향후 관찰: id 컬럼 오버플로 (Case 4).
+-->
+
+## Step 7 — Filters ✅ Complete
+- [x] Goal: Confidence threshold slider + class visibility toggles.
+- Scope: `components/filters/*` (Filters, ConfidenceSlider, ClassToggles),
+  `lib/selectors/*` (visible-detections), `lib/types/index.ts` (`Point3D.detectionId`),
+  `lib/geometry/pointcloud-generator.ts` (+ test). Modified for `visibleIds` wiring:
+  `components/viewer-2d/Viewer2D.tsx`, `components/viewer-3d/{Viewer3D, Scene, PointCloud}.tsx`,
+  `components/object-list/ObjectList.tsx`, `app/page.tsx` (header row + grid restructure).
+- Done when:
+  - [x] Slider updates `confidenceThreshold` in store.
+  - [x] Class toggles update `visibleClasses` in store.
+  - [x] Both 2D and 3D viewers respect these filters.
+  - [x] Point cloud points for filtered-out detections are removed too (Edge_#4 Case 5 Option A).
+  - [x] ObjectList keeps showing all detections but dims hidden rows (preserves Edge_#4 Case 1 path).
+- Tests (required):
+  - [x] `lib/selectors/visible-detections.test.ts` — **11 tests**:
+    - threshold = 0 + visibleClasses = ∅ returns all detections (permissive-empty semantic locked).
+    - threshold = 1 returns only confidence-1.0 detections.
+    - threshold drops `confidence < threshold` detections.
+    - non-empty `visibleClasses` acts as a whitelist (single class, multi-class union).
+    - threshold AND class filter combine (logical AND).
+    - empty result when `visibleClasses` contains no matching class.
+    - empty input returns empty output.
+    - detection identity (object refs) is preserved through the filter.
+    - `selectVisibleDetectionIds` returns the id Set of survivors.
+  - [x] `lib/geometry/pointcloud-generator.test.ts` — 1 added: every generated `Point3D` carries
+    its source detection id (locks Edge_#4 Case 5 Option A contract).
+- Decisions:
+  - **`visibleClasses` semantic: permissive empty.** Empty Set = show all. Initial state is
+    an empty Set so the first paint isn't blank. Locked by selector test.
+  - **Point cloud filtering: Option A** (Edge_#4 Case 5). `Point3D.detectionId` is now required;
+    `PointCloud` filters its `BufferGeometry` at render time by the same `visibleIds` set.
+    Filter changes only rebuild the geometry; `useEffect` cleanup disposes the previous one
+    (Edge_#4 Case 4 pattern continues to apply).
+  - **ObjectList stays unfiltered.** Hidden rows render at `opacity-40` instead of being removed,
+    so the non-spatial selection path from Edge_#4 Case 1 still works for filtered detections.
+  - **ClassToggles UI: color chips.** Each class is a pill with its viewer color (matches the
+    2D / 3D / list color map). When `visibleClasses` is empty, all chips render as active —
+    visualizing the "show all" state.
+  - **Filters layout: header row** (top of page, above the 3-column grid). Step 9 may move it.
+- Implementation notes:
+  - Selector lives in a new `lib/selectors/` layer (added to Separation of Concerns table).
+    Pure function, no React/Zustand/Three.js imports.
+  - `visibleIds` prop is optional on all consumers (`undefined` = no filter), keeping each
+    component usable standalone for tests/demos.
+  - `page.tsx` is the single wire point: it reads store state, calls the selector once, and
+    passes the resulting `visibleIds: Set<string>` to every consumer.
+- Suite total: **82/82** (70 prior + 11 selector + 1 pointcloud detectionId).
+- Follow-up (manual verification): `Edge_#2.md` Case 1 / `Edge_#4.md` Case 1
+  resolved. Discovery path was hands-on use (clicking the bicycle's front
+  wheel selected the person bbox). Fix is a one-line sort by `bbox.width *
+  bbox.height` ascending in `Viewer2D.tsx`, so the 2D paint order matches the
+  3D estimator's "larger area → smaller z → closer" convention. Long-form
+  walkthrough: `docs/etc/blog-svg-paint-order-and-click-priority.md`.
+- Edge cases (see `docs/edgecases/Edge_#7.md` — 2 deferred):
+  - Defer to Step 8: `Filters` derives chip set from current frame only; with
+    persistent `visibleClasses` this leaves toggled-on classes unreachable in
+    frames that lack them. **Read `Edge_#7.md` Case 1 before starting Step 8.**
+    Recommended: derive `classes` from the union across all frames.
+  - Defer to Step 9: clicking the Filters bar background does not deselect
+    (inconsistent with Viewer2D / Viewer3D / ObjectList). UX consistency call
+    that fits the Step 9 polish pass.
+
+<!-- KO (move to a localized file)
+- 결정:
+  - `visibleClasses` 의미는 **permissive empty** — 빈 Set이면 모두 표시. 초기 상태가 빈 Set이라 첫 페인트가 빈 화면이 되지 않게.
+  - 포인트 클라우드 필터링은 Edge_#4 Case 5의 **Option A** 채택. `Point3D.detectionId` 필수 필드로 추가, `PointCloud`가 렌더 시 필터.
+  - ObjectList는 **전체 표시 유지 + hidden 행은 opacity-40** — Edge_#4 Case 1의 비공간 선택 경로 보존.
+  - ClassToggles UI는 **색상 칩**. 클래스별 뷰어 색상과 일치.
+  - Filters 레이아웃은 **header row** (페이지 상단). Step 9에서 조정 가능.
+- 테스트 (필수): selector 11개 + pointcloud detectionId 1개. 전체 **82/82**.
 -->
 
 

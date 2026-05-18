@@ -3,6 +3,10 @@
 
 # Architecture
 
+**Current Status: Steps 1–7 complete. Next: Step 8 — Frame Timeline.**
+For step-by-step history and per-Step decisions, see `mvp-checklist.md`.
+For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
+
 ## Folder Structure
 
 The project is an **nx monorepo**. All Step 1–10 work happens inside the
@@ -12,7 +16,7 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # fetch → parseCoco → enrichFrame → Viewer2D + Viewer3D + useViewerStore
+│   │   └── page.tsx        # fetch → parseCoco → enrichFrame → Viewer2D + Viewer3D + ObjectList + useViewerStore
 │   ├── components/
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
 │   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?
@@ -23,8 +27,14 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── PointCloud.tsx  # THREE.BufferGeometry via useMemo + dispose
 │   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight
 │   │   │   └── index.ts        # barrel
-│   │   ├── object-list/    # detection list panel
-│   │   ├── filters/        # confidence / class filters
+│   │   ├── object-list/    # ✅ Step 6 — detection list panel; selection sync with 2D/3D
+│   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds?
+│   │   │   └── index.ts        # barrel
+│   │   ├── filters/        # ✅ Step 7 — confidence slider + class toggles
+│   │   │   ├── Filters.tsx           # props: frame, threshold, visibleClasses, callbacks
+│   │   │   ├── ConfidenceSlider.tsx  # 0..1 range input
+│   │   │   ├── ClassToggles.tsx      # color chips per class
+│   │   │   └── index.ts              # barrel
 │   │   └── timeline/       # frame timeline
 │   ├── lib/
 │   │   ├── coco/           # COCO JSON parsing → internal Frame[]
@@ -36,8 +46,12 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── bbox-estimator.ts            # Detection2D → Detection3D math
 │   │   │   ├── bbox-estimator.test.ts       # 15 tests
 │   │   │   ├── pointcloud-generator.ts      # scatter points within bbox volume
-│   │   │   ├── pointcloud-generator.test.ts # 7 tests
+│   │   │   ├── pointcloud-generator.test.ts # 8 tests (incl. detectionId lock)
 │   │   │   ├── frame-enricher.ts            # orchestrator: enrichFrame()
+│   │   │   └── index.ts                     # barrel
+│   │   ├── selectors/      # ✅ Step 7 — pure store derivations
+│   │   │   ├── visible-detections.ts        # filter by threshold + visibleClasses
+│   │   │   ├── visible-detections.test.ts   # 11 tests; locks permissive-empty semantic
 │   │   │   └── index.ts                     # barrel
 │   │   └── types/          # Frame, Detection2D, Detection3D, Point3D
 │   └── store/          # ✅ Step 3 — Zustand store (UI state only)
@@ -84,7 +98,13 @@ type Detection3D = {
   bbox3D: { center: [number, number, number]; size: [number, number, number] };
 };
 
-type Point3D = { x: number; y: number; z: number; intensity?: number };
+type Point3D = {
+  x: number;
+  y: number;
+  z: number;
+  detectionId: string;  // set by generatePointCloud; required for filter (Step 7)
+  intensity?: number;
+};
 ```
 
 ## Data Flow
@@ -97,7 +117,13 @@ Frame[] (parsed: id, imageUrl, imageWidth, imageHeight, detections2D)
 Frame[] (enriched: + detections3D + pointCloud)
    ↓ loaded into React state (top-level page component)
    ↓
-Zustand store (selection / filters)  ←→  Viewer-2D / Viewer-3D / ObjectList
+Zustand store (selection / filters)
+   ↓                                      ↓
+   ↓   lib/selectors/visible-detections   ↓
+   ↓   (frame, threshold, classes) →      ↓
+   ↓        visibleIds: Set<string>       ↓
+   ↓                                      ↓
+   ↓→  Filters  Viewer-2D  Viewer-3D  ObjectList
 ```
 
 The Zustand store holds UI state only. Frame data lives in React state at the page level.
@@ -130,6 +156,11 @@ See `docs/edgecases/Edge_#3.md` for discovery history.
 | `setConfidenceThreshold` | finite number | clamp to `[0, 1]` |
 | `setConfidenceThreshold` | `NaN` / `±Infinity` | `console.warn`, keep previous value |
 | `toggleClass` | any string | toggle membership; emit a new `Set` instance |
+
+`visibleClasses` semantic (locked by `lib/selectors/visible-detections.test.ts`):
+**empty Set means "show all classes"** (permissive empty). The initial state is
+`new Set<string>()` so the user's first paint shows everything. A non-empty Set
+acts as a whitelist.
 
 ## 2D → 3D Estimation Strategy
 
@@ -167,6 +198,7 @@ type Viewer3DProps = {
   frame: Frame;           // must be enriched (has detections3D + pointCloud)
   selectedId?: string | null;              // highlights the matching bbox (Step 5)
   onSelect?: (id: string | null) => void;  // wire to store.setSelectedObject in Step 5
+  visibleIds?: Set<string>;                // Step 7 — filters out hidden bboxes + points
 };
 ```
 
@@ -176,6 +208,7 @@ type Viewer3DProps = {
 | `Scene` | Camera target, lighting, scene root. Passes `isSelected`/`onClick` to each `BBox3D`. |
 | `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. |
 | `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. |
+| `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. |
 
 `Viewer3D` receives an enriched `Frame` (output of `enrichFrame`). It does NOT call `enrichFrame` —
 coordinate math is `lib/geometry/`'s responsibility.
@@ -192,6 +225,7 @@ For camera state across frame switches, see `docs/edgecases/Edge_#4.md` Case 6 (
 |------------------|----------------------------------------|-----------------------------------|
 | `lib/coco/`      | Parse COCO JSON into `Frame[]`         | Touch React / Zustand             |
 | `lib/geometry/`  | 2D→3D math, point cloud generation     | Touch React / Zustand             |
+| `lib/selectors/` | Pure store derivations (filters etc.)  | Touch React / Zustand / Three.js  |
 | `store/`         | UI state (selection, filters)          | Hold frame data, do parsing       |
 | `components/`    | Rendering, event handling              | Do parsing or coordinate math     |
 
@@ -252,6 +286,7 @@ type Viewer2DProps = {
   frame: Frame;
   selectedId?: string | null;              // highlights the matching bbox (Step 5)
   onSelect?: (id: string | null) => void;  // wire to store.setSelectedObject in Step 5
+  visibleIds?: Set<string>;                // Step 7 — only render bboxes whose ids are in the set
 };
 ```
 
@@ -288,6 +323,7 @@ Tests follow the same layer boundaries as "Separation of Concerns". Each layer h
 |------------------|---------------------------|-----------------------------------------------------------------|
 | `lib/coco/`      | Unit                      | COCO JSON → `Frame[]` conversion correctness and edge cases     |
 | `lib/geometry/`  | Unit                      | 2D bbox → 3D bbox / point cloud math correctness                |
+| `lib/selectors/` | Unit                      | Filter semantics; locked invariants (e.g. permissive-empty)     |
 | `store/`         | Unit                      | Actions update state correctly; selectors return expected data  |
 | `components/`    | (MVP) none                | Rendering is verified manually. Only extracted pure functions are tested |
 | Integration      | Starting Step 5           | store + 2D + 3D respond to the same `selectedObjectId`          |

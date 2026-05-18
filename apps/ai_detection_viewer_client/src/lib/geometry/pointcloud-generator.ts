@@ -38,6 +38,7 @@ function samplePointInBbox(d: Detection3D, rng: Rng): Point3D {
     x: cx + (rng() - 0.5) * sx,
     y: cy + (rng() - 0.5) * sy,
     z: cz + (rng() - 0.5) * sz,
+    detectionId: d.id,
     intensity: d.confidence,
   };
 }

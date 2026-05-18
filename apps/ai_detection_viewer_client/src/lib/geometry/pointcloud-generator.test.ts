@@ -91,4 +91,20 @@ describe('generatePointCloud', () => {
       expect(p.intensity).toBe(0.42);
     }
   });
+
+  it('every generated point carries its source detection id', () => {
+    // Locks Edge_#4 Case 5 fix (Option A): the 3D viewer relies on
+    // Point3D.detectionId to filter points by the same visibility rules
+    // as the bboxes.
+    const dets = [
+      d3('det-1', [0, 0, 0], [1, 1, 1]),
+      d3('det-2', [5, 5, 5], [1, 1, 1]),
+    ];
+    const perDet = 10;
+    const points = generatePointCloud(dets, perDet, makeRng(7));
+    const firstSlice = points.slice(0, perDet);
+    const secondSlice = points.slice(perDet);
+    for (const p of firstSlice) expect(p.detectionId).toBe('det-1');
+    for (const p of secondSlice) expect(p.detectionId).toBe('det-2');
+  });
 });
