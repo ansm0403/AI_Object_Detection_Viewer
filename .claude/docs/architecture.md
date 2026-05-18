@@ -3,7 +3,7 @@
 
 # Architecture
 
-**Current Status: Steps 1–7 complete. Next: Step 8 — Frame Timeline.**
+**Current Status: Steps 1–8 complete. Next: Step 9 — UI Cleanup.**
 For step-by-step history and per-Step decisions, see `mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
 
@@ -16,7 +16,7 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # fetch → parseCoco → enrichFrame → Viewer2D + Viewer3D + ObjectList + useViewerStore
+│   │   └── page.tsx        # fetch → parseCoco → enrich all → auto-select frame → Filters + Viewer2D + <Viewer3D key={id}/> + ObjectList + Timeline
 │   ├── components/
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
 │   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?
@@ -31,11 +31,13 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds?
 │   │   │   └── index.ts        # barrel
 │   │   ├── filters/        # ✅ Step 7 — confidence slider + class toggles
-│   │   │   ├── Filters.tsx           # props: frame, threshold, visibleClasses, callbacks
+│   │   │   ├── Filters.tsx           # props: classes, threshold, visibleClasses, callbacks
 │   │   │   ├── ConfidenceSlider.tsx  # 0..1 range input
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
-│   │   └── timeline/       # frame timeline
+│   │   └── timeline/       # ✅ Step 8 — horizontal thumbnail strip
+│   │       ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame
+│   │       └── index.ts         # barrel
 │   ├── lib/
 │   │   ├── coco/           # COCO JSON parsing → internal Frame[]
 │   │   │   ├── parser.ts
@@ -59,8 +61,9 @@ apps/ai_detection_viewer_client/
 │       ├── viewer-store.test.ts
 │       └── index.ts        # barrel
 ├── tests/
-│   └── integration/        # ✅ Step 5 — cross-module contract tests
-│       └── selection-sync.test.ts  # 5 tests
+│   └── integration/        # ✅ Step 5, 8 — cross-module contract tests
+│       ├── selection-sync.test.ts  # 5 tests
+│       └── frame-switch.test.ts    # 3 tests — Edge_#5 Case 6 contract
 ├── public/
 │   └── sample-data/        # sample COCO JSON + frame images
 │       ├── sample.json
@@ -152,7 +155,7 @@ See `docs/edgecases/Edge_#3.md` for discovery history.
 |---|---|---|
 | `setSelectedObject` | `null` | clear selection |
 | `setSelectedObject` | nonexistent string | stored as-is; no highlight rendered (component id match is always false); see Edge_#5 Case 5 |
-| `setSelectedFrame` | `string` only | no `null` deselect path until Step 8 |
+| `setSelectedFrame` | `string` only | no `null` deselect path — Step 8 finalized as intentional (always-one-frame policy); see Edge_#3 Case 3 |
 | `setConfidenceThreshold` | finite number | clamp to `[0, 1]` |
 | `setConfidenceThreshold` | `NaN` / `±Infinity` | `console.warn`, keep previous value |
 | `toggleClass` | any string | toggle membership; emit a new `Set` instance |
@@ -217,7 +220,7 @@ Selection highlight: selected BBox3D renders in white (`#ffffff`) and pulses via
 (scale ±4% at ~0.64 Hz). An invisible `<mesh><boxGeometry>` provides a reliable full-volume
 click target (line segments alone are difficult to raycast in WebGL2).
 
-For camera state across frame switches, see `docs/edgecases/Edge_#4.md` Case 6 (defer to Step 8).
+For camera reset across frame switches, see `docs/edgecases/Edge_#4.md` Case 6 — resolved in Step 8 via `<Viewer3D key={frame.id} />` remount; `page.tsx` is the single wire point.
 
 ## Separation of Concerns
 

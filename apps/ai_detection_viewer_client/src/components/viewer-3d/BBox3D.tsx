@@ -4,14 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Detection3D } from '@/lib/types';
-
-const CLASS_COLORS: Record<string, string> = {
-  person: '#4ade80',
-  bicycle: '#facc15',
-  car: '#f87171',
-};
-const DEFAULT_COLOR = '#60a5fa';
-const SELECTED_COLOR = '#ffffff';
+import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
 
 // Scale pulse constants — easy to swap for other animation styles later.
 const PULSE_FREQUENCY = 4;   // rad/s (~0.64 Hz)
@@ -45,7 +38,7 @@ export function BBox3D({ detection, isSelected = false, onClick }: Props) {
     }
   });
 
-  const wireColor = isSelected ? SELECTED_COLOR : (CLASS_COLORS[detection.class] ?? DEFAULT_COLOR);
+  const wireColor = isSelected ? SELECTED_COLOR : getClassColor(detection.class);
 
   return (
     <group ref={groupRef} position={detection.bbox3D.center}>

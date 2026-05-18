@@ -1,12 +1,6 @@
 'use client';
 
-// Mirrors Viewer2D / Viewer3D / ObjectList CLASS_COLORS — consolidated in Step 9.
-const CLASS_COLORS: Record<string, string> = {
-  person: '#4ade80',
-  bicycle: '#facc15',
-  car: '#f87171',
-};
-const DEFAULT_COLOR = '#60a5fa';
+import { getClassColor } from '@/lib/ui/class-colors';
 
 type Props = {
   // The full set of class names that can be toggled (derived from the current
@@ -31,7 +25,7 @@ export function ClassToggles({ classes, visibleClasses, onToggle }: Props) {
       </span>
       {classes.map((name) => {
         const active = showAll || visibleClasses.has(name);
-        const color = CLASS_COLORS[name] ?? DEFAULT_COLOR;
+        const color = getClassColor(name);
         return (
           <button
             key={name}

@@ -324,13 +324,68 @@ Work on ONE step at a time. Mark with [x] when complete.
 -->
 
 
-## Step 8 — Frame Timeline
-- [ ] Goal: Horizontal timeline to switch between frames.
-- Scope: `components/timeline/*`.
+## Step 8 — Frame Timeline ✅ Complete
+- [x] Goal: Horizontal timeline to switch between frames.
+- Scope: `components/timeline/*` (Timeline, index). Modified: `app/page.tsx`
+  (eager enrich + auto-select + `handleSelectFrame` + classes union + Viewer3D
+  remount key + Timeline placement), `components/filters/Filters.tsx`
+  (props: `frame` → `classes`). New test: `tests/integration/frame-switch.test.ts`.
 - Done when:
-  - All frames are listed.
-  - Clicking a frame sets `selectedFrameId`.
-  - Current frame is visually highlighted.
+  - [x] All frames are listed.
+  - [x] Clicking a frame sets `selectedFrameId`.
+  - [x] Current frame is visually highlighted.
+- Tests (required):
+  - [x] `tests/integration/frame-switch.test.ts` — **3 tests; suite total 85/85**:
+    different-frame switch clears `selectedObjectId`; same-frame click is idempotent
+    (preserves object selection); no-prior-selection switch doesn't throw.
+    Locks the Edge_#5 Case 6 contract.
+- Decisions (full rationale: `docs/edgecases/Edge_#8.md` + linked earlier cases):
+  - **Initial frame**: always exactly one selected; `setSelectedFrame: (id: string)`
+    signature final (Edge_#3 Case 3 option a). `page.tsx` auto-select effect
+    self-heals stale ids by checking existence in `enrichedFrames`.
+  - **Camera**: `<Viewer3D key={currentFrame.id}>` remount per frame (Edge_#4
+    Case 6). GPU dispose already wired in Edge_#4 Case 4.
+  - **Frame-switch object clear**: `handleSelectFrame` in `page.tsx` calls
+    `setSelectedFrame(id); setSelectedObject(null);`. Same-id early-return preserves
+    selection. Store stays single-purpose (Edge_#5 Case 6).
+  - **Class chips union**: `page.tsx` computes union of all frames' classes;
+    `Filters` takes `classes: string[]` (Edge_#7 Case 1 Option A).
+  - **Eager enrich**: `frames.map((f) => enrichFrame(f))` once. Trivial memory at
+    MVP scale; pins point-cloud RNG output per frame.
+- Implementation notes:
+  - Timeline UI: 96px wide thumbnails (4:3), `ring-2 ring-white` on active,
+    placed at page bottom. Native `<img loading="lazy">` (next/image needs
+    domain config; no benefit at this size).
+- Suite total: **85/85** (82 prior + 3 frame-switch).
+- Manual verification:
+  - frame_001: Step 7 paint-order fix (bicycle front wheel) ✓.
+  - frame_009 id=9-40, frame_002 id=2-11, frame_010 id=10-49: Edge_#2 Case 2/3
+    label fallbacks render correctly ✓.
+  - 10 frames × 10 roundtrip: no visible regressions. GPU
+    `WebGLRenderer.info.memory` numerical audit deferred to Step 9.
+- Edge cases (see `docs/edgecases/Edge_#8.md`):
+  - Fixed: stale `selectedFrameId` self-heal (Case 1).
+  - Deferred to Step 9: fetch `AbortController` (Case 2, pre-existing from Step 1),
+    Timeline image-load fallback (Case 3, mirrors `Edge_#2.md` Case 5).
+  - Cross-resolved earlier defers: `Edge_#3.md` Case 3, `Edge_#4.md` Case 6,
+    `Edge_#5.md` Case 6, `Edge_#7.md` Case 1.
+
+<!-- KO (move to a localized file)
+- 결정 (전체 근거는 Edge_#8.md):
+  - 초기 frame: 항상 하나 선택. `setSelectedFrame: (id: string)` 시그니처 최종.
+    auto-select effect가 stale id도 자가복구.
+  - 카메라: `<Viewer3D key={id}>` remount.
+  - 선택 클리어: page.tsx의 `handleSelectFrame`이 `setSelectedFrame + setSelectedObject(null)`.
+  - 클래스 union: 모든 프레임 클래스 합집합. `Filters`는 `classes: string[]` 받음.
+  - Eager enrich: 메모리 무시 가능, RNG 안정성 확보.
+- 테스트: frame-switch 통합 3개. **85/85**.
+- 수동 검증: frame_001/009/002/010 정상. GPU 누수 수치 audit은 Step 9.
+- 엣지 케이스 (Edge_#8.md — 3건):
+  - 해결: stale frameId 자가복구 (Case 1).
+  - Step 9로 미룸: fetch AbortController, Timeline image fallback.
+  - 이전 defer 해결: Edge_#3 Case 3, Edge_#4 Case 6, Edge_#5 Case 6, Edge_#7 Case 1.
+-->
+
 
 ## Step 9 — UI Cleanup
 - [ ] Goal: Polish layout, spacing, colors, responsive behavior.

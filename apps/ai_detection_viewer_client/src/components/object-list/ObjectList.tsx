@@ -1,6 +1,7 @@
 'use client';
 
 import type { Frame } from '@/lib/types';
+import { getClassColor } from '@/lib/ui/class-colors';
 
 type ObjectListProps = {
   frame: Frame;
@@ -11,14 +12,6 @@ type ObjectListProps = {
   // filtered-out objects); hidden rows are dimmed instead.
   visibleIds?: Set<string>;
 };
-
-// Mirrors Viewer2D CLASS_COLORS — consolidated in Step 9 UI Cleanup.
-const CLASS_COLORS: Record<string, string> = {
-  person: '#4ade80',
-  bicycle: '#facc15',
-  car: '#f87171',
-};
-const DEFAULT_COLOR = '#60a5fa';
 
 export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectListProps) {
   return (
@@ -44,7 +37,7 @@ export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectLi
           {frame.detections2D.map((d) => {
             const isSelected = d.id === selectedId;
             const isHidden = visibleIds ? !visibleIds.has(d.id) : false;
-            const color = CLASS_COLORS[d.class] ?? DEFAULT_COLOR;
+            const color = getClassColor(d.class);
 
             return (
               <li
