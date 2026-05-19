@@ -1,0 +1,7 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npx nx build ai_detection_viewer_client",
+  "outputDirectory": "apps/ai_detection_viewer_client/.next",
+  "installCommand": "npm install",
+  "framework": "nextjs"
+}

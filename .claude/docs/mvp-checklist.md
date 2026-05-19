@@ -487,42 +487,6 @@ even if Phase 2/3 are skipped.
     outer scroll containers and could move the page on short viewports.
     Replaced with manual `ul.scrollTop` adjustment scoped to the list.
 
-### Phase 3 — Analytics Panel ✅ Complete
-
-- [x] Goal: Replace the right-rail single column with a Spatial / Analytics
-  split that visualizes selection state, confidence distribution, and class
-  composition.
-- Scope: Proposal B layout in `page.tsx`; new `components/inspector/`,
-  `components/charts/`, `components/analytics/`; new selectors
-  `lib/selectors/{confidence-buckets, class-counts}.ts`.
-- Done when:
-  - [x] `Viewer3D` occupies more than half of the main row width (5/7 split).
-  - [x] Selecting any detection (2D / 3D / list) updates the info card.
-  - [x] Moving the confidence slider shifts the histogram threshold line.
-  - [x] Clicking a class bar toggles that class in the existing filter.
-- Decisions:
-  - Selectors take **`frame` only, no `visibleIds`**. Filtering the
-    histogram or class bar would erase the very information the threshold
-    overlay / toggle interaction is meant to expose. Locked by tests.
-  - `BUCKET_COUNT = 10`, half-open `[i/10, (i+1)/10)`; **last bucket
-    closed on the right** so `confidence === 1.0` is counted.
-  - `selectClassCounts` returns a `Map` whose iteration order is
-    first-appearance in `frame.detections2D` — `ClassCountBar` renders
-    rows in that order with no extra sort.
-  - `ClassCountBar` permissive-empty visual matches `ClassToggles`
-    (empty `visibleClasses` ⇒ all rows active). Both surfaces dispatch
-    the same `toggleClass` action — no new store action introduced.
-  - `AnalyticsPanel` has no background-deselect handler — Phase 2's
-    deselect surfaces (Filters / ObjectList / Viewer empty-space) stay
-    the only entry points. No `Element.scrollIntoView` (Edge_#9.5 Case C).
-  - **Timeline** moved between row 1 and row 2 (`md:col-span-12` inside
-    the grid) so frame-switch stays next to the viewers it drives.
-  - **Viewer2D wrapper** tone aligned with other panels (`bg-zinc-900
-    rounded-lg ring-1 ring-inset ring-zinc-800`); `ring-inset` keeps
-    outer size unchanged so bbox / aspect contracts are unaffected.
-- Tests: confidence-buckets **7** + class-counts **5**. **Suite: 99/99**.
-- Edge cases: none discovered. Phase 3 adds rendering-only surfaces; no
-  new event routing that could break the selection contract.
 
 ### Excluded from Step 9.5 (rationale: see `docs/etc/NEW_UI.md`)
 
@@ -557,11 +521,43 @@ even if Phase 2/3 are skipped.
 
 
 
-- [ ] Goal: Write README, deploy to Vercel.
+## Step 10 — README + Deploy
+
+- [x] Goal: Write README, deploy to Vercel.
+- Scope: `README.md` (new content), `vercel.json` (new).
 - Done when:
-  - README explains project goal, tech stack, how to run, and known limitations
+  - [x] README explains project goal, tech stack, how to run, and known limitations
     (especially: 3D data is estimated, not real LiDAR).
-  - Live demo URL works on Vercel.
+  - [ ] Live demo URL works on Vercel. ← 사용자가 배포 후 URL 교체
+- Decisions:
+  - **Deployment model: `vercel.json` at repo root (Root Directory = `.`).**
+    Nx monorepo with empty root `scripts` and no `dev`/`build`/`start` scripts
+    on the app's package.json → Vercel needs an explicit build command pointing
+    at `npx nx build ai_detection_viewer_client`. Setting Root Directory to the
+    app folder would fail because workspace deps are hoisted to repo root.
+  - **README language: Korean only.** Portfolio target audience reads Korean;
+    English canonical spec lives in `.claude/docs/` for the internal spec triangle.
+  - **Live demo URL: placeholder until deploy completes.** User replaces
+    `https://ai-detection-viewer.vercel.app` with actual Vercel URL after first deploy.
+  - **No new feature work.** KITTI ingestion and detectron2 prediction swap are post-MVP.
+- Tests: None added. Suite stays at **99/99**.
+- Manual verification (사용자가 직접 수행):
+  - [ ] Vercel 프로젝트 생성 → GitHub 저장소 연결
+  - [ ] vercel.json에 의해 framework / build command 자동 인식 확인
+  - [ ] 첫 배포 후 sample-data 정적 자원 로드 확인
+  - [ ] 2D↔3D 선택 동기화 동작 확인
+  - [ ] README Live demo URL placeholder를 실제 URL로 교체
+
+<!-- KO (move to a localized file)
+- 결정:
+  - 배포: 루트 vercel.json + Root Directory = `.`. Nx monorepo의 hoisted deps 때문에
+    app dir을 Root로 잡으면 install이 실패함.
+  - README 언어: 한국어 단일. 영문 canonical은 `.claude/docs/` 스펙 삼각형에 이미 존재.
+  - Live URL: placeholder로 시작, 사용자가 배포 후 직접 교체.
+  - 신규 기능 없음. KITTI / prediction swap은 post-MVP.
+- 테스트: 신규 없음. **99/99**.
+- 수동 검증: Vercel 프로젝트 생성 → GitHub 연결 → 자동 배포 → URL 교체.
+-->
 
 ---
 
