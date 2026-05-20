@@ -20,32 +20,21 @@
     ],
     "paths": {
       "@/*": ["./src/*"]
-    },
-    "types": ["jest", "node"],
-    "outDir": "dist",
-    "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo"
+    }
   },
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
     "src/**/*.js",
     "src/**/*.jsx",
-    "../../apps/ai_detection_viewer_client/.next/types/**/*.ts",
-    "../../dist/apps/ai_detection_viewer_client/.next/types/**/*.ts",
     "next-env.d.ts"
   ],
   "exclude": [
-    "out-tsc",
-    "dist",
     "node_modules",
     "jest.config.ts",
     "jest.config.cts",
     "src/**/*.spec.ts",
     "src/**/*.test.ts",
-    ".next",
-    "eslint.config.js",
-    "eslint.config.cjs",
-    "eslint.config.mjs"
+    ".next"
   ]
 }
