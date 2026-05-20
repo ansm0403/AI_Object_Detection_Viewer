@@ -3,8 +3,8 @@
 
 # Architecture
 
-**Current Status: Steps 1–9 complete. Step 9.5 Phase 1 ✅ complete;
-Phase 2 ✅ complete; Phase 3 ✅ complete. Step 10 ✅ complete — README + Vercel deploy config done.**
+**Current Status: Steps 1–11 complete. Step 10 ✅ README + Vercel deploy config.
+Step 11 ✅ YOLOv8n prediction data — sample.json now has real confidence scores (0.274–0.904).**
 For step-by-step history and per-Step decisions, see `mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
 For Step 9.5 UI feature candidates and adopt/exclude rationale, see `docs/etc/NEW_UI.md`.

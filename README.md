@@ -64,12 +64,7 @@ geometry / material / camera / lighting 같은 Three.js 핵심 개념도 자연�
 의존성 / 번들 사이즈가 늘지 않는다는 이점이 컸습니다. 핸드-롤된 차트는 confidence 슬라이더와의
 threshold 오버레이도 자유롭게 그릴 수 있었습니다.
 
-### 4. 라이트 테마 미지원
-
-2D 클래스 색상, `SELECTED_COLOR`(흰색), SVG glow filter가 다크 배경을 가정한 톤으로 짜여 있습니다.
-라이트 테마를 추가하면 이 세 가지를 동시에 재설계해야 해서 MVP 스코프를 벗어난다고 판단했습니다.
-
-### 5. 코어 로직과 React의 분리
+### 4. 코어 로직과 React의 분리
 
 COCO 파싱, 2D→3D 좌표 변환, 셀렉터는 모두 `lib/` 아래의 순수 함수입니다.
 React 컴포넌트와 Zustand store는 이 함수들의 호출자일 뿐, 도메인 로직을 직접 들고 있지 않습니다.
@@ -158,7 +153,7 @@ apps/ai_detection_viewer_client/
 
 ---
 
-## 알려진 한계점
+## 현 프로젝트의 한계점
 
 ### 1. 3D 좌표는 추정값입니다
 

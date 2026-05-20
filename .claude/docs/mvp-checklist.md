@@ -559,6 +559,28 @@ even if Phase 2/3 are skipped.
 - 수동 검증: Vercel 프로젝트 생성 → GitHub 연결 → 자동 배포 → URL 교체.
 -->
 
+## Step 11 — Prediction Data ✅ Complete
+
+- [x] Goal: Replace ground-truth `sample.json` with model prediction output
+  so that `score` fields are populated, making the confidence slider and histogram meaningful.
+- Scope: `public/sample-data/sample.json` replacement + `scripts/generate_predictions.py` (new).
+  No frontend code changes — `CocoAnnotation.score?: number` and the
+  `confidence = Number.isFinite(ann.score) ? ann.score : 1.0` fallback already existed.
+- Done when:
+  - [x] `sample.json` contains prediction annotations with varied `score` values (0.0–1.0 range).
+  - [x] `npm test` (app dir) still passes **99/99** with new data.
+  - [x] Confidence histogram shows a real distribution (not a plateau at 1.0).
+- Implementation:
+  - Model: YOLOv8n (ultralytics 8.4.51, CPU inference). Model file 6.2MB, auto-downloaded.
+  - Classes kept: person(0→1) / bicycle(1→2) / car(2→3). Other COCO-80 classes filtered out.
+  - Confidence threshold: 0.25. Results: 47 annotations across 10 frames.
+  - Score distribution: min=0.274 / max=0.904 / mean=0.577. Low(0.25~0.5): 20, Mid(0.5~0.9): 26, High(0.9+): 1.
+  - Original GT data backed up to `public/sample-data/sample.gt_backup.json`.
+  - Script is idempotent; re-running creates a fresh backup and overwrites `sample.json`.
+- Tests: None added (data swap, no new code). Suite: **99/99**.
+- Note: `npx nx test` fails with a pre-existing Nx/vitest-v4 runner resolution issue unrelated
+  to this step. `npm test` from the app directory is the correct test command.
+
 ---
 
 ## How to Use This Checklist
