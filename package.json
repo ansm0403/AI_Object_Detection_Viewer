@@ -2,7 +2,11 @@
   "name": "@ai-detection-viewer/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "dev": "npm run dev -w @ai-detection-viewer/ai_detection_viewer_client",
+    "build": "npm run build -w @ai-detection-viewer/ai_detection_viewer_client",
+    "start": "npm run start -w @ai-detection-viewer/ai_detection_viewer_client"
+  },
   "private": true,
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -26,7 +30,6 @@
     "@nx/jest": "22.7.1",
     "@nx/js": "22.7.1",
     "@nx/nest": "22.7.1",
-    "@nx/next": "^22.7.1",
     "@nx/node": "22.7.1",
     "@nx/playwright": "22.7.1",
     "@nx/web": "22.7.1",
