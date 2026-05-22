@@ -1,3 +1,8 @@
+<img width="400" alt="Honeycam 2026-05-22 11-32-13" src="https://github.com/user-attachments/assets/bfbda11d-0157-4bdc-8b7c-31cfdbf595b4" />
+<img width="400" alt="Honeycam 2026-05-22 11-31-21" src="https://github.com/user-attachments/assets/0bd33b58-c9e6-43f8-a17c-8e9e65e7af9b" />
+<img width="400" alt="Honeycam 2026-05-22 11-33-05" src="https://github.com/user-attachments/assets/7732a033-3844-4c8a-b901-4e588b0b60f0" />
+<img width="400" alt="Honeycam 2026-05-22 11-36-51" src="https://github.com/user-attachments/assets/2696eb39-998b-4136-8f65-e189e9b15df0" />
+
 # AI Object Detection Viewer
 
 AI 객체 탐지 결과를 2D 이미지와 3D 공간에서 동시에 탐색하는 데이터 시각화 뷰어입니다.
@@ -5,7 +10,7 @@ AI 객체 탐지 결과를 2D 이미지와 3D 공간에서 동시에 탐색하�
 
 ## 라이브 데모
 
-🔗 https://ai-detection-viewer.vercel.app *(배포 후 URL로 교체)*
+🔗 ai-object-detection-viewer-ai-detec.vercel.app 
 
 > 샘플 데이터로 MS COCO val2017의 person / bicycle / car 카테고리 10장이 들어 있습니다.
 > 좌측 2D 이미지의 바운딩 박스, 우측 3D 씬의 wireframe 박스, 우상단 객체 리스트,
@@ -28,6 +33,15 @@ AI 객체 탐지 결과를 2D 이미지와 3D 공간에서 동시에 탐색하�
 ---
 
 ## 기술 스택
+
+![Next JS](https://img.shields.io/badge/Next-black.svg?style=for-the-badge&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white)<br>
+![TailwindCSS](https://img.shields.io/badge/tailwindcss-%2338B2AC.svg?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![Threejs](https://img.shields.io/badge/threejs-black?style=for-the-badge&logo=three.js&logoColor=white)<br>
+![Vitest](https://img.shields.io/badge/-Vitest-252529?style=for-the-badge&logo=vitest&logoColor=FCC72B)
+![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
+![Vercel](https://img.shields.io/badge/vercel-%23000000.svg?style=for-the-badge&logo=vercel&logoColor=white)
+
 
 | 영역 | 스택 | 선택 이유 |
 |---|---|---|
@@ -224,8 +238,3 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
 
 세부 사례와 의사결정 근거는 [`docs/edgecases/`](docs/edgecases/) 하위 문서에 남겨두었습니다.
 
----
-
-## 라이선스
-
-MIT
