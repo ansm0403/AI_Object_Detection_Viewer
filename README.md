@@ -238,3 +238,41 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
 
 세부 사례와 의사결정 근거는 [`docs/edgecases/`](docs/edgecases/) 하위 문서에 남겨두었습니다.
 
+---
+
+## 트러블슈팅
+
+프로젝트에서 직접 겪고 해결한 3가지 사례입니다. root cause / 대안 분석은
+[`docs/edgecases/`](docs/edgecases/) 문서에 자세히 남겨두었습니다.
+
+### 1. 3D 깊이 반전 — 큰 객체가 화면 뒤로 밀려나던 문제
+
+- **문제**: estimator는 z를 "카메라까지의 거리"로 인코딩(작은 z = 가까움)하지만,
+  카메라가 `+z` 쪽에 있어 `-z` 방향을 응시하고 있어 깊이 의미가 정반대로 나타남.
+- **해결**: 카메라 위치를 `[0, 0, +14]` → `[0, 0, -10]`로 옮겨 `+z` 방향을 응시하게 함.
+  estimator·tests·spec 한 줄도 건드리지 않고 한 줄만 변경.
+- **코드**: [`Viewer3D.tsx#L18-L25`](apps/ai_detection_viewer_client/src/components/viewer-3d/Viewer3D.tsx#L18-L25)
+  · 상세: `docs/edgecases/Edge_#4.md` Case 2
+
+### 2. 겹친 2D bbox 클릭 우선순위 불일치
+
+- **문제**: SVG는 CSS `z-index`를 무시하고 paint order(배열 순서)대로 hit-test 하므로,
+  COCO `annotations` 배열 순서에 따라 시각적으로 앞에 있는 큰 객체를 클릭해도 가려진
+  작은 객체가 선택되는 경우 발생.
+- **해결**: detection 목록을 bbox 면적 오름차순으로 정렬해 큰 bbox가 마지막에 paint되어
+  hit-test 스택 최상단을 차지하게 함. 3D estimator의 "큰 면적 = 가까운 z" 컨벤션과
+  동일한 proxy를 공유하므로 2D/3D 두 뷰가 단일 깊이 모델을 공유.
+- **코드**: [`Viewer2D.tsx#L22-L34`](apps/ai_detection_viewer_client/src/components/viewer-2d/Viewer2D.tsx#L22-L34)
+  · 상세: `docs/edgecases/Edge_#2.md` Case 1
+
+### 3. drei `<Grid>` raycast가 "빈 공간 deselect" 깨뜨림
+
+- **문제**: R3F의 `<Canvas onPointerMissed>`는 raycast가 *아무것도* 맞히지 않을 때만
+  발화. UI 다듬기에서 추가한 drei `<Grid infiniteGrid>`는 시각적으로는 페이드되지만
+  실제로는 거대한 plane mesh라 거의 모든 클릭이 grid를 맞춰 `onPointerMissed`가 발화하지
+  않음 → "빈 공간 클릭 = 선택 해제" 계약이 시각적 회귀 없이 조용히 깨짐.
+- **해결**: `useRef`로 grid mesh를 잡고 mount 직후 `useEffect`에서 해당 mesh의 `raycast`
+  메소드를 no-op으로 덮어씀. 시각은 유지하면서 raycaster에는 "보이지 않게" 만들어
+  deselect 계약을 복구.
+- **코드**: [`Scene.tsx#L31-L38`](apps/ai_detection_viewer_client/src/components/viewer-3d/Scene.tsx#L31-L38)
+  · 상세: `docs/edgecases/Edge_#9.5.md` Case A

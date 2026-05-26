@@ -28,9 +28,10 @@ export function Scene({ frame, selectedId, onSelect, visibleIds }: Props) {
     ? frame.detections3D.filter((d) => visibleIds.has(d.id))
     : frame.detections3D;
 
-  // Grid is a giant Plane mesh — without this, raycast would always hit the
-  // floor and `<Canvas onPointerMissed>` would never fire, breaking the
-  // "click empty space to deselect" contract from Step 5. Edge_#9.5 Case A.
+  // 빈 공간 클릭 시 선택 해제를 보장하는 코드. drei <Grid infiniteGrid>는
+  // 실제로는 거대한 plane mesh라 raycast가 항상 grid에 맞아 <Canvas
+  // onPointerMissed>가 발화 안 함 → mesh의 raycast를 no-op으로 덮어써
+  // raycaster에 "보이지 않게" 만듦으로써 Step 5의 deselect 계약을 복구.
   const gridRef = useRef<THREE.Mesh>(null);
   useEffect(() => {
     if (gridRef.current) gridRef.current.raycast = () => {};
