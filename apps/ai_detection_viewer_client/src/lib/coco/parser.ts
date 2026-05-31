@@ -114,7 +114,8 @@ function toDetection2D(
     !Array.isArray(ann.bbox) ||
     ann.bbox.length !== 4 ||
     !ann.bbox.every((n) => Number.isFinite(n))
-  ) {
+  )
+  {
     console.warn(
       `[parseCoco] Annotation ${ann.id} has invalid bbox. Skipping.`,
     );
