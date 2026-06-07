@@ -5,7 +5,8 @@
 
 **Current Status: Steps 1–11 complete. Step 10 ✅ README + Vercel deploy config.
 Step 11 ✅ YOLOv8n prediction data — sample.json now has real confidence scores (0.274–0.904).**
-For step-by-step history and per-Step decisions, see `mvp-checklist.md`.
+For step-by-step history and per-Step decisions, see `mvp-checklist.md` (🔒 frozen).
+Post-MVP feature work (in progress) is tracked in `post-mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
 For Step 9.5 UI feature candidates and adopt/exclude rationale, see `docs/etc/NEW_UI.md`.
 
@@ -26,8 +27,10 @@ apps/ai_detection_viewer_client/
 │   │   ├── viewer-3d/      # ✅ Step 4, 5 — R3F canvas, point cloud, 3D bboxes, selection sync
 │   │   │   ├── Viewer3D.tsx    # props: frame, selectedId?, onSelect?; hosts Canvas
 │   │   │   ├── Scene.tsx       # lights + PointCloud + BBox3D + OrbitControls; passes selection
-│   │   │   ├── PointCloud.tsx  # THREE.BufferGeometry via useMemo + dispose
-│   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight
+│   │   │   ├── PointCloud.tsx  # THREE.BufferGeometry via useMemo + dispose; per-vertex depth color (F1-A)
+│   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight + hover tint (F1-B); mounts BBoxLabel (F1-C)
+│   │   │   ├── BBoxLabel.tsx   # ✅ F1-C — drei <Html> info pill (class + confidence) anchored above the box; pointer-events-none
+│   │   │   ├── HintBox.tsx     # ✅ Step 9.5 — corner mouse-controls overlay (plain HTML sibling of Canvas)
 │   │   │   └── index.ts        # barrel
 │   │   ├── object-list/    # ✅ Step 6 — detection list panel; selection sync with 2D/3D
 │   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds?
@@ -64,6 +67,8 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── bbox-estimator.test.ts       # 15 tests
 │   │   │   ├── pointcloud-generator.ts      # scatter points within bbox volume
 │   │   │   ├── pointcloud-generator.test.ts # 8 tests (incl. detectionId lock)
+│   │   │   ├── depth-color.ts               # ✅ F1-A — pure depthToColor + depthRange (per-frame z domain)
+│   │   │   ├── depth-color.test.ts          # 15 tests (endpoints, monotonic, clamp, degenerate, range)
 │   │   │   ├── frame-enricher.ts            # orchestrator: enrichFrame()
 │   │   │   └── index.ts                     # barrel
 │   │   ├── selectors/      # ✅ Step 7 — pure store derivations
@@ -201,6 +206,13 @@ This is a visualization approximation, not real perception.
 Mapping constants (`SCENE_HALF_Y`, `MIN_Z`, `MAX_Z`, `MIN_SIZE_WORLD`) and formulas live
 in `lib/geometry/bbox-estimator.ts`.
 
+> **Note (F1-A finding).** The estimator compresses typical COCO detections toward the FAR
+> end: `z = MAX_Z − areaRatio·(MAX_Z−MIN_Z)`, and COCO objects are small relative to the
+> image, so on the sample data ~85% of detections land in `z∈[7,8]`. Depth-color therefore
+> does NOT color over the fixed `[MIN_Z, MAX_Z]` (that used only the top ~15% of the ramp and
+> looked flat); it fits the ramp per frame to the frame's actual point-z range. See the
+> PointCloud contract and Edge_F#1.
+
 ### Camera setup (`components/viewer-3d/Viewer3D.tsx`)
 
 Camera at `(0, 0, -10)` with OrbitControls target `(0, 0, 4.5)` — looks in the **+z** direction.
@@ -230,10 +242,11 @@ type Viewer3DProps = {
 
 | Component | Responsibility |
 |---|---|
-| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. |
+| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. **F1-A:** `<Canvas flat>` disables ACES tone mapping so the point-cloud depth colors (and bbox wires) render with true, un-desaturated color — verified by screenshot, see Edge_F#1 Case 3. |
 | `Scene` | Camera target, lighting (ambient + hemisphere + directional), `<Grid>` floor, `<fog>` for depth, and scene root. The `<Grid>` mesh's `raycast` is no-oped at mount so it does not hijack `<Canvas onPointerMissed>` — without that, empty-space deselect from Step 5 silently breaks. See Edge_#9.5 Case A. Passes `isSelected`/`onClick` to each `BBox3D`. OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6` are tuned here. |
-| `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. |
-| `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. |
+| `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. **F1-A:** each point carries a per-vertex `color` attribute from `depthToColor(z, zMin, zMax)` (`lib/geometry/depth-color.ts`); `<pointsMaterial vertexColors>` with a white base (multiplicative identity) shades each point by depth. The `[zMin, zMax]` domain is `depthRange(points)` fit to the **full frame** point-z range (computed pre-filter, so class toggles do NOT recolor — only frame switches do). Colors are then written for the `visibleIds`-filtered `visiblePoints`, and the color attribute rides the same geometry the dispose `useEffect` already cleans up. Base point `size` is `0.2` (with `sizeAttenuation`) and palette is **cyan→violet**; both were finalized by render verification (smaller points / dark-far-end / ACES tone mapping all made the gradient invisible). See Edge_F#1 Case 3. |
+| `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. **F1-B:** `onPointerOver`/`onPointerOut` on the same invisible mesh drive a local `hovered` state; a non-selected hovered box renders a lightened class tint (`THREE.Color(classColor).lerp(white, 0.6)`) + a static `1.06` scale (no pulse — kept distinct from the selected white+pulse look, whose scale stays in `0.96–1.04`; selection wins when both apply). Tint/scale strengths were render-verified (the initial `0.45`/`1.02` barely read on the near-black bg with 1px wires). Cursor → `pointer` while hovered via an effect whose cleanup also fires on unmount, so a hovered box that disappears (frame switch / filtered out) before `onPointerOut` still resets the cursor. Hover is 3D-local only — no store field, no 2D/ObjectList sync (Immutable Rule #2). See Edge_F#1 Case 4. **F1-C:** split into an outer (position-only) group and an inner (pulse/hover-scaled) group; when `isSelected || hovered`, mounts `<BBoxLabel>` on the OUTER group at the box top (`size.y/2 + pad`) so the selected-box pulse doesn't jitter the label anchor. |
+| `BBoxLabel` | **F1-C:** drei `<Html>` info pill anchored to a 3D point, re-projected each frame so it tracks the box as the camera orbits/zooms. Constant on-screen size (no `distanceFactor`). Shows class-color dot + class + `confidence` as a percent. `pointer-events-none` on both the `<Html>` container and the inner node so empty-space clicks still reach `<Canvas onPointerMissed>` (deselect). `occlude` OFF for F1. Shown only for selected/hovered boxes (≤2 at once) to avoid clutter; it's an in-scene complement to `SelectedObjectInfo`, not a replacement. See Edge_F#1 Case 5. |
 | `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. **Phase 2:** confidence rendered as a sky-tinted gauge bar; on `selectedId` change the selected row is scrolled into view by manually adjusting the `<ul>` `scrollTop` (NOT `Element.scrollIntoView` — that propagates to outer scroll containers and can move the page; see Edge_#9.5 Case C). |
 
 `Viewer3D` receives an enriched `Frame` (output of `enrichFrame`). It does NOT call `enrichFrame` —

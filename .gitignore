@@ -53,3 +53,7 @@ out
 
 docs/etc
 docs/learning
+
+# 빌드 캐시
+
+tsconfig.tsbuildinfo

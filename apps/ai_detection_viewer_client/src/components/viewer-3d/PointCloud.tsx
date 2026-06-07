@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { Point3D } from '@/lib/types';
+import { depthToColor, depthRange } from '@/lib/geometry';
 
 type Props = {
   points: Point3D[];
@@ -10,26 +11,45 @@ type Props = {
   // to the GPU. `undefined` keeps all points. Edge_#4 Case 5 (Option A).
   visibleIds?: Set<string>;
   size?: number;
-  color?: string;
 };
 
-export function PointCloud({ points, visibleIds, size = 0.04, color = '#cbd5f5' }: Props) {
+// size 0.2 (world units, with sizeAttenuation): smaller looked like faint specks
+// where the per-point depth color was unreadable — verified by rendering (Edge_F#1
+// Case 3). The Canvas runs `flat` (no tone mapping) so these colors stay vivid.
+export function PointCloud({ points, visibleIds, size = 0.2 }: Props) {
   const visiblePoints = useMemo(
     () => (visibleIds ? points.filter((p) => visibleIds.has(p.detectionId)) : points),
     [points, visibleIds],
   );
 
+  // Color domain is fit to the FULL frame's point-z range (pre-filter), so
+  // toggling class filters does NOT recolor the cloud — only frame switches do.
+  // Per-frame fit (not the estimator's fixed [1,8]) is what makes the gradient
+  // visible; see depth-color.ts and Edge_F#1 Case 1.
+  const [zMin, zMax] = useMemo(() => depthRange(points), [points]);
+
   const geometry = useMemo(() => {
     const geom = new THREE.BufferGeometry();
     const positions = new Float32Array(visiblePoints.length * 3);
+    // Per-vertex color: one RGB triple (0..1) per point, derived from its depth
+    // (z) so the cloud reads as 3D. Conversion lives in lib/geometry/depth-color
+    // (Immutable Rule #3). Range is this frame's own [zMin, zMax] so the gradient
+    // fills the whole ramp.
+    const colors = new Float32Array(visiblePoints.length * 3);
     for (let i = 0; i < visiblePoints.length; i++) {
       positions[i * 3] = visiblePoints[i].x;
       positions[i * 3 + 1] = visiblePoints[i].y;
       positions[i * 3 + 2] = visiblePoints[i].z;
+
+      const [r, g, b] = depthToColor(visiblePoints[i].z, zMin, zMax);
+      colors[i * 3] = r;
+      colors[i * 3 + 1] = g;
+      colors[i * 3 + 2] = b;
     }
     geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     return geom;
-  }, [visiblePoints]); // 클래스 필터 변경 → visiblePoints 변경 → 매번 새 BufferGeometry 생성
+  }, [visiblePoints, zMin, zMax]); // 필터/프레임 변경 → 새 BufferGeometry 생성
 
   // [GPU 메모리 누수] 같은 프레임을 고정한 채 클래스 필터를 반복 조작하면
   // geometry가 정상 12개 대비 49개까지 단조 증가하는 WebGL 누수를 발견.
@@ -48,7 +68,11 @@ export function PointCloud({ points, visibleIds, size = 0.04, color = '#cbd5f5' 
 
   return (
     <points ref={ref} geometry={geometry}>
-      <pointsMaterial size={size} color={color} sizeAttenuation />
+      {/* vertexColors shades each point by its own `color` attribute. The base
+          color stays white (#ffffff) because vertexColors MULTIPLIES it into the
+          per-vertex color — white (1,1,1) is the multiplicative identity, so the
+          depth ramp shows through unchanged. */}
+      <pointsMaterial size={size} vertexColors sizeAttenuation />
     </points>
   );
 }

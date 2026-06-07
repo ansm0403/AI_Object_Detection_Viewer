@@ -3,6 +3,10 @@
 
 # MVP Checklist
 
+> 🔒 **FROZEN — MVP completion record (Steps 1–11).** The MVP is done; this file is now a
+> read-only baseline, treated like `docs/PROJECT_DESIGN.md`. Do NOT append new work here.
+> Post-MVP feature work lives in `.claude/docs/post-mvp-checklist.md`.
+
 Track MVP progress here. Each step has a goal, scope, and "done when" criteria.
 Work on ONE step at a time. Mark with [x] when complete.
 

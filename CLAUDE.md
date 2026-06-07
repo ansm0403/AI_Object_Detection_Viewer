@@ -38,7 +38,7 @@ The project's full design is reconstructed from three doc groups:
 
 | Group | Files | Role |
 |---|---|---|
-| **Spec triangle** (the design itself) | `docs/PROJECT_DESIGN.md` + `.claude/docs/architecture.md` + `.claude/docs/mvp-checklist.md` | why + current structure + step-by-step progress |
+| **Spec triangle** (the design itself) | `docs/PROJECT_DESIGN.md` + `.claude/docs/architecture.md` + progress log (`mvp-checklist.md` 🔒 frozen → `post-mvp-checklist.md` active) | why + current structure + progress |
 | **Rules + entry point** (always loaded) | `CLAUDE.md` | Immutable Rules, Workflow Rules, Error Defaults, Testing Policy |
 | **Reading aids** (consulted as needed) | `.claude/docs/domain-glossary.md` + `docs/edgecases/Edge_#N.md` | terminology + per-Step decision history |
 
@@ -46,24 +46,31 @@ Detail per file:
 
 - `.claude/docs/architecture.md` — current spec: data model, folder structure, data flow,
   component contracts, validation rules. Updated each Step.
-- `.claude/docs/mvp-checklist.md` — step-by-step progress, decisions, and per-Step Edge case
-  references. Updated each Step.
+- `.claude/docs/mvp-checklist.md` — 🔒 **FROZEN** MVP completion record (Steps 1–11). Read-only,
+  treated like `PROJECT_DESIGN.md`: a baseline for comparison, not a working doc. Never append new
+  work here.
+- `.claude/docs/post-mvp-checklist.md` — **active** progress log for post-MVP feature work. Same
+  per-feature template as the MVP checklist (Goal / Scope / Done when / Tests / Decisions / Edge
+  refs), but the unit is a loose "Feature", not a strict "Step". Updated as features land.
 - `.claude/docs/domain-glossary.md` — 3D/AI term definitions. Read before explaining domain
-  concepts to the user.
+  concepts to the user. Add new terms here the moment a feature introduces them.
 - `docs/edgecases/Edge_#N.md` — per-Step edge case discoveries, root causes, resolutions, and
   deferred items. Cross-referenced from `mvp-checklist.md`'s Step entries; read the relevant
-  Edge_#N.md when starting any Step that has deferred cases pointed at it.
+  Edge_#N.md when starting any Step that has deferred cases pointed at it. Post-MVP features use
+  `Edge_F#N.md` (created only when a feature actually surfaces edge cases), cross-referenced from
+  `post-mvp-checklist.md`.
 - `docs/PROJECT_DESIGN.md` — **READ-ONLY historical record** of the original project vision and
   decisions. Read ONLY when (a) clarifying user intent, (b) resolving conflicts between docs, or
   (c) deciding whether a feature fits the project goal. Do NOT read for routine implementation tasks.
   **Never edit this file.** If new information would change a decision, record it in
-  `architecture.md` or `mvp-checklist.md` — never alter the original record. Preserving the
+  `architecture.md` or `post-mvp-checklist.md` — never alter the original record. Preserving the
   original vision is what lets it serve as a comparison baseline for future decisions.
 
 Routing shortcuts:
 - Unsure about a 3D/AI term → read `domain-glossary.md` before answering.
 - Structural or multi-file changes → read `architecture.md` first.
-- User references "step N" → read `mvp-checklist.md` (and any Edge_#N.md it links).
+- Working on a post-MVP feature → read `post-mvp-checklist.md` (and any Edge_F#N.md it links).
+- User references "step N" → read `mvp-checklist.md` (🔒 frozen; and any Edge_#N.md it links).
 
 ## Immutable Rules
 
