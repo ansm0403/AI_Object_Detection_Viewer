@@ -11,6 +11,12 @@ type TimelineProps = {
   // frames are independent and don't track — shows no autoplay affordance.
   isPlaying?: boolean;
   onTogglePlay?: () => void;
+  // (F2-D-1) Camera-follow toggle (nuScenes only). `cameraMode` is the current
+  // mode and `onToggleCameraMode` flips Fixed↔Follow; when the callback is
+  // omitted the toggle is not rendered (COCO has no follow mode). This is a pure
+  // VIEW flag — it does NOT touch `selectedObjectId` (Immutable Rule #2).
+  cameraMode?: 'fixed' | 'follow';
+  onToggleCameraMode?: () => void;
 };
 
 export function Timeline({
@@ -19,6 +25,8 @@ export function Timeline({
   onSelectFrame,
   isPlaying = false,
   onTogglePlay,
+  cameraMode = 'fixed',
+  onToggleCameraMode,
 }: TimelineProps) {
   if (frames.length === 0) return null;
 
@@ -31,25 +39,52 @@ export function Timeline({
             ({frames.length})
           </span>
         </h2>
-        {onTogglePlay && (
-          <button
-            type="button"
-            onClick={onTogglePlay}
-            aria-pressed={isPlaying}
-            aria-label={isPlaying ? 'Pause autoplay' : 'Play sequence'}
-            className={[
-              'inline-flex items-center gap-1.5 rounded px-2.5 py-1',
-              'text-xs font-medium transition-colors',
-              isPlaying
-                ? 'bg-sky-400 text-zinc-950 hover:bg-sky-300'
-                : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 ring-1 ring-zinc-700',
-            ].join(' ')}
-          >
-            {/* Inline glyphs keep this dependency-free (no icon lib in MVP). */}
-            <span aria-hidden="true">{isPlaying ? '❙❙' : '▶'}</span>
-            {isPlaying ? 'Pause' : 'Play'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* (F2-D-1) Camera mode toggle — keeps the SELECTED object centered as
+              it moves (Follow) vs the fixed overview (Fixed, the default). Pure
+              view flag; falls back to Fixed behavior when nothing is selected. */}
+          {onToggleCameraMode && (
+            <button
+              type="button"
+              onClick={onToggleCameraMode}
+              aria-pressed={cameraMode === 'follow'}
+              aria-label={
+                cameraMode === 'follow'
+                  ? 'Switch to fixed camera'
+                  : 'Follow the selected object'
+              }
+              className={[
+                'inline-flex items-center gap-1.5 rounded px-2.5 py-1',
+                'text-xs font-medium transition-colors',
+                cameraMode === 'follow'
+                  ? 'bg-emerald-400 text-zinc-950 hover:bg-emerald-300'
+                  : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 ring-1 ring-zinc-700',
+              ].join(' ')}
+            >
+              <span aria-hidden="true">◎</span>
+              {cameraMode === 'follow' ? 'Following' : 'Follow'}
+            </button>
+          )}
+          {onTogglePlay && (
+            <button
+              type="button"
+              onClick={onTogglePlay}
+              aria-pressed={isPlaying}
+              aria-label={isPlaying ? 'Pause autoplay' : 'Play sequence'}
+              className={[
+                'inline-flex items-center gap-1.5 rounded px-2.5 py-1',
+                'text-xs font-medium transition-colors',
+                isPlaying
+                  ? 'bg-sky-400 text-zinc-950 hover:bg-sky-300'
+                  : 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 ring-1 ring-zinc-700',
+              ].join(' ')}
+            >
+              {/* Inline glyphs keep this dependency-free (no icon lib in MVP). */}
+              <span aria-hidden="true">{isPlaying ? '❙❙' : '▶'}</span>
+              {isPlaying ? 'Pause' : 'Play'}
+            </button>
+          )}
+        </div>
       </div>
       <ul className="flex gap-2 overflow-x-auto pb-1">
         {frames.map((frame, idx) => {

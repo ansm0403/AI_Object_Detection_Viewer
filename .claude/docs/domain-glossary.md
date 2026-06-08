@@ -215,14 +215,29 @@ loops at the end. The *which-frame-next* decision is the pure `nextFrameIndex` i
 React `setInterval` only owns the timing. Meaningful only with a **track id** (so the same object is
 seen moving) — wired for nuScenes, hidden on COCO (independent frames → a slideshow, not motion).
 
-**tween / lerp / slerp** *(F2-C, deferred)*
+**tween / lerp / slerp** *(F2-C snap → F2-D-2 shipped)*
 *Tween* (in-be**tween**ing) = generating smooth intermediate frames between two keyframes so motion
 looks continuous instead of snapping. *lerp* (linear interpolation) blends two positions: `a + (b−a)·t`
 for `t ∈ [0,1]`. *slerp* (spherical linear interpolation) is the rotation equivalent — it interpolates
 between two **quaternions** along the shortest arc at constant angular speed (a plain lerp of
-quaternions would distort orientation). F2-C ships **snap** (no tween) so every rendered pose is a real
-measured keyframe; a future box-tween would lerp the center + slerp the rotation between consecutive
-keyframes (pure fns in `lib/geometry`), while the LiDAR cloud stays per-keyframe.
+quaternions would distort orientation). F2-C shipped **snap**; **F2-D-2** adds the box tween: during
+autoplay each box lerps its center + slerps its rotation between consecutive keyframes (pure
+`lerpVec3`/`slerpQuat` in `lib/geometry/interpolation.ts`), paced by a `useFrame` clock advancing
+`t ∈ [0,1]` over `AUTOPLAY_INTERVAL_MS`. **Honesty (Rule #6):** an interpolated in-between pose is NOT
+a measurement, so the tween runs ONLY while playing — paused / scrubbing shows the exact measured
+keyframe. The LiDAR cloud stays per-keyframe (box-smooth / points-snap dissonance, accepted). See
+Edge_F#2 Case 8.
+
+**Camera Follow (look-at target tracking)** *(F2-D-1)*
+An opt-in 3D-viewer camera mode that keeps the SELECTED object centered as it moves across keyframes.
+[[OrbitControls]] orbits the camera around a `target` (its look-at pivot); follow mode just moves that
+pivot to the selected box's current center each frame, so the camera stays 3rd-person and
+user-orbitable (the camera POSITION is unchanged — only the aim point tracks; this is NOT a
+first-person / dashcam view). The pure lookup is `selectFollowTarget(detections3D, selectedId)` →
+center | null; `null` (nothing selected, or the object isn't in this frame) falls back to the fixed
+overview framing, so follow never aims at empty space. The default + fallback is the F2-C fixed camera.
+Uses a [[track id / instance token]] indirectly (it follows whatever `selectedObjectId` points at,
+which on nuScenes is a stable instance). See Edge_F#2 Case 7.
 
 **nuScenes**
 A modern (2019) autonomous-driving dataset: 360° cameras + LiDAR + radar, 3D annotations in the

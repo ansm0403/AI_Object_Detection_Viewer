@@ -16,7 +16,11 @@ shown). **F2-C ✅ Done** (sequence + tracking + autoplay): the `instance` token
 identity, so on nuScenes `selectedObjectId` SURVIVES a frame switch (tracking; COCO still clears —
 unstable ids), a Timeline play/pause control steps the keyframes at ~2 Hz (pure `nextFrameIndex` in
 `lib/sequence/`), and the nuScenes 3D camera no longer remounts/bounces per frame (dataset-aware
-`Viewer3D` key + frozen initial framing). 190 tests. **F2 complete.**
+`Viewer3D` key + frozen initial framing). **F2-D ✅ Done** (motion/camera polish): an opt-in
+Fixed/Follow camera toggle aims OrbitControls at the selected box (`selectFollowTarget`, falls back to
+fixed), and during autoplay every box tweens between keyframes (position `lerpVec3` + rotation
+`slerpQuat` in `lib/geometry/interpolation.ts`) while paused/scrubbing shows the exact measured
+keyframe (Rule #6); the LiDAR cloud stays per-keyframe snap. 203 tests. **F2 complete.**
 For step-by-step history and per-Step decisions, see `mvp-checklist.md` (🔒 frozen).
 Post-MVP feature work (in progress) is tracked in `post-mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
@@ -31,7 +35,7 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # per-dataset load (COCO: parseCoco→enrich / nuScenes: parseNuScenes, F2-A) → auto-select frame → Header(switcher+badge) + Filters + Viewer2D + <Viewer3D/> + ObjectList + AnalyticsPanel + Timeline. Derives 2D + 3D visible-id sets (∩ distance filter). F2-C: `tracksAcrossFrames` (nuScenes) drives dataset-aware frame-switch selection (keep vs clear) + dataset-aware `Viewer3D` key (stable vs `frame.id`) + an `isPlaying` autoplay timer (nextFrameIndex @ ~2 Hz).
+│   │   └── page.tsx        # per-dataset load (COCO: parseCoco→enrich / nuScenes: parseNuScenes, F2-A) → auto-select frame → Header(switcher+badge) + Filters + Viewer2D + <Viewer3D/> + ObjectList + AnalyticsPanel + Timeline. Derives 2D + 3D visible-id sets (∩ distance filter). F2-C: `tracksAcrossFrames` (nuScenes) drives dataset-aware frame-switch selection (keep vs clear) + dataset-aware `Viewer3D` key (stable vs `frame.id`) + an `isPlaying` autoplay timer (nextFrameIndex @ ~2 Hz). F2-D: a page-level `cameraMode` (`'fixed'|'follow'`, nuScenes-only view flag, reset to fixed on dataset switch) + a `nextFrame` memo (the upcoming keyframe) are threaded to Viewer3D for camera-follow + box-tween.
 │   ├── components/
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
 │   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?
@@ -54,7 +58,7 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
 │   │   ├── timeline/       # ✅ Step 8 — horizontal thumbnail strip
-│   │   │   ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only)
+│   │   │   ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only)
 │   │   │   └── index.ts         # barrel
 │   │   ├── header/         # ✅ Step 9.5 Phase 2 — app title + frame meta line
 │   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount
@@ -86,8 +90,10 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── transforms.test.ts           # 13 tests — global→ego yaw, axis flip, quaternion order/absent, size reorder
 │   │   │   ├── projection.ts                # ✅ F2 — ego→camera + intrinsic; 8-corner AABB; behind-camera/off-screen cull
 │   │   │   ├── projection.test.ts           # 10 tests — known 3D→pixel, behind-camera null, off-screen clamp
-│   │   │   ├── camera-framing.ts            # ✅ F2-A — frameBoxesForCamera(): fit 3D camera (pos+target) to the nuScenes box cloud
-│   │   │   ├── camera-framing.test.ts       # 5 tests — center on cloud, behind+above, ground-cap, wider→farther
+│   │   │   ├── camera-framing.ts            # ✅ F2-A frameBoxesForCamera() (fit camera to box cloud) + ✅ F2-D-1 selectFollowTarget() (selected box center | null)
+│   │   │   ├── camera-framing.test.ts       # 9 tests — framing (center/behind+above/ground-cap/wider→farther) + selectFollowTarget (found/null/absent/empty)
+│   │   │   ├── interpolation.ts             # ✅ F2-D-2 — pure lerpVec3 (position) + slerpQuat (rotation) for inter-frame box tween
+│   │   │   ├── interpolation.test.ts        # 9 tests — lerp endpoints/midpoint/clamp; slerp endpoints/half-angle/unit-norm/identity
 │   │   │   ├── frame-enricher.ts            # orchestrator: enrichFrame() (stamps source:'coco-estimated')
 │   │   │   └── index.ts                     # barrel
 │   │   ├── nuscenes/       # ✅ F2 (parser+types) — prepped nuScenes static JSON → internal Frame[]
@@ -306,10 +312,10 @@ type Viewer3DProps = {
 
 | Component | Responsibility |
 |---|---|
-| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes (**F2-C:** the `key` is dataset-aware — COCO uses `frame.id` so it remounts/resets per frame as before, nuScenes uses one stable key so the Canvas + OrbitControls persist across frames and autoplay; the nuScenes framing is also **frozen to the mount frame** via `useRef`+`useMemo` so the OrbitControls `target` doesn't re-aim each frame. Extension seam for camera-follow: pass the selected box center as `target` per frame. See Edge_F#2 Case 6). `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. **F1-A:** `<Canvas flat>` disables ACES tone mapping so the point-cloud depth colors (and bbox wires) render with true, un-desaturated color — verified by screenshot, see Edge_F#1 Case 3. **F2-A:** the camera is **dataset-aware**. COCO keeps `position=[0,0,-10]` looking +z with `far=100`. nuScenes (`frame.source==='nuscenes-measured'`) fits the camera to the measured box cloud via `frameBoxesForCamera(centers)` (behind+above, looking forward/−z), widens `far=600`, and passes `target`+`fog={false}` to `Scene`. Without this the COCO camera faces away from the nuScenes cloud and the COCO fog occludes it — see Edge_F#2 Case 3. |
-| `Scene` | Camera **target** (prop; default COCO `[0,0,SCENE_CENTER_Z]`, nuScenes = fitted target), lighting (ambient + hemisphere + directional), `<Grid>` floor, optional `<fog>` for depth (prop `fog`, default on; nuScenes passes `false`), and scene root. The `<Grid>` mesh's `raycast` is no-oped at mount so it does not hijack `<Canvas onPointerMissed>` — without that, empty-space deselect from Step 5 silently breaks. See Edge_#9.5 Case A. Passes `isSelected`/`onClick` to each `BBox3D`. OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6` are tuned here. |
+| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes (**F2-C:** the `key` is dataset-aware — COCO uses `frame.id` so it remounts/resets per frame as before, nuScenes uses one stable key so the Canvas + OrbitControls persist across frames and autoplay; the nuScenes framing is also **frozen to the mount frame** via `useRef`+`useMemo` so the OrbitControls `target` doesn't re-aim each frame. Extension seam for camera-follow: pass the selected box center as `target` per frame. See Edge_F#2 Case 6). `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. **F1-A:** `<Canvas flat>` disables ACES tone mapping so the point-cloud depth colors (and bbox wires) render with true, un-desaturated color — verified by screenshot, see Edge_F#1 Case 3. **F2-A:** the camera is **dataset-aware**. COCO keeps `position=[0,0,-10]` looking +z with `far=100`. nuScenes (`frame.source==='nuscenes-measured'`) fits the camera to the measured box cloud via `frameBoxesForCamera(centers)` (behind+above, looking forward/−z), widens `far=600`, and passes `target`+`fog={false}` to `Scene`. Without this the COCO camera faces away from the nuScenes cloud and the COCO fog occludes it — see Edge_F#2 Case 3. **F2-D-1 (camera follow):** with `cameraMode='follow'` the OrbitControls `target` is `selectFollowTarget(frame.detections3D, selectedId)` — the selected box's CURRENT center, recomputed each frame so it tracks the moving box (snap). When it returns `null` (no selection / object absent in this frame) `target` falls back to the frozen framing — follow degrades to the F2-C fixed camera, never aiming at empty space. The camera POSITION stays the one-time init, so the view stays 3rd-person/orbitable (only the pivot tracks). **F2-D-2:** passes `nextFrame` + `playing` to `Scene` for the box tween. Both are nuScenes-only; COCO gets the defaults (fixed, no tween). See Edge_F#2 Case 7. |
+| `Scene` | Camera **target** (prop; default COCO `[0,0,SCENE_CENTER_Z]`, nuScenes = fitted target), lighting (ambient + hemisphere + directional), `<Grid>` floor, optional `<fog>` for depth (prop `fog`, default on; nuScenes passes `false`), and scene root. The `<Grid>` mesh's `raycast` is no-oped at mount so it does not hijack `<Canvas onPointerMissed>` — without that, empty-space deselect from Step 5 silently breaks. See Edge_#9.5 Case A. Passes `isSelected`/`onClick` to each `BBox3D`. OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6` are tuned here. **F2-D-2:** builds a memoized `Map<instanceId, bbox3D>` from `nextFrame.detections3D` (the upcoming keyframe) and passes each `BBox3D` its own `nextCenter`/`nextRotation` (or `undefined` if the object has no next match → hold pose), plus `playing` (gates the tween) and `frameId` (resets the per-box tween clock on a keyframe switch). |
 | `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. **F1-A:** each point carries a per-vertex `color` attribute from `depthToColor(z, zMin, zMax)` (`lib/geometry/depth-color.ts`); `<pointsMaterial vertexColors>` with a white base (multiplicative identity) shades each point by depth. The `[zMin, zMax]` domain is `depthRange(points)` fit to the **full frame** point-z range (computed pre-filter, so class toggles do NOT recolor — only frame switches do). The visible set comes from `selectVisiblePoints(points, visibleIds)`, and the color attribute rides the same geometry the dispose `useEffect` already cleans up. Base point `size` is `0.2` (with `sizeAttenuation`) and palette is **cyan→violet**; both were finalized by render verification (smaller points / dark-far-end / ACES tone mapping all made the gradient invisible). See Edge_F#1 Case 3. **F2-B:** the cloud is now real LiDAR for nuScenes frames (COCO stays estimated). `selectVisiblePoints` (in `lib/selectors`, pure) keeps points whose `detectionId` is in `visibleIds` (COCO's owned points) AND **always keeps points with no `detectionId`** (LiDAR environment points), so the box filters (distance slider / class toggles) never thin the measured cloud. Real `z` drives the depth color; `size`/decimation density were render-verified legible at the nuScenes scale (Edge_F#2 Case 4). |
-| `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. **F1-B:** `onPointerOver`/`onPointerOut` on the same invisible mesh drive a local `hovered` state; a non-selected hovered box renders a lightened class tint (`THREE.Color(classColor).lerp(white, 0.6)`) + a static `1.06` scale (no pulse — kept distinct from the selected white+pulse look, whose scale stays in `0.96–1.04`; selection wins when both apply). Tint/scale strengths were render-verified (the initial `0.45`/`1.02` barely read on the near-black bg with 1px wires). Cursor → `pointer` while hovered via an effect whose cleanup also fires on unmount, so a hovered box that disappears (frame switch / filtered out) before `onPointerOut` still resets the cursor. Hover is 3D-local only — no store field, no 2D/ObjectList sync (Immutable Rule #2). See Edge_F#1 Case 4. **F1-C:** split into an outer (position-only) group and an inner (pulse/hover-scaled) group; when `isSelected || hovered`, mounts `<BBoxLabel>` on the OUTER group at the box top (`size.y/2 + pad`) so the selected-box pulse doesn't jitter the label anchor. **F2-A:** the inner group also carries `quaternion={bbox3D.rotation ?? [0,0,0,1]}` — measured nuScenes boxes render at their real heading; absent (COCO) → identity, so estimated boxes / F1 are unchanged. Rotation and the uniform pulse/hover scale compose independently; the label stays on the unrotated outer group so it hangs upright. |
+| `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. **F1-B:** `onPointerOver`/`onPointerOut` on the same invisible mesh drive a local `hovered` state; a non-selected hovered box renders a lightened class tint (`THREE.Color(classColor).lerp(white, 0.6)`) + a static `1.06` scale (no pulse — kept distinct from the selected white+pulse look, whose scale stays in `0.96–1.04`; selection wins when both apply). Tint/scale strengths were render-verified (the initial `0.45`/`1.02` barely read on the near-black bg with 1px wires). Cursor → `pointer` while hovered via an effect whose cleanup also fires on unmount, so a hovered box that disappears (frame switch / filtered out) before `onPointerOut` still resets the cursor. Hover is 3D-local only — no store field, no 2D/ObjectList sync (Immutable Rule #2). See Edge_F#1 Case 4. **F1-C:** split into an outer (position-only) group and an inner (pulse/hover-scaled) group; when `isSelected || hovered`, mounts `<BBoxLabel>` on the OUTER group at the box top (`size.y/2 + pad`) so the selected-box pulse doesn't jitter the label anchor. **F2-A:** the inner group also carries `quaternion={bbox3D.rotation ?? [0,0,0,1]}` — measured nuScenes boxes render at their real heading; absent (COCO) → identity, so estimated boxes / F1 are unchanged. Rotation and the uniform pulse/hover scale compose independently; the label stays on the unrotated outer group so it hangs upright. **F2-D-2 (box tween):** the outer-group position and inner-group quaternion are now driven imperatively in `useFrame` (the JSX `position`/`quaternion` are kept only as first-render seeds). While `playing` AND a `nextCenter` exists, the box GLIDES from its current measured pose toward the next keyframe's pose — `lerpVec3` on position, `slerpQuat` on rotation — with `t = (elapsed − keyframeStart) / AUTOPLAY_INTERVAL_MS` clamped to `[0,1]`; the per-box clock resets on each `frameId` change (and on a play restart), so a tween always begins exactly on a measured pose. When NOT playing (paused / scrubbed) or with no next match, it shows the EXACT measured pose (Rule #6 — interpolated in-between poses are never shown as a static state). |
 | `BBoxLabel` | **F1-C:** drei `<Html>` info pill anchored to a 3D point, re-projected each frame so it tracks the box as the camera orbits/zooms. Constant on-screen size (no `distanceFactor`). Shows class-color dot + class + `confidence` as a percent. `pointer-events-none` on both the `<Html>` container and the inner node so empty-space clicks still reach `<Canvas onPointerMissed>` (deselect). `occlude` OFF for F1. Shown only for selected/hovered boxes (≤2 at once) to avoid clutter; it's an in-scene complement to `SelectedObjectInfo`, not a replacement. See Edge_F#1 Case 5. |
 | `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. **Phase 2:** confidence rendered as a sky-tinted gauge bar; on `selectedId` change the selected row is scrolled into view by manually adjusting the `<ul>` `scrollTop` (NOT `Element.scrollIntoView` — that propagates to outer scroll containers and can move the page; see Edge_#9.5 Case C). |
 
@@ -344,6 +350,37 @@ independent frames make playback a meaningless slideshow). The boxes snap betwee
 4-A; the LiDAR cloud is per-keyframe too) — `Scene` keys each `BBox3D` on the stable instance id, so
 the component persists frame to frame and is the seam for a future box-tween (lerp/slerp in
 `lib/geometry`).
+
+### Camera mode + inter-frame tween (F2-D)
+
+Two viewing-smoothness layers on top of F2-C, both nuScenes-only and both built on the same seams
+F2-C left clean. They share the gap they bridge: the scene renders at ~60 fps but keyframes update at
+only ~2 Hz.
+
+**F2-D-1 — camera follow (toggle).** A page-level `cameraMode: 'fixed' | 'follow'` (a pure VIEW flag,
+NOT a selection field — Immutable Rule #2 untouched; mirrors `isPlaying`, reset to `'fixed'` on a
+dataset switch). The Timeline header shows a `Fixed/Follow` button (nuScenes only). In `'follow'`,
+`Viewer3D` sets the OrbitControls `target` to `selectFollowTarget(frame.detections3D, selectedId)` —
+the selected box's current center, recomputed each frame so the pivot tracks the moving box (snap,
+decision Q2). `selectFollowTarget` (pure, in `lib/geometry/camera-framing.ts`, tested) returns `null`
+when nothing is selected or the selected instance is absent in the frame, and the caller falls back to
+the frozen framing — so follow degrades gracefully to the F2-C fixed camera, never aiming at empty
+space. The camera POSITION stays the one-time init (3rd-person, user-orbitable; only the aim tracks).
+A consequence: a followed object that travels far still recedes (position is fixed) — accepted for the
+short sequence. See Edge_F#2 Case 7.
+
+**F2-D-2 — inter-frame box tween.** During autoplay each box GLIDES from its current keyframe pose to
+the next instead of snapping. `page.tsx` computes `nextFrame` (the upcoming keyframe via
+`nextFrameIndex`) and threads it + `playing` through `Viewer3D` → `Scene`, which builds a
+`Map<instanceId, bbox3D>` of next poses and hands each `BBox3D` its own `nextCenter`/`nextRotation`.
+`BBox3D` interpolates in `useFrame`: position via `lerpVec3`, rotation via `slerpQuat` (both pure, in
+`lib/geometry/interpolation.ts`, tested), over `t = (elapsed − keyframeStart)/AUTOPLAY_INTERVAL_MS`
+clamped to `[0,1]`. The per-box clock resets on each `frameId` change (and on a play restart) so a
+tween always begins on a real measured pose. **Honesty (Rule #6):** the tween is gated on `playing`,
+so paused / manual scrubbing shows the EXACT measured keyframe — an interpolated in-between pose is
+never a static state, and the "Measured" badge keeps referring to the keyframe data. The LiDAR cloud
+stays per-keyframe (the accepted box-smooth / points-snap dissonance). Objects with no next match hold
+their current pose (no jump, no NaN). All visible boxes tween (cost negligible). See Edge_F#2 Case 8.
 
 ## Step 9.5 Component Contracts
 
@@ -402,7 +439,7 @@ frames — see "2D Viewer SVG Contract" below.
 |------------------|----------------------------------------|-----------------------------------|
 | `lib/coco/`      | Parse COCO JSON into `Frame[]`         | Touch React / Zustand             |
 | `lib/nuscenes/`  | (F2 ✅) Parse the offline-prepped nuScenes static JSON into `Frame[]` (`parseNuScenes`) | Touch React / Zustand; traverse raw relational tables (the prep script flattens those) |
-| `lib/geometry/`  | 2D→3D math, point cloud generation; (F2) coordinate-frame transforms (global→ego, **sensor→global** for LiDAR, axis convention), 3D→2D projection, and 3D camera framing (`frameBoxesForCamera`) | Touch React / Zustand             |
+| `lib/geometry/`  | 2D→3D math, point cloud generation; (F2) coordinate-frame transforms (global→ego, **sensor→global** for LiDAR, axis convention), 3D→2D projection, and 3D camera framing (`frameBoxesForCamera`); (F2-D) follow-target selection (`selectFollowTarget`) + pose interpolation (`lerpVec3`/`slerpQuat`) | Touch React / Zustand             |
 | `lib/selectors/` | Pure store derivations: filters (Step 7), chart aggregations (Step 9.5), (F2) distance filter, (F2-B) `selectVisiblePoints` (point-cloud visibility: owned points obey the box filter, environment points always show) | Touch React / Zustand / Three.js  |
 | `lib/ui/`        | Shared UI-layer constants (colors etc.) | Touch React / Zustand / Three.js |
 | `lib/sequence/`  | (F2-C) Pure keyframe-sequence playback logic — `nextFrameIndex` (which frame is next, loop/stop) + the autoplay cadence constant | Touch React / Zustand / Three.js; own the timer (the `setInterval` lives in `page.tsx`) |
@@ -534,6 +571,11 @@ raw inputs the transforms need:
   split: pure `nextFrameIndex` in `lib/sequence` (Rule #3), timer + dataset-aware policy in `page.tsx`.
   Boxes snap between keyframes (no tween); seams for box-tween and camera-follow are left clean. See
   Edge_F#2 Case 5 (selection persistence) + Case 6 (camera stability).
+- **F2-D** ✅ — motion/camera polish on top of F2-C, built on those two seams. **D-1 camera follow:**
+  an opt-in Fixed/Follow toggle aims OrbitControls at the selected box (`selectFollowTarget`), falling
+  back to the fixed framing when nothing is followable. **D-2 box tween:** during autoplay each box
+  glides between keyframes (`lerpVec3`/`slerpQuat`), while paused/scrubbing snaps to the exact measured
+  pose (Rule #6); the LiDAR cloud stays per-keyframe. See Edge_F#2 Case 7 + Case 8.
 
 **Filter (F2-A ✅):** a pure **distance** selector in `lib/selectors/distance-filter.ts`
 (`detectionDistance` = `|bbox3D.center|`; `selectIdsWithinDistance(detections3D, max)`).

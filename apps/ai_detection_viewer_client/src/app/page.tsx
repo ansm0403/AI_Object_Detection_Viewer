@@ -47,6 +47,12 @@ export default function Index() {
   // meaningful on nuScenes, where objects keep their `instance` id across frames
   // (track id) so playing shows real motion; COCO frames are independent.
   const [isPlaying, setIsPlaying] = useState(false);
+  // (F2-D-1) Camera mode. 'fixed' = the F2-C frozen overview (default + fallback);
+  // 'follow' = keep the SELECTED object centered as it moves across keyframes.
+  // A pure VIEW flag — separate from `selectedObjectId`, so Immutable Rule #2
+  // (single selection field) is untouched. nuScenes only (see the Timeline +
+  // Viewer3D wiring below); reset to 'fixed' on a dataset switch.
+  const [cameraMode, setCameraMode] = useState<'fixed' | 'follow'>('fixed');
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -137,6 +143,17 @@ export default function Index() {
     if (!frames || !currentFrame) return 0;
     return frames.findIndex((f) => f.id === currentFrame.id) + 1;
   }, [frames, currentFrame]);
+
+  // (F2-D-2) The NEXT keyframe in the sequence (the one autoplay would advance
+  // to), so each tracked box can tween from its current pose toward its
+  // next-keyframe pose. nuScenes only (COCO frames are independent → no tween);
+  // null when there is no meaningful "next" (single frame / no selection yet).
+  const nextFrame = useMemo(() => {
+    if (!tracksAcrossFrames || !frames || frames.length <= 1) return null;
+    const idx = frames.findIndex((f) => f.id === selectedFrameId);
+    const next = nextFrameIndex(idx, frames.length, { loop: true });
+    return next === null ? null : frames[next];
+  }, [tracksAcrossFrames, frames, selectedFrameId]);
 
   // Distance filter (F2-A): ids of 3D boxes within maxDistance of the ego
   // vehicle. On COCO this passes everything (estimated centers are well within
@@ -241,6 +258,7 @@ export default function Index() {
       setSelectedObject(null);
       resetFilters();
       setIsPlaying(false); // (F2-C) stop autoplay when leaving the sequence
+      setCameraMode('fixed'); // (F2-D-1) reset to the default overview camera
     },
     [datasetId, setSelectedObject, resetFilters],
   );
@@ -350,6 +368,11 @@ export default function Index() {
             selectedId={selectedObjectId}
             onSelect={setSelectedObject}
             visibleIds={visibleIds3D}
+            // (F2-D) Camera-follow + box-tween are nuScenes-only; COCO gets the
+            // defaults (fixed camera, no tween) so its path is unchanged.
+            cameraMode={tracksAcrossFrames ? cameraMode : undefined}
+            nextFrame={tracksAcrossFrames ? nextFrame : null}
+            playing={tracksAcrossFrames ? isPlaying : false}
           />
         </div>
         <div className="md:col-span-12">
@@ -363,6 +386,13 @@ export default function Index() {
             isPlaying={tracksAcrossFrames ? isPlaying : undefined}
             onTogglePlay={
               tracksAcrossFrames ? () => setIsPlaying((p) => !p) : undefined
+            }
+            // (F2-D-1) Fixed/Follow camera toggle, nuScenes only.
+            cameraMode={tracksAcrossFrames ? cameraMode : undefined}
+            onToggleCameraMode={
+              tracksAcrossFrames
+                ? () => setCameraMode((m) => (m === 'fixed' ? 'follow' : 'fixed'))
+                : undefined
             }
           />
         </div>

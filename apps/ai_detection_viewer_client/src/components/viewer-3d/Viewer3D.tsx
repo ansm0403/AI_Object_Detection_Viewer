@@ -3,7 +3,7 @@
 import { useMemo, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Frame } from '@/lib/types';
-import { frameBoxesForCamera } from '@/lib/geometry';
+import { frameBoxesForCamera, selectFollowTarget } from '@/lib/geometry';
 import { Scene } from './Scene';
 import { HintBox } from './HintBox';
 
@@ -12,9 +12,27 @@ type Viewer3DProps = {
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   visibleIds?: Set<string>;
+  // (F2-D-1) Camera mode (nuScenes only). 'fixed' = the frozen overview framing
+  // (F2-C default); 'follow' = aim the OrbitControls target at the selected
+  // object each frame so it stays centered as it moves. Falls back to fixed when
+  // there is no selection / the object isn't in this frame.
+  cameraMode?: 'fixed' | 'follow';
+  // (F2-D-2) The NEXT keyframe + whether autoplay is running, threaded to Scene
+  // so each box can tween from its current pose toward its next-keyframe pose
+  // WHILE PLAYING (paused/scrubbing shows the exact measured keyframe — Rule #6).
+  nextFrame?: Frame | null;
+  playing?: boolean;
 };
 
-export function Viewer3D({ frame, selectedId, onSelect, visibleIds }: Viewer3DProps) {
+export function Viewer3D({
+  frame,
+  selectedId,
+  onSelect,
+  visibleIds,
+  cameraMode = 'fixed',
+  nextFrame,
+  playing = false,
+}: Viewer3DProps) {
   // nuScenes boxes sit at real measured positions (tens of metres ahead, Three
   // forward = −z) so the COCO camera (at −z looking +z) faces away from them.
   // Fit the camera to the actual box cloud and look forward instead. COCO keeps
@@ -49,6 +67,19 @@ export function Viewer3D({ frame, selectedId, onSelect, visibleIds }: Viewer3DPr
   // far=100 only by a little, but the camera also backs off, so widen it.
   const cameraFar = isMeasured ? 600 : 100;
 
+  // (F2-D-1) Camera-follow target. In 'follow' mode aim OrbitControls at the
+  // selected object's CURRENT center (recomputed each frame from the live
+  // `frame`, so it tracks the moving box — decision Q2 = snap). The camera
+  // POSITION stays the one-time init, so the view stays 3rd-person/orbitable;
+  // only the pivot tracks. `selectFollowTarget` returns null when nothing is
+  // selected or the object is absent in this frame → fall back to the frozen
+  // fixed framing (never aim at empty space). COCO (no framing) keeps undefined.
+  const followTarget =
+    isMeasured && cameraMode === 'follow'
+      ? selectFollowTarget(frame.detections3D, selectedId)
+      : null;
+  const target = followTarget ?? (framing ? framing.target : undefined);
+
   return (
     <div className="relative overflow-hidden w-full aspect-[4/3] bg-neutral-950 rounded">
       {/* 3D 씬을 렌더링하는 R3F Canvas. COCO estimator는 "큰 bbox = 작은 z =
@@ -70,8 +101,10 @@ export function Viewer3D({ frame, selectedId, onSelect, visibleIds }: Viewer3DPr
           selectedId={selectedId}
           onSelect={onSelect}
           visibleIds={visibleIds}
-          target={framing ? framing.target : undefined}
+          target={target}
           fog={isMeasured ? false : undefined}
+          nextFrame={nextFrame}
+          playing={playing}
         />
       </Canvas>
       <HintBox />

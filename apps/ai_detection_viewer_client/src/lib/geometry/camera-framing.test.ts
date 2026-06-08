@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { frameBoxesForCamera, type Vec3 } from './camera-framing';
+import { frameBoxesForCamera, selectFollowTarget, type Vec3 } from './camera-framing';
+import type { Detection3D } from '@/lib/types';
+
+// Minimal Detection3D fixture — only id + center matter for follow targeting.
+const det = (id: string, center: Vec3): Detection3D => ({
+  id,
+  class: 'car',
+  confidence: 1,
+  bbox3D: { center, size: [1, 1, 1] },
+});
 
 describe('frameBoxesForCamera', () => {
   it('returns the forward-looking fallback for an empty cloud', () => {
@@ -47,5 +56,29 @@ describe('frameBoxesForCamera', () => {
     const standoff = (f: ReturnType<typeof frameBoxesForCamera>) =>
       f.position[2] - f.target[2];
     expect(standoff(wide)).toBeGreaterThan(standoff(tight));
+  });
+});
+
+describe('selectFollowTarget (F2-D-1)', () => {
+  const detections = [
+    det('a', [1, 2, 3]),
+    det('b', [-4, 5, -6]),
+  ];
+
+  it('returns the selected detection center', () => {
+    expect(selectFollowTarget(detections, 'b')).toEqual([-4, 5, -6]);
+  });
+
+  it('returns null when nothing is selected', () => {
+    expect(selectFollowTarget(detections, null)).toBeNull();
+    expect(selectFollowTarget(detections, undefined)).toBeNull();
+  });
+
+  it('returns null when the selected id is absent in this frame (fallback to fixed)', () => {
+    expect(selectFollowTarget(detections, 'gone')).toBeNull();
+  });
+
+  it('returns null for an empty detection list', () => {
+    expect(selectFollowTarget([], 'a')).toBeNull();
   });
 });

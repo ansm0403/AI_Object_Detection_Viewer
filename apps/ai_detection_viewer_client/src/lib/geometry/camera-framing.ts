@@ -14,6 +14,8 @@
  * scene ahead of the ego vehicle.
  */
 
+import type { Detection3D } from '@/lib/types';
+
 export type Vec3 = [number, number, number];
 export type CameraFraming = { position: Vec3; target: Vec3 };
 
@@ -60,4 +62,30 @@ export function frameBoxesForCamera(
     position: [cx, cy + up, cz + back],
     target: [cx, Math.min(cy, MAX_TARGET_Y), cz],
   };
+}
+
+/**
+ * The OrbitControls look target for **camera-follow mode** (F2-D-1): the current
+ * center of the selected object, or `null` when there is nothing to follow.
+ *
+ * Camera follow keeps the SELECTED object centered as it moves across keyframes
+ * by aiming the OrbitControls pivot (`target`) at it each frame — the camera
+ * stays 3rd-person and user-orbitable (only the aim point tracks). This helper
+ * is the pure lookup behind that; the component passes the result as `target`
+ * and snaps to it (decision Q2). Kept pure + tested (Immutable Rule #3).
+ *
+ * Returns `null` when:
+ * - `selectedId` is null/undefined (nothing selected), or
+ * - the selected id is not present in this frame's `detections3D` (the object
+ *   left the camera / was filtered out). The caller then falls back to the fixed
+ *   framing — so follow degrades gracefully to the F2-C fixed camera, never
+ *   aiming at empty space.
+ */
+export function selectFollowTarget(
+  detections3D: ReadonlyArray<Detection3D>,
+  selectedId: string | null | undefined,
+): Vec3 | null {
+  if (!selectedId) return null;
+  const hit = detections3D.find((d) => d.id === selectedId);
+  return hit ? hit.bbox3D.center : null;
 }

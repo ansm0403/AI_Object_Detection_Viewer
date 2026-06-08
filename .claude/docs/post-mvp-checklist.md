@@ -222,7 +222,7 @@ Sub-features can ship independently; recommended order **1A → 1B → 1C** (1C 
 
 ---
 
-## F2 — nuScenes Real-3D Integration ✅ Done (F2-A ✅, F2-B ✅, F2-C ✅)
+## F2 — nuScenes Real-3D Integration — core ✅ Done (F2-A ✅, F2-B ✅, F2-C ✅); F2-D ✅ Done (motion/camera polish)
 
 Replace *estimated* 3D (COCO → invented depth) with *measured* 3D from **nuScenes**,
 added **alongside** COCO via a dataset switcher (not a replacement — the Step 11 YOLO /
@@ -509,6 +509,157 @@ or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
   Case 6), Case 6 (camera remount-for-reset vs no-remount-for-stability — resolved by dataset-aware
   key + frozen framing).
 
+### F2-D — Motion & camera polish ✅ Done (after F2-C)
+
+Two viewing-smoothness upgrades layered on F2-C's tracking. Neither adds data nor a new view — they
+make the existing autoplay *read* smoother and let the user focus on one tracked object. Both bridge
+the same gap (the scene renders at ~60 fps, but keyframes update at only ~2 Hz) via a time-based
+interpolation in `useFrame` — that frame-rate-decoupling idea is the one genuinely new concept here.
+
+**Split into two independently-shippable sub-features; recommended order F2-D-1 → F2-D-2** (D-1 is
+smaller / lower-risk and carries no honesty caveat; D-2 is the bigger plumbing job and reopens the
+Rule #6 question that got it deferred in the first place).
+
+**Locked from the planning chat (do not re-litigate):**
+- Both sub-features ship.
+- **Camera follow is an OPT-IN mode; the F2-C fixed camera stays the DEFAULT and the fallback.**
+  Keeping the fixed mode is *cheaper*, not costlier: follow's hard edges ("nothing selected" / "the
+  selected object isn't in this frame") resolve to the already-built, already-verified fixed
+  behavior. Coexistence lowers risk vs replacing.
+- **Tween is box-only**; the LiDAR cloud stays per-keyframe (snap). Accepted dissonance: the box
+  glides while the points jump.
+
+#### F2-D-1 — Camera follow mode (toggle) ✅ Done
+
+- [x] Goal: An opt-in camera mode that keeps the SELECTED object centered as it moves across
+      keyframes, while the fixed overview camera remains the default.
+- Scope: a camera-mode flag (UI state — store or page; **NOT** a new selection field, so Immutable
+  Rule #2 is untouched); a toggle control (Timeline area or 3D corner, nuScenes only); branch the
+  `target` source in `Viewer3D`/`Scene` — fixed = frozen framing (current F2-C behavior), follow =
+  the selected box's current center each frame; fall back to fixed when there is no selection or the
+  selected instance is absent in the frame. Reuses the existing `target` prop seam (Edge_F#2 Case 6) —
+  no remount/key change.
+- Background (beginner): OrbitControls means the camera ORBITS around a `target` (its look-at pivot).
+  Follow moves only that pivot to the selected object — it stays **3rd-person and user-orbitable**
+  (NOT first-person / dashcam; the camera position stays user-controlled, only the aim point tracks).
+- Done when:
+  - [x] A toggle switches Fixed (default) ↔ Follow; in Follow the selected box stays centered as
+        autoplay / manual scrubbing advances. (Timeline header `Fixed/Follow` button, nuScenes only;
+        render-verified: toggling Follow re-aims the camera onto the selected box, which stays
+        centered as frames advance.)
+  - [x] No selection (or the selected object isn't in the current frame) → behaves exactly as Fixed
+        (the built-in fallback) — no camera jump to empty space, no crash. (`selectFollowTarget`
+        returns `null` in both cases → `target` falls back to the frozen framing.)
+  - [x] The user can still orbit / zoom in Follow (only the pivot moves); COCO shows no toggle
+        (nuScenes only); Rule #2 (single `selectedObjectId`) intact; F2-C fixed mode unchanged.
+        (`cameraMode` is a separate page-level VIEW flag, never a selection field; render-verified
+        Follow button hidden on COCO.)
+- Decisions made during impl (via AskUserQuestion — all recommended options chosen):
+  - **Trigger = explicit Fixed/Follow toggle button** (predictable; a plain object click does not
+    move the camera). Placed in the Timeline header next to Play (nuScenes only).
+  - **`target` update = snap** (re-aim each frame to the selected box center; matches the box snap
+    pre-D-2 and keeps D-1 isolated/low-risk — no shared clock pulled in early).
+  - **Mode persistence:** the flag persists across frame switches (just page state), resets to Fixed
+    on a dataset switch; default on load = Fixed.
+  - **State location = page-level** `cameraMode` (mirrors `isPlaying` — both nuScenes-only, ephemeral
+    view flags; kept out of the persisted Zustand store).
+- Tests: camera / OrbitControls is UI → no unit tests (Testing Policy); render-verified (Playwright).
+  The pure helper that emerged — `selectFollowTarget(detections3D, selectedId)` → center | null — is
+  unit-tested in `camera-framing.test.ts` (+4: found / null id / absent id / empty), per Rule #3.
+- Edge refs: `Edge_F#2.md` Case 7 (follow↔fixed fallback + camera position stays frozen so a
+  far-moving object recedes — accepted for the short sequence).
+
+#### F2-D-2 — Inter-frame box tween ✅ Done
+
+- [x] Goal: Between keyframes, smoothly interpolate each tracked box's pose (position + rotation) so
+      autoplay motion is continuous instead of snapping every ~0.5 s.
+- Scope: pure interpolation in `lib/geometry` (`lerpVec3` + a quaternion `slerp` — thin, tested
+  wrappers over Three.js `Vector3.lerp` / `Quaternion.slerp`, kept pure per Rule #3); a per-frame
+  clock (`useFrame`) advancing `t ∈ [0,1]` over `AUTOPLAY_INTERVAL_MS`, synced to autoplay; thread
+  the SAME instance's NEXT-keyframe pose down to `BBox3D` (Scene already keys `BBox3D` on the stable
+  instance id — the persistence seam noted in F2-C). LiDAR cloud stays snap.
+- Background (beginner): **lerp** (linear interpolation) blends two positions on a straight line
+  (`a + (b−a)·t`); **slerp** (spherical linear interpolation) blends two **quaternions** along the
+  shortest arc at constant angular speed — a plain quaternion lerp distorts the rotation. Three.js
+  provides both; the work is the plumbing, not the math.
+- Done when:
+  - [x] During autoplay a tracked box GLIDES between its keyframe poses (position lerp + rotation
+        slerp); at each ACTUAL keyframe it sits exactly on the measured pose (t snaps to 0/1).
+        (`BBox3D` useFrame: `lerpVec3` on the outer group position + `slerpQuat` on the inner group
+        quaternion; the per-box clock resets to 0 on each keyframe switch so t starts on the measured
+        pose. Render-verified: boxes advance smoothly under autoplay.)
+  - [x] Objects with no match in the next keyframe (appear / disappear) are handled gracefully — no
+        jumps, no NaN. (No next pose → the box simply holds its current measured pose; the next-pose
+        Map lookup returns `undefined` → tween is skipped for that box.)
+  - [x] LiDAR stays per-keyframe (documented dissonance: box smooth, points snap); COCO unaffected;
+        only nuScenes autoplay tweens. (`PointCloud` untouched; tween props are nuScenes-only and the
+        tween is gated on `playing` — COCO passes neither.)
+- Decisions made during impl (via AskUserQuestion — all recommended options chosen):
+  - **Honesty (Rule #6) = tween ONLY while playing.** Paused / manual scrubbing shows the EXACT
+    measured keyframe (the useFrame gate is `playing && nextCenter`, so `t=0`/no-tween off-play). Every
+    statically-viewed pose is therefore a real measurement; the "Measured" badge keeps referring to the
+    keyframe data. No "interpolating" affordance added (kept the UI clean; the honesty is structural).
+  - **Appear / disappear = hold-last-pose** (no next match → the box stays on its current measured
+    pose, then is simply gone at the next keyframe when it leaves `detections3D`).
+  - **Scrub / pause mid-tween:** covered by the play-gate — pausing snaps every box to its exact
+    current keyframe pose (t effectively 0).
+  - **Scope = all boxes** (every visible box with a next-keyframe match glides; ~58 boxes ×
+    lerp+slerp/frame is negligible). The whole scene reads smooth, not just the selected one.
+- Tests: `lib/geometry/interpolation.ts` `lerpVec3` / `slerpQuat` unit-tested in `interpolation.test.ts`
+  (+9: lerp endpoints/midpoint/clamp; slerp endpoints/half-angle shortest-arc/unit-norm/identity). The
+  clock + data threading is UI → render-verified (Playwright).
+- Edge refs: `Edge_F#2.md` Case 8 (box-smooth / points-snap dissonance + the Rule #6 tween-only-while-
+  playing honesty handling).
+
+#### F2-D — to fill on completion
+- Files changed / added:
+  - F2-D-1: **added** `selectFollowTarget` to `lib/geometry/camera-framing.ts` (+4 tests in
+    `camera-framing.test.ts`); **changed** `lib/geometry/index.ts` (barrel), `app/page.tsx`
+    (`cameraMode` page state + reset on dataset switch + Timeline/Viewer3D wiring),
+    `components/timeline/Timeline.tsx` (Fixed/Follow toggle button, nuScenes only),
+    `components/viewer-3d/Viewer3D.tsx` (follow `target` branch via `selectFollowTarget`, fallback to
+    frozen framing). No store/type change (Rule #2 intact — `cameraMode` is a view flag, not a
+    selection field).
+  - F2-D-2: **added** `lib/geometry/interpolation.ts` (`lerpVec3` + `slerpQuat`, pure) +
+    `interpolation.test.ts`; **changed** `lib/geometry/index.ts` (barrel), `app/page.tsx` (`nextFrame`
+    memo threaded to Viewer3D), `components/viewer-3d/Viewer3D.tsx` (`nextFrame`/`playing` →Scene),
+    `components/viewer-3d/Scene.tsx` (next-pose-by-id Map, per-box tween props), `components/viewer-3d/
+    BBox3D.tsx` (useFrame position lerp + quaternion slerp + per-box tween clock; outer-group `ref`;
+    position/quaternion now driven imperatively, JSX values kept as first-render seeds). No store/type
+    change; `PointCloud` untouched (LiDAR stays snap).
+- Suite total: **190 → 203 passing** (+13: 4 `selectFollowTarget`, 9 interpolation). `tsc --noEmit` 0
+  errors. UI (camera mode, tween clock) render-verified, no tests per Testing Policy.
+- Edge cases (Edge_F#2.md): Case 7 (D-1 follow↔fixed fallback; camera position stays frozen so a
+  far-moving followed object recedes — accepted for the short sequence), Case 8 (D-2 box-smooth /
+  points-snap dissonance + Rule #6 tween-only-while-playing honesty).
+- Architecture.md updates made: Viewer3D contract (`cameraMode` + follow `target` branch + `nextFrame`/
+  `playing` threading), Scene contract (next-pose Map + per-box tween props), BBox3D contract (useFrame
+  pose tween + clock), page.tsx description (`cameraMode`, `nextFrame`), Timeline contract (Follow
+  toggle), `lib/geometry/` folder listing (`interpolation.ts` + `selectFollowTarget`), Separation of
+  Concerns (`lib/geometry` interpolation), a new "Camera mode + inter-frame tween (F2-D)" subsection.
+- domain-glossary.md terms added/updated: `tween / lerp / slerp` (deferred → shipped), new
+  **Camera Follow (look-at target tracking)** entry.
+
+<!-- KO (move to a localized file)
+## F2-D — 모션·카메라 마감 (계획, F2-C 이후)
+F2-C 추적 위에 얹는 "보이는 매끄러움" 2종. 새 데이터/새 화면이 아니라 기존 자동재생을 더 부드럽게 보이게.
+둘 다 같은 간극(씬은 ~60fps로 그려지지만 키프레임은 ~2Hz)을 `useFrame` 시간보간으로 메움.
+독립 출시 가능한 2개 서브로 분리, 권장 순서 D-1 → D-2(D-1이 더 작고 안전·정직성 이슈 없음).
+
+[기획 확정 — 재논의 금지]
+- 둘 다 구현. 카메라 추적은 **옵트인 모드**, F2-C 고정 카메라가 **기본값이자 폴백**(고정 모드를 남기는 게
+  더 싸다 — 추적의 까다로운 엣지 "선택 없음/객체 사라짐"이 이미 만든 고정 동작으로 폴백). 교체보다 저위험.
+- tween은 박스만. 점구름은 키프레임 스냅 유지(박스는 미끄럽고 점은 튀는 부조화 수용).
+
+- F2-D-1 카메라 추적(토글): OrbitControls의 target(바라보는 중심점)만 선택 박스로 옮김 → 3인칭·orbit 유지
+  (1인칭 아님). 선택 없으면 고정으로 폴백. Rule #2(단일 selectedObjectId) 유지. 열린 결정: 트리거(토글
+  버튼[권장] vs 자동), target 스냅 vs 시간 lerp, 모드 지속/기본값. UI라 렌더 검증, 순수 헬퍼 생기면 테스트.
+- F2-D-2 박스 tween: lerp(위치)+slerp(회전)를 lib/geometry 순수 함수로(Rule #3) + `useFrame` clock(t 0→1,
+  AUTOPLAY_INTERVAL_MS 동기). BBox3D는 instance id keying으로 이미 유지됨(이음새). LiDAR는 스냅. 열린 결정:
+  정직성(Rule #6 — 보간 사이값은 측정 아님; 재생 중에만 tween 등) **출시 전 명시 결정**, 등장/소멸 처리,
+  스크럽/일시정지 시 t clamp, 전체 vs 선택만. lerp/slerp 유닛 테스트 + 렌더 검증.
+-->
+
 ### F2-A — completion record (UI integration session)
 - Files **added**: `lib/selectors/distance-filter.ts` (+`.test.ts`),
   `lib/geometry/camera-framing.ts` (+`.test.ts`), `lib/ui/distance.ts`,
@@ -600,9 +751,10 @@ or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
   contracts, folder structure (`lib/nuscenes`, `lib/sequence`, `scripts/`), Separation of Concerns.
 - domain-glossary.md terms added across F2: quaternion / projection / coordinate frames / `.pcd.bin` /
   decimation / voxel grid / track id / instance token / autoplay / tween-lerp-slerp.
-- **Out of scope (not done, intentionally):** multi-camera / 6-up, radar, additional scenes (swap via
-  `--scene-index`), COCO tracking (unstable ids), inter-frame tween (seam left for a later F2-D),
-  camera-follow (seam left).
+- **Out of scope of the A/B/C core (intentionally):** multi-camera / 6-up, radar, additional scenes
+  (swap via `--scene-index`), COCO tracking (unstable ids). Inter-frame tween + camera-follow were
+  deferred here as clean seams and are now **planned as F2-D** (D-2 tween, D-1 camera-follow) — see
+  the F2-D section above.
 
 <!-- KO (move to a localized file)
 ## F2 — nuScenes 실측 3D 통합 (계획)

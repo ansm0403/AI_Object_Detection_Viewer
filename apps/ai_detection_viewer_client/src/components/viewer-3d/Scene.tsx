@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Grid, OrbitControls } from '@react-three/drei';
-import type { Frame } from '@/lib/types';
+import type { Detection3D, Frame } from '@/lib/types';
 import { PointCloud } from './PointCloud';
 import { BBox3D } from './BBox3D';
 
@@ -19,6 +19,11 @@ type Props = {
   // compact z∈[1,8] scene; on nuScenes (boxes tens of metres out) it would
   // fully occlude every box, so the nuScenes path disables it. Default = on.
   fog?: boolean;
+  // (F2-D-2) The NEXT keyframe (nuScenes autoplay) + whether playback is running.
+  // Each box looks up its OWN next-keyframe pose by stable instance id and tweens
+  // toward it while playing (paused → exact measured keyframe, Rule #6).
+  nextFrame?: Frame | null;
+  playing?: boolean;
 };
 
 // Roughly the midpoint of MIN_Z..MAX_Z in bbox-estimator.ts. Both the camera
@@ -37,10 +42,24 @@ export function Scene({
   visibleIds,
   target = [0, 0, SCENE_CENTER_Z],
   fog = true,
+  nextFrame,
+  playing = false,
 }: Props) {
   const visibleDetections3D = visibleIds
     ? frame.detections3D.filter((d) => visibleIds.has(d.id))
     : frame.detections3D;
+
+  // (F2-D-2) Map each instance id → its pose in the NEXT keyframe, so a box can
+  // tween from its current pose toward where the SAME object is next. Built once
+  // per frame; a box whose id is absent (the object appears/disappears) gets no
+  // next pose and simply holds at its current measured pose (no tween, no NaN).
+  const nextPoseById = useMemo(() => {
+    const m = new Map<string, Detection3D['bbox3D']>();
+    if (nextFrame) {
+      for (const d of nextFrame.detections3D) m.set(d.id, d.bbox3D);
+    }
+    return m;
+  }, [nextFrame]);
 
   // 빈 공간 클릭 시 선택 해제를 보장하는 코드. drei <Grid infiniteGrid>는
   // 실제로는 거대한 plane mesh라 raycast가 항상 grid에 맞아 <Canvas
@@ -85,14 +104,25 @@ export function Scene({
           previous and current pose over AUTOPLAY_INTERVAL_MS (position lerp +
           quaternion slerp, pure fns in lib/geometry) for smooth motion. The
           LiDAR cloud stays per-keyframe, so only the box would be tweened. */}
-      {visibleDetections3D.map((d) => (
-        <BBox3D
-          key={d.id}
-          detection={d}
-          isSelected={d.id === selectedId}
-          onClick={() => onSelect?.(d.id)}
-        />
-      ))}
+      {visibleDetections3D.map((d) => {
+        const next = nextPoseById.get(d.id);
+        return (
+          <BBox3D
+            key={d.id}
+            detection={d}
+            isSelected={d.id === selectedId}
+            onClick={() => onSelect?.(d.id)}
+            // (F2-D-2) tween inputs. `frameId` resets each box's interpolation
+            // clock on a keyframe switch; `playing` gates the tween (off → exact
+            // measured pose). `next*` is the same object's next-keyframe pose, or
+            // undefined when it has no match next frame (→ hold current pose).
+            frameId={frame.id}
+            playing={playing}
+            nextCenter={next?.center}
+            nextRotation={next?.rotation}
+          />
+        );
+      })}
 
       <OrbitControls
         target={target}

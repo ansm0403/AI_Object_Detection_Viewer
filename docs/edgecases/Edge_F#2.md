@@ -1,12 +1,13 @@
-# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A / F2-B / F2-C)
+# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A / F2-B / F2-C / F2-D)
 
 > Case 1 was discovered implementing the **pure `lib/` core** of F2-A (TDD,
 > synthetic fixtures, no UI). Cases 2–3 were discovered during the **UI
 > integration** session (wiring the prepped data into the live app + Playwright
 > render verification). Case 4 is **F2-B** (real LiDAR point cloud — alignment +
 > render verification). Cases 5–6 are **F2-C** (sequence + tracking + autoplay —
-> dataset-aware selection persistence + camera stability). See
-> `post-mvp-checklist.md` → F2-A / F2-B / F2-C and `architecture.md` →
+> dataset-aware selection persistence + camera stability). Cases 7–8 are **F2-D**
+> (motion/camera polish — camera-follow fallback + box-tween honesty). See
+> `post-mvp-checklist.md` → F2-A / F2-B / F2-C / F2-D and `architecture.md` →
 > "nuScenes Integration".
 
 ## Context
@@ -252,6 +253,94 @@ point. To make the camera FOLLOW the selected object later, compute `target` fro
 the selected box's current center each frame instead of the frozen framing — no
 other wiring changes, since the prop already flows to OrbitControls. Left
 commented, not built (no speculative code, per CLAUDE.md).
+
+---
+
+## Case 7 — Camera follow must FALL BACK to fixed, and only the pivot moves (F2-D-1)
+
+**Discovery (F2-D-1, wiring the follow mode).** F2-D-1 adds an opt-in camera that
+keeps the selected object centered by aiming OrbitControls `target` at it each
+frame (the seam left in Case 6). Two ways this could misbehave if built naively:
+
+1. **Aiming at nothing.** The selected instance can be absent in the current
+   frame — it left the camera, was distance/class-filtered out, or nothing is
+   selected at all. Feeding OrbitControls a `target` of "the selected box center"
+   would then be `undefined`/garbage and the camera would jump to the origin or
+   crash.
+2. **Moving the camera, not just the pivot.** It would be easy to also move the
+   camera POSITION toward the object (a chase cam). That breaks the "3rd-person,
+   user-orbitable" intent and fights the user's orbit/zoom.
+
+**Resolution (decision: toggle + snap + fixed fallback).**
+- A pure `selectFollowTarget(detections3D, selectedId)` returns the selected box's
+  center, or **`null`** when there is no selection or the id is absent in this
+  frame (unit-tested). `Viewer3D` does `target = followTarget ?? frozenFraming`,
+  so follow **degrades to the F2-C fixed camera** whenever there is nothing to
+  follow — no jump to empty space, no crash. The fixed mode is the default and the
+  fallback, so the hard edges resolve to already-verified behavior.
+- Only `target` (the OrbitControls pivot) tracks; the camera **position** stays
+  the one-time `<Canvas>` init. OrbitControls then keeps the camera in place and
+  re-aims at the new pivot (its `update()` recomputes the offset from the new
+  target within the same frame), so the view stays 3rd-person and orbitable.
+- Follow is a separate page-level **VIEW flag** (`cameraMode`), never a selection
+  field → Immutable Rule #2 (single `selectedObjectId`) is untouched.
+
+**Accepted limitation.** Because the position is frozen, an object that travels a
+long way still **recedes** (the camera re-aims but doesn't chase). Fine for the
+short scene-0916 sequence; a position-tracking chase cam was out of scope.
+
+**Render verification.** Toggling Follow visibly re-aims the camera onto the
+selected box (the box cloud shifts so the selected box moves toward centre);
+selection persists across frames (F2-C tracking) so it stays centred as frames
+advance; toggling back to Fixed restores the frozen overview; the Follow button is
+hidden on COCO. (Pure `selectFollowTarget` is unit-tested; the camera itself is UI,
+render-verified — same policy as Case 3/6.)
+
+---
+
+## Case 8 — Box tween must stay honest: smooth only while playing; points stay snapped (F2-D-2)
+
+**Discovery (F2-D-2, the reason tween was deferred twice).** F2-D-2 interpolates
+each box between keyframes (`lerpVec3` position + `slerpQuat` rotation) so autoplay
+glides instead of snapping. But an interpolated in-between pose is **invented**, not
+measured — nuScenes only measures the ~2 Hz keyframes. Showing a made-up pose as if
+it were data would violate Immutable Rule #6 (never misrepresent 3D provenance), and
+the frame still wears a **"Measured"** badge. This honesty cost is exactly why tween
+was deferred at Step 9.5 and again at F2-C.
+
+**A second, physical dissonance.** The boxes can be tweened, but the **LiDAR cloud
+is a single per-keyframe sweep** — there is no honest way to interpolate raw sensor
+returns. So if both moved, they'd desync; if the box glides while the points snap,
+they visibly disagree for 0.5 s.
+
+**Resolution (decision: tween only while playing; points snap; all boxes).**
+- The tween is **gated on `playing`**. During autoplay boxes glide; the moment the
+  user **pauses or scrubs**, every box snaps to its EXACT current measured keyframe
+  pose (the `useFrame` branch falls through to the measured pose, `t` effectively
+  0). So every *statically-viewed* pose is a real measurement, and the "Measured"
+  badge keeps referring to the keyframe data — the made-up poses exist only as
+  motion, never as an inspectable state. No extra "interpolating" label was needed
+  (the honesty is structural, not a disclaimer).
+- The per-box clock **resets on each keyframe switch** (`frameId` change) and on a
+  play restart, so a tween always *starts* on a measured pose and *ends* on the next
+  measured pose (`t` clamped to `[0,1]`) — continuity holds because the next frame's
+  `detection.center` is what this frame tweened toward.
+- The **LiDAR cloud stays per-keyframe snap** (accepted box-smooth / points-snap
+  dissonance — documented, the truthful choice).
+- Objects with **no match in the next keyframe** (appear / disappear) simply hold
+  their current pose (the next-pose Map lookup is `undefined` → tween skipped) — no
+  jump, no NaN. **All** visible boxes tween (cost negligible at ~58 boxes).
+
+**Rule #3 note.** The interpolation math is pure `lib/geometry/interpolation.ts`
+(`lerpVec3` hand-rolled; `slerpQuat` a thin wrapper over `THREE.Quaternion.slerp`
+for correct shortest-arc), unit-tested; the `useFrame` clock + data threading are UI
+(render-verified).
+
+**Render verification.** Under autoplay the boxes advance with the sequence while
+points + boxes stay co-located; pausing leaves boxes on clean measured poses; COCO
+(no tween props, no `playing`) is unchanged. The glide itself is a per-frame
+animation not captured in stills — its correctness rests on the unit-tested math +
+the play-gated wiring.
 
 ---
 
