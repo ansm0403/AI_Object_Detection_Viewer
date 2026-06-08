@@ -133,6 +133,15 @@ const CATEGORY_MAP: Record<string, string> = {
   'human.pedestrian.child': 'person',
   'human.pedestrian.construction_worker': 'person',
   'human.pedestrian.police_officer': 'person',
+  // Common driving classes nuScenes adds beyond COCO's person/bicycle/car.
+  // Mapped to clean short names so labels read "truck" (not "vehicle.truck")
+  // and so the color palette can give each a distinct chip. Rarer categories
+  // (e.g. static_object.bicycle_rack) intentionally fall through to the raw
+  // name + DEFAULT_COLOR rather than expanding the palette indefinitely.
+  'vehicle.truck': 'truck',
+  'vehicle.bus.rigid': 'bus',
+  'vehicle.bus.bendy': 'bus',
+  'vehicle.motorcycle': 'motorcycle',
 };
 
 function mapCategory(category: string): string {

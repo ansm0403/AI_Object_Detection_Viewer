@@ -222,7 +222,7 @@ Sub-features can ship independently; recommended order **1A → 1B → 1C** (1C 
 
 ---
 
-## F2 — nuScenes Real-3D Integration 🔨 In Progress (F2-A: lib + data ✅, UI ⏳)
+## F2 — nuScenes Real-3D Integration 🔨 In Progress (F2-A ✅ done; F2-B/C planned)
 
 Replace *estimated* 3D (COCO → invented depth) with *measured* 3D from **nuScenes**,
 added **alongside** COCO via a dataset switcher (not a replacement — the Step 11 YOLO /
@@ -273,9 +273,9 @@ Structure/contract notes live in `architecture.md` ("nuScenes Integration").
   still forbidden.
 - **#7 (COCO is 2D-only):** untouched. nuScenes has its own parser; we never read 3D from COCO JSON.
 
-### F2-A — Measured 3D boxes + projected 2D + sync 🔨 In Progress (lib + data ✅, UI ⏳)
+### F2-A — Measured 3D boxes + projected 2D + sync ✅ Done (lib + data + UI)
 
-- [ ] Goal: A nuScenes keyframe renders real measured 3D boxes (with rotation) in the 3D viewer
+- [x] Goal: A nuScenes keyframe renders real measured 3D boxes (with rotation) in the 3D viewer
       and projected 2D boxes on the camera image, fully selection-synced — picked via the dataset
       switcher, badged "Measured".
 - Scope (planned): `scripts/` offline prep; `public/sample-data/nuscenes/`; `lib/nuscenes/`
@@ -283,13 +283,23 @@ Structure/contract notes live in `architecture.md` ("nuScenes Integration").
   `lib/types` (`Frame.source`, `bbox3D.rotation?`); `lib/selectors/` distance filter (+ test);
   a dataset-source switcher + "Estimated/Measured" badge in the UI; `BBox3D` reads `rotation`.
 - Done when:
-  - [ ] A dataset switcher toggles between the COCO sample and the nuScenes sample.
-  - [ ] nuScenes 3D boxes render at measured positions with correct orientation (quaternion).
-  - [ ] Projected 2D boxes appear on the camera image and select-sync with the 3D boxes (shared id).
-  - [ ] Distance filter hides boxes beyond a threshold (metres); confidence slider no-ops gracefully.
-  - [ ] The frame shows a "Measured" badge; COCO frames still show "Estimated".
+  - [x] A dataset switcher toggles between the COCO sample and the nuScenes sample. (Segmented
+        control in the Header; switching clears selection + `resetFilters()`, frame auto-re-homes.)
+  - [x] nuScenes 3D boxes render at measured positions with correct orientation (quaternion).
+        (`BBox3D` applies `bbox3D.rotation` as the inner-group quaternion; render-verified — parked
+        cars show consistent diagonal headings.)
+  - [x] Projected 2D boxes appear on the camera image and select-sync with the 3D boxes (shared id).
+        (13/40 project on frame 0; the rest are 3D-only, Edge_F#2 Case 1. Sync via shared
+        `selectedObjectId`, render-verified 2D→3D.)
+  - [x] Distance filter hides boxes beyond a threshold (metres); confidence slider no-ops gracefully.
+        (Per-dataset slider swap: nuScenes shows the Distance slider, COCO the Confidence slider —
+        no fake-confidence metre filter over estimated depth, Rule #6. Render-verified 40→19 @ 25 m.)
+  - [x] The frame shows a "Measured" badge; COCO frames still show "Estimated".
+        (`enrichFrame` now stamps `source: 'coco-estimated'`; nuScenes parser stamps
+        `'nuscenes-measured'`. Both render-verified.)
   - [x] COCO path, F1 visuals, and the full suite are unaffected. (`source`/`rotation` are optional →
-        existing COCO frames and F1 tests untouched; full suite 114 → **147 passing**.)
+        existing COCO frames and F1 tests untouched; full suite 114 → 147 → **166 passing**. COCO
+        camera/fog/depth-color render-verified unchanged.)
 - Tests (required — pure logic): `transforms.test.ts` (global→ego round-trip, axis convention,
   quaternion identity when absent), `projection.test.ts` (known 3D point → expected pixel; behind-camera
   cull), `lib/selectors` distance-filter test, `lib/nuscenes/parser` test (prepped JSON → Frame, id
@@ -333,8 +343,38 @@ download, no UI). **Done this session:**
       `--scene-index` (the prep script clears `cam_front/` on re-run). Density is still ~58/frame → the
       distance filter (next) earns its keep.
 
-**Still deferred** (unchecked Done-when above): `lib/selectors` distance filter (+test), UI (dataset
-switcher, Estimated/Measured badge, `BBox3D` reading `rotation`).
+**UI integration ✅ Done (this session):** the remaining Done-when items all landed.
+- [x] `lib/selectors/distance-filter.ts` (+`distance-filter.test.ts`, 10 tests) — `detectionDistance`
+      = `|bbox3D.center|` (euclidean; the ego→three axis flip is a pure rotation so magnitude = real
+      metres from the car) + `selectIdsWithinDistance(detections3D, max)` (inclusive boundary,
+      NaN → hides all).
+- [x] `lib/selectors/visible-detections.ts` — added `selectVisibleDetectionIds3D` (filters
+      `detections3D`, same confidence + permissive-empty class semantics). **Why:** the existing 2D
+      visible-id set is built from `detections2D`; on nuScenes a measured box can have NO 2D
+      projection (Edge_F#2 Case 1), so a 2D-derived set would silently drop those 3D-only boxes from
+      the 3D viewer. COCO is 1:1 → identical there (no regression). `page.tsx` now passes a 2D set
+      (Viewer2D + ObjectList) and a 3D set (Viewer3D), each intersected with the distance set.
+- [x] store `maxDistance` (+ `setMaxDistance`, non-finite guard mirroring confidence; in
+      `resetFilters`/`createInitialState`; default `DISTANCE_MAX=90` from `lib/ui/distance.ts`).
+- [x] `BBox3D` applies `bbox3D.rotation` (quaternion `[x,y,z,w]`) on the inner (scaled) group;
+      absent → identity `[0,0,0,1]` so COCO/F1 are unchanged. The F1 label stays on the unrotated
+      outer group.
+- [x] UI: `Header` dataset switcher (segmented `COCO | nuScenes`) + Estimated/Measured badge
+      (reads `Frame.source`); `Filters` swaps Confidence↔Distance slider on `filterMode`;
+      `DistanceSlider` (new, metres, "All" at max). `enrichFrame` now stamps `source:'coco-estimated'`.
+- [x] **nuScenes camera framing + fog** (`lib/geometry/camera-framing.ts` `frameBoxesForCamera`,
+      +5 tests): the COCO camera (at −z looking +z) and fog (`[10,28]`) are tuned for the compact
+      estimator scene and **face away from / fully occlude** the real nuScenes cloud (boxes tens of
+      metres out along three −z). Render-verification caught this — only ~2 boxes showed. Fix:
+      nuScenes fits the camera to the box cloud (behind+above, looking forward), widens `far` to 600,
+      and disables fog. COCO keeps its tuned camera/fog (branch on `source`). See Edge_F#2 Case 3.
+- **Render-verified (Playwright):** dataset toggle + Measured/Estimated badges; ~40 measured 3D
+      boxes with correct per-box heading (parked cars in consistent diagonal rows); projected 2D
+      boxes land on the actual person/bikes in CAM_FRONT; 2D→3D selection sync; distance filter
+      40→19 @ 25 m; COCO path (camera/fog/depth-color/confidence) unchanged.
+- [x] **Default dataset = nuScenes** (post-verification tweak): `page.tsx` initial
+      `datasetId = 'nuscenes'` so the app lands on the measured-3D headline feature; the Header
+      switcher flips to COCO. Verified the first paint shows the Measured badge + 3D boxes.
 
 Locked decisions made this session (via AskUserQuestion): render frame = **ego**; axis rule =
 **`(x,y,z)→(-y,z,-x)`** (fwd→−z); 2D box = **AABB of 8 projected corners**; culling = **all-8-in-front
@@ -362,7 +402,32 @@ or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
 - Note: this is what makes autoplay non-trivial vs COCO's independent frames. Revisit the Step 9.5
   "inter-frame tween" exclusion — real tracking now exists, so it becomes feasible.
 
-### F2 — to fill on completion
+### F2-A — completion record (UI integration session)
+- Files **added**: `lib/selectors/distance-filter.ts` (+`.test.ts`),
+  `lib/geometry/camera-framing.ts` (+`.test.ts`), `lib/ui/distance.ts`,
+  `components/filters/DistanceSlider.tsx`.
+- Files **changed**: `lib/selectors/visible-detections.ts` (+`selectVisibleDetectionIds3D`),
+  `lib/selectors/index.ts` + `lib/geometry/index.ts` (barrels), `lib/geometry/frame-enricher.ts`
+  (`source:'coco-estimated'`), `lib/nuscenes/parser.ts` (CATEGORY_MAP +truck/bus/motorcycle) +
+  `parser.test.ts`, `lib/ui/class-colors.ts` (+3 colors), `store/viewer-store.ts` (`maxDistance` +
+  `setMaxDistance`) + `viewer-store.test.ts`, `components/header/Header.tsx` (+`index.ts`, switcher +
+  badge), `components/filters/Filters.tsx` (slider swap), `components/viewer-3d/BBox3D.tsx`
+  (rotation), `Viewer3D.tsx` + `Scene.tsx` (per-dataset camera framing + fog), `app/page.tsx`
+  (dataset load/switch/reset, distance + 2D/3D visible-id wiring).
+- Suite total: **147 → 166 passing** (15 files). New pure-logic tests: distance-filter (10),
+  camera-framing (5), store maxDistance (3), parser mapping (2 added). UI = no tests (Testing Policy),
+  render-verified via Playwright.
+- Edge cases (Edge_F#2.md): Case 2 (visible-id set must be 3D-based or 3D-only boxes vanish),
+  Case 3 (COCO-tuned camera + fog hid the nuScenes cloud → per-dataset framing, found by rendering).
+- Architecture.md updates: Store Schema (`maxDistance`/`setMaxDistance` + validation row), nuScenes
+  Integration status → F2-A done, BBox3D contract (rotation), Viewer3D/Scene contract (per-dataset
+  camera framing + fog), selectors (distance filter + 3D visible-id), Header contract (switcher +
+  badge), Filters `filterMode`, folder structure (new files), Separation-of-Concerns (camera-framing).
+- domain-glossary.md terms added: none new (quaternion / projection / coordinate frames already
+  defined in the F2 lib-core session; distance filter + camera framing are UI mechanics, not domain
+  terms).
+
+### F2 (overall) — to fill when F2-B / F2-C land
 - Files changed / added:
 - Suite total:
 - Edge cases (Edge_F#2.md if any):

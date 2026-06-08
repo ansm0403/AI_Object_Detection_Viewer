@@ -2,24 +2,44 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseCoco } from '@/lib/coco';
+import { parseNuScenes } from '@/lib/nuscenes';
 import { enrichFrame } from '@/lib/geometry';
 import {
   selectClassCounts,
   selectConfidenceBuckets,
+  selectIdsWithinDistance,
   selectVisibleDetectionIds,
+  selectVisibleDetectionIds3D,
 } from '@/lib/selectors';
 import { Viewer2D } from '@/components/viewer-2d';
 import { Viewer3D } from '@/components/viewer-3d';
 import { ObjectList } from '@/components/object-list';
 import { Filters } from '@/components/filters';
-import { Header } from '@/components/header';
+import { Header, type DatasetId } from '@/components/header';
 import { Timeline } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
 import { useViewerStore } from '@/store';
 import type { Frame } from '@/lib/types';
 
+// Static sample sources, one per dataset. Both are served from /public; there
+// is no backend (nuScenes was flattened offline by scripts/prep_nuscenes.py).
+const DATASET_SOURCES: Record<DatasetId, string> = {
+  coco: '/sample-data/sample.json',
+  nuscenes: '/sample-data/nuscenes/nuscenes.json',
+};
+
+// Set intersection (no Set.prototype.intersection in our target runtimes).
+const intersectIds = (a: Set<string>, b: Set<string>): Set<string> =>
+  new Set([...a].filter((id) => b.has(id)));
 
 export default function Index() {
+  // The active dataset. COCO and nuScenes coexist (F2-A) — the switcher in the
+  // Header flips this, which re-runs the loader below. Default = nuScenes so the
+  // app opens on the measured-3D headline feature.
+  const [datasetId, setDatasetId] = useState<DatasetId>('nuscenes');
+  // `frames` holds FINAL (enriched) frames ready to render. COCO frames are
+  // enriched here (estimated 3D); nuScenes frames arrive already enriched from
+  // parseNuScenes (measured 3D) and must NOT be re-enriched.
   const [frames, setFrames] = useState<Frame[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,27 +51,34 @@ export default function Index() {
   const setConfidenceThreshold = useViewerStore((s) => s.setConfidenceThreshold);
   const visibleClasses = useViewerStore((s) => s.visibleClasses);
   const toggleClass = useViewerStore((s) => s.toggleClass);
+  const maxDistance = useViewerStore((s) => s.maxDistance);
+  const setMaxDistance = useViewerStore((s) => s.setMaxDistance);
   const resetFilters = useViewerStore((s) => s.resetFilters);
 
+  // Load the active dataset. Re-runs on dataset switch; clears stale frames so
+  // the loading skeleton shows and the auto-select effect re-homes to the new
+  // frames[0] (the old selectedFrameId won't exist in the new set).
   useEffect(() => {
     const ac = new AbortController();
-    fetch('/sample-data/sample.json', { signal: ac.signal })
+    setFrames(null);
+    setError(null);
+    fetch(DATASET_SOURCES[datasetId], { signal: ac.signal })
       .then((r) => r.json())
-      .then((raw) => setFrames(parseCoco(raw)))
+      .then((raw) => {
+        // COCO: parse → estimate 3D (enrichFrame). nuScenes: parseNuScenes
+        // already returns measured, enriched frames — do not estimate again.
+        const parsed =
+          datasetId === 'coco'
+            ? parseCoco(raw).map((f) => enrichFrame(f))
+            : parseNuScenes(raw);
+        setFrames(parsed);
+      })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(String(err));
       });
     return () => ac.abort();
-  }, []);
-
-  // Eager enrich: 10 frames × ~5 detections × ~80 points is trivial memory.
-  // Enriching once also pins the point-cloud RNG output per frame so revisits
-  // show a stable distribution. See Step 8 plan, decision #2.
-  const enrichedFrames = useMemo(
-    () => (frames ? frames.map((f) => enrichFrame(f)) : null),
-    [frames],
-  );
+  }, [datasetId]);
 
   // Auto-select frames[0] when no valid frame is selected. Edge_#3 Case 3 (a):
   // the timeline policy is "always exactly one frame selected" — there is no
@@ -59,28 +86,30 @@ export default function Index() {
   // longer exists in the current data (dev hot-reload, dataset swap), which
   // would otherwise leave the page stuck on the "Selecting frame…" placeholder.
   useEffect(() => {
-    if (!enrichedFrames || enrichedFrames.length === 0) return;
+    if (!frames || frames.length === 0) return;
     const exists =
-      selectedFrameId !== null &&
-      enrichedFrames.some((f) => f.id === selectedFrameId);
+      selectedFrameId !== null && frames.some((f) => f.id === selectedFrameId);
     if (!exists) {
-      setSelectedFrame(enrichedFrames[0].id);
+      setSelectedFrame(frames[0].id);
     }
-  }, [enrichedFrames, selectedFrameId, setSelectedFrame]);
+  }, [frames, selectedFrameId, setSelectedFrame]);
 
   const currentFrame = useMemo(() => {
-    if (!enrichedFrames) return null;
-    return enrichedFrames.find((f) => f.id === selectedFrameId) ?? null;
-  }, [enrichedFrames, selectedFrameId]);
+    if (!frames) return null;
+    return frames.find((f) => f.id === selectedFrameId) ?? null;
+  }, [frames, selectedFrameId]);
 
   // Class chips must stay reachable across frames even if the active frame
-  // doesn't contain the class. Edge_#7.md Case 1 Option A.
+  // doesn't contain the class. Edge_#7.md Case 1 Option A. Iterates detections3D
+  // (the superset): on nuScenes a class may appear only on a 3D-only box (no 2D
+  // projection), and it must still be toggleable. COCO is 1:1 so this is
+  // identical to iterating detections2D.
   const allClasses = useMemo(() => {
-    if (!enrichedFrames) return [];
+    if (!frames) return [];
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const frame of enrichedFrames) {
-      for (const d of frame.detections2D) {
+    for (const frame of frames) {
+      for (const d of frame.detections3D) {
         if (!seen.has(d.class)) {
           seen.add(d.class);
           out.push(d.class);
@@ -88,19 +117,48 @@ export default function Index() {
       }
     }
     return out;
-  }, [enrichedFrames]);
+  }, [frames]);
 
   const frameIndex = useMemo(() => {
-    if (!enrichedFrames || !currentFrame) return 0;
-    return enrichedFrames.findIndex((f) => f.id === currentFrame.id) + 1;
-  }, [enrichedFrames, currentFrame]);
+    if (!frames || !currentFrame) return 0;
+    return frames.findIndex((f) => f.id === currentFrame.id) + 1;
+  }, [frames, currentFrame]);
 
+  // Distance filter (F2-A): ids of 3D boxes within maxDistance of the ego
+  // vehicle. On COCO this passes everything (estimated centers are well within
+  // the 90 m default) so it is a no-op there; on nuScenes it is the real filter.
+  const withinDistance = useMemo(
+    () =>
+      currentFrame
+        ? selectIdsWithinDistance(currentFrame.detections3D, maxDistance)
+        : new Set<string>(),
+    [currentFrame, maxDistance],
+  );
+
+  // Two visible-id sets. The 2D set drives Viewer2D + ObjectList; the 3D set
+  // drives Viewer3D. They diverge only on nuScenes, where a measured 3D box may
+  // have no 2D projection (behind camera / off-screen, Edge_F#2 Case 1) — the
+  // 3D set must still include it so the box renders. Both are intersected with
+  // the distance filter. COCO is 1:1, so both sets coincide there.
   const visibleIds = useMemo(
     () =>
       currentFrame
-        ? selectVisibleDetectionIds(currentFrame, confidenceThreshold, visibleClasses)
+        ? intersectIds(
+            selectVisibleDetectionIds(currentFrame, confidenceThreshold, visibleClasses),
+            withinDistance,
+          )
         : new Set<string>(),
-    [currentFrame, confidenceThreshold, visibleClasses],
+    [currentFrame, confidenceThreshold, visibleClasses, withinDistance],
+  );
+  const visibleIds3D = useMemo(
+    () =>
+      currentFrame
+        ? intersectIds(
+            selectVisibleDetectionIds3D(currentFrame, confidenceThreshold, visibleClasses),
+            withinDistance,
+          )
+        : new Set<string>(),
+    [currentFrame, confidenceThreshold, visibleClasses, withinDistance],
   );
 
   // Phase 3 analytics aggregations. Selectors are intentionally unfiltered:
@@ -128,6 +186,19 @@ export default function Index() {
     [selectedFrameId, setSelectedFrame, setSelectedObject],
   );
 
+  // Dataset switch: clear the object selection and reset all filters (the class
+  // universe and the meaningful metric filter both differ between datasets).
+  // The frame auto-select effect re-homes to the new frames[0].
+  const handleSelectDataset = useCallback(
+    (id: DatasetId) => {
+      if (id === datasetId) return;
+      setDatasetId(id);
+      setSelectedObject(null);
+      resetFilters();
+    },
+    [datasetId, setSelectedObject, resetFilters],
+  );
+
   if (error) {
     return (
       <main className="min-h-screen flex items-center justify-center p-8">
@@ -146,7 +217,7 @@ export default function Index() {
     );
   }
 
-  if (!enrichedFrames) {
+  if (!frames) {
     return (
       <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
         <div className="h-12 rounded-lg bg-zinc-900 animate-pulse" />
@@ -162,11 +233,17 @@ export default function Index() {
     );
   }
 
-  if (enrichedFrames.length === 0)
+  if (frames.length === 0)
     return <main className="p-4 text-zinc-400">No frames.</main>;
-  // selectedFrameId is null for one render between enrichedFrames arriving
-  // and the auto-select effect firing; render a placeholder rather than crash.
+  // selectedFrameId is null for one render between frames arriving and the
+  // auto-select effect firing; render a placeholder rather than crash.
   if (!currentFrame) return <main className="p-4 text-zinc-400">Selecting frame…</main>;
+
+  // Count by 3D boxes — the main view (Rule #5) renders 3D, and on nuScenes the
+  // 3D set is the superset (some boxes have no 2D projection). COCO is 1:1, so
+  // this matches the previous detections2D count there.
+  const totalCount = currentFrame.detections3D.length;
+  const filterMode = datasetId === 'nuscenes' ? 'distance' : 'confidence';
 
   // Layout: 12-column grid with Timeline wedged between row 1 (viewers) and
   // row 2 (list + analytics) so frame navigation stays within reach of the
@@ -183,16 +260,22 @@ export default function Index() {
     <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
       <Header
         frameIndex={frameIndex}
-        frameCount={enrichedFrames.length}
-        detectionCount={currentFrame.detections2D.length}
+        frameCount={frames.length}
+        detectionCount={totalCount}
+        datasetId={datasetId}
+        onSelectDataset={handleSelectDataset}
+        source={currentFrame.source}
       />
       <Filters
         classes={allClasses}
         confidenceThreshold={confidenceThreshold}
         visibleClasses={visibleClasses}
-        visibleCount={visibleIds.size}
-        totalCount={currentFrame.detections2D.length}
+        visibleCount={visibleIds3D.size}
+        totalCount={totalCount}
+        filterMode={filterMode}
+        maxDistance={maxDistance}
         onChangeThreshold={setConfidenceThreshold}
+        onChangeDistance={setMaxDistance}
         onToggleClass={toggleClass}
         onReset={resetFilters}
         onDeselect={() => setSelectedObject(null)}
@@ -214,12 +297,12 @@ export default function Index() {
             frame={currentFrame}
             selectedId={selectedObjectId}
             onSelect={setSelectedObject}
-            visibleIds={visibleIds}
+            visibleIds={visibleIds3D}
           />
         </div>
         <div className="md:col-span-12">
           <Timeline
-            frames={enrichedFrames}
+            frames={frames}
             selectedFrameId={selectedFrameId}
             onSelectFrame={handleSelectFrame}
           />

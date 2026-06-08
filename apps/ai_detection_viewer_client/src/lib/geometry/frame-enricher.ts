@@ -24,5 +24,8 @@ export function enrichFrame(
     options.rng,
   );
 
-  return { ...frame, detections3D, pointCloud };
+  // Mark provenance so the UI badges these frames "Estimated" (Immutable Rule
+  // #6): their 3D is inferred from 2D, never measured. nuScenes frames set
+  // 'nuscenes-measured' in their own parser instead.
+  return { ...frame, detections3D, pointCloud, source: 'coco-estimated' };
 }

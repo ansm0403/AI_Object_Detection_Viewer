@@ -1,7 +1,9 @@
 'use client';
 
 import { ConfidenceSlider } from './ConfidenceSlider';
+import { DistanceSlider } from './DistanceSlider';
 import { ClassToggles } from './ClassToggles';
+import { DISTANCE_MAX } from '@/lib/ui/distance';
 
 type Props = {
   // Class names available for toggling. Caller (page.tsx) computes this as the
@@ -12,7 +14,15 @@ type Props = {
   visibleClasses: Set<string>;
   visibleCount: number;
   totalCount: number;
+  // (F2-A) Which metric filter to surface. COCO frames have real confidence
+  // scores but estimated depth → show the confidence slider. nuScenes frames
+  // have measured metres but a constant 1.0 confidence → show the distance
+  // slider instead. Exactly one is shown; we never present a metre filter over
+  // estimated depth (Immutable Rule #6).
+  filterMode: 'confidence' | 'distance';
+  maxDistance: number;
   onChangeThreshold: (v: number) => void;
+  onChangeDistance: (v: number) => void;
   onToggleClass: (className: string) => void;
   onReset: () => void;
   onDeselect?: () => void;
@@ -24,12 +34,22 @@ export function Filters({
   visibleClasses,
   visibleCount,
   totalCount,
+  filterMode,
+  maxDistance,
   onChangeThreshold,
+  onChangeDistance,
   onToggleClass,
   onReset,
   onDeselect,
 }: Props) {
-  const isDefault = confidenceThreshold === 0 && visibleClasses.size === 0;
+  // The active metric filter is "default" only when its own control is at rest:
+  // confidence at 0, or distance at its max ("All"). The inactive metric is
+  // ignored so toggling datasets doesn't leave Reset spuriously enabled.
+  const metricIsDefault =
+    filterMode === 'confidence'
+      ? confidenceThreshold === 0
+      : maxDistance >= DISTANCE_MAX;
+  const isDefault = metricIsDefault && visibleClasses.size === 0;
 
   return (
     <div
@@ -37,7 +57,11 @@ export function Filters({
       onClick={onDeselect}
     >
       <div onClick={(e) => e.stopPropagation()}>
-        <ConfidenceSlider value={confidenceThreshold} onChange={onChangeThreshold} />
+        {filterMode === 'distance' ? (
+          <DistanceSlider value={maxDistance} onChange={onChangeDistance} />
+        ) : (
+          <ConfidenceSlider value={confidenceThreshold} onChange={onChangeThreshold} />
+        )}
       </div>
       <div onClick={(e) => e.stopPropagation()}>
         <ClassToggles

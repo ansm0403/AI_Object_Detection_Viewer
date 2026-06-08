@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { useViewerStore, createInitialState } from './viewer-store';
+import { DISTANCE_MAX } from '@/lib/ui/distance';
 
 beforeEach(() => {
   // Partial reset: resets state fields without replacing action references.
@@ -81,6 +82,29 @@ describe('setConfidenceThreshold non-finite inputs', () => {
   });
 });
 
+describe('setMaxDistance', () => {
+  it('sets a finite value', () => {
+    useViewerStore.getState().setMaxDistance(40);
+    expect(useViewerStore.getState().maxDistance).toBe(40);
+  });
+
+  it('clamps negative values to 0', () => {
+    useViewerStore.getState().setMaxDistance(-10);
+    expect(useViewerStore.getState().maxDistance).toBe(0);
+  });
+
+  it('ignores non-finite values and keeps the previous value', () => {
+    const warnSpy = vi
+      .spyOn(console, 'warn')
+      .mockImplementation(() => undefined);
+    useViewerStore.getState().setMaxDistance(35);
+    useViewerStore.getState().setMaxDistance(Number.NaN);
+    expect(useViewerStore.getState().maxDistance).toBe(35);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    warnSpy.mockRestore();
+  });
+});
+
 describe('toggleClass', () => {
   it('adds a class when not present', () => {
     useViewerStore.getState().toggleClass('person');
@@ -148,10 +172,11 @@ describe('slice independence', () => {
 });
 
 describe('resetFilters', () => {
-  it('restores confidenceThreshold to 0 and visibleClasses to empty', () => {
+  it('restores confidenceThreshold to 0, visibleClasses to empty, and maxDistance to its default', () => {
     useViewerStore.getState().setConfidenceThreshold(0.7);
     useViewerStore.getState().toggleClass('person');
     useViewerStore.getState().toggleClass('car');
+    useViewerStore.getState().setMaxDistance(25);
 
     useViewerStore.getState().resetFilters();
 
@@ -159,6 +184,7 @@ describe('resetFilters', () => {
     expect(state.confidenceThreshold).toBe(0);
     expect(state.visibleClasses.size).toBe(0);
     expect(state.visibleClasses).toBeInstanceOf(Set);
+    expect(state.maxDistance).toBe(DISTANCE_MAX);
   });
 
   it('does not affect selectedObjectId or selectedFrameId', () => {
@@ -189,5 +215,6 @@ describe('createInitialState', () => {
     expect(s.selectedObjectId).toBeNull();
     expect(s.confidenceThreshold).toBe(0);
     expect(s.visibleClasses.size).toBe(0);
+    expect(s.maxDistance).toBe(DISTANCE_MAX);
   });
 });

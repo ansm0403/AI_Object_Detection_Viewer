@@ -4,10 +4,12 @@
 # Architecture
 
 **Current Status: MVP (Steps 1–11) complete.** Post-MVP: **F1 ✅** (visual impact pass — point-cloud
-depth color, 3D hover, `<Html>` labels). **F2-A** (nuScenes real-3D) — **lib core ✅** (transforms /
-projection / parser, 147 tests) and **offline prep + sample data ✅** (`scripts/prep_nuscenes.py` →
-`public/sample-data/nuscenes/`, scene-0916); **remaining: `lib/selectors` distance filter + UI**
-(dataset switcher, Estimated/Measured badge, `BBox3D` rotation render).
+depth color, 3D hover, `<Html>` labels). **F2-A ✅ Done** (nuScenes real-3D): lib core (transforms /
+projection / parser), offline prep + sample data (`scripts/prep_nuscenes.py` →
+`public/sample-data/nuscenes/`, scene-0916), **and UI integration** — dataset switcher +
+Estimated/Measured badge (Header), measured 3D boxes with quaternion rotation, projected 2D boxes +
+selection sync, a `lib/selectors` distance filter (per-dataset slider swap), and per-dataset 3D camera
+framing + fog. 166 tests. **Next: F2-B** (real LiDAR point cloud), **F2-C** (sequence + tracking).
 For step-by-step history and per-Step decisions, see `mvp-checklist.md` (🔒 frozen).
 Post-MVP feature work (in progress) is tracked in `post-mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
@@ -22,7 +24,7 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # fetch → parseCoco → enrich all → auto-select frame → Header + Filters + Viewer2D + <Viewer3D key={id}/> + ObjectList + AnalyticsPanel + Timeline (after Step 9.5)
+│   │   └── page.tsx        # per-dataset load (COCO: parseCoco→enrich / nuScenes: parseNuScenes, F2-A) → auto-select frame → Header(switcher+badge) + Filters + Viewer2D + <Viewer3D key={id}/> + ObjectList + AnalyticsPanel + Timeline. Derives 2D + 3D visible-id sets (∩ distance filter).
 │   ├── components/
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
 │   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?
@@ -39,8 +41,9 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds?
 │   │   │   └── index.ts        # barrel
 │   │   ├── filters/        # ✅ Step 7 — confidence slider + class toggles
-│   │   │   ├── Filters.tsx           # props: classes, threshold, visibleClasses, callbacks
-│   │   │   ├── ConfidenceSlider.tsx  # 0..1 range input
+│   │   │   ├── Filters.tsx           # props: classes, threshold, visibleClasses, filterMode, maxDistance, callbacks
+│   │   │   ├── ConfidenceSlider.tsx  # 0..1 range input (shown for COCO)
+│   │   │   ├── DistanceSlider.tsx    # ✅ F2-A — metres range input (shown for nuScenes; swapped with ConfidenceSlider by filterMode)
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
 │   │   ├── timeline/       # ✅ Step 8 — horizontal thumbnail strip
@@ -76,7 +79,9 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── transforms.test.ts           # 13 tests — global→ego yaw, axis flip, quaternion order/absent, size reorder
 │   │   │   ├── projection.ts                # ✅ F2 — ego→camera + intrinsic; 8-corner AABB; behind-camera/off-screen cull
 │   │   │   ├── projection.test.ts           # 10 tests — known 3D→pixel, behind-camera null, off-screen clamp
-│   │   │   ├── frame-enricher.ts            # orchestrator: enrichFrame()
+│   │   │   ├── camera-framing.ts            # ✅ F2-A — frameBoxesForCamera(): fit 3D camera (pos+target) to the nuScenes box cloud
+│   │   │   ├── camera-framing.test.ts       # 5 tests — center on cloud, behind+above, ground-cap, wider→farther
+│   │   │   ├── frame-enricher.ts            # orchestrator: enrichFrame() (stamps source:'coco-estimated')
 │   │   │   └── index.ts                     # barrel
 │   │   ├── nuscenes/       # ✅ F2 (parser+types) — prepped nuScenes static JSON → internal Frame[]
 │   │   │   ├── parser.ts                     # ✅ parseNuScenes: prepped JSON → Frame[] (NOT raw relational tables)
@@ -84,15 +89,18 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── types.ts                      # ✅ prepped-JSON schema (nuScenes-native: quat [w,x,y,z], size [w,l,h], global)
 │   │   │   └── index.ts                      # barrel
 │   │   ├── selectors/      # ✅ Step 7 — pure store derivations
-│   │   │   ├── visible-detections.ts        # filter by threshold + visibleClasses
+│   │   │   ├── visible-detections.ts        # filter by threshold + visibleClasses (2D ids; + selectVisibleDetectionIds3D for the 3D viewer, F2-A)
 │   │   │   ├── visible-detections.test.ts   # 11 tests; locks permissive-empty semantic
+│   │   │   ├── distance-filter.ts           # ✅ F2-A — detectionDistance + selectIdsWithinDistance (pure)
+│   │   │   ├── distance-filter.test.ts      # 10 tests — magnitude, inclusive boundary, NaN→empty
 │   │   │   ├── confidence-buckets.ts        # ✅ Step 9.5 Phase 3 — histogram buckets (BUCKET_COUNT=10)
 │   │   │   ├── confidence-buckets.test.ts   # 7 tests; locks bucket count + boundary rules
 │   │   │   ├── class-counts.ts              # ✅ Step 9.5 Phase 3 — class → count map (first-appearance order)
 │   │   │   ├── class-counts.test.ts         # 5 tests; locks key-by-class + iteration order
 │   │   │   └── index.ts                     # barrel
 │   │   ├── ui/             # ✅ Step 9 — shared UI-layer constants (no React/Zustand/Three.js)
-│   │   │   └── class-colors.ts              # CLASS_COLORS map, getClassColor(), DEFAULT_COLOR, SELECTED_COLOR
+│   │   │   ├── class-colors.ts              # CLASS_COLORS map (+truck/bus/motorcycle F2-A), getClassColor(), DEFAULT_COLOR, SELECTED_COLOR
+│   │   │   └── distance.ts                  # ✅ F2-A — DISTANCE_MAX / DISTANCE_STEP (distance-filter slider + store default)
 │   │   └── types/          # Frame, Detection2D, Detection3D, Point3D
 │   └── store/          # ✅ Step 3 — Zustand store (UI state only)
 │       ├── viewer-store.ts
@@ -200,12 +208,14 @@ type ViewerStore = {
   selectedObjectId: string | null;     // shared between 2D and 3D
   confidenceThreshold: number;         // 0.0 ~ 1.0
   visibleClasses: Set<string>;
+  maxDistance: number;                 // F2-A — metres; nuScenes distance filter. Default DISTANCE_MAX (90, "off"). Inert on COCO (no distance slider shown).
 
   setSelectedFrame: (id: string) => void;
   setSelectedObject: (id: string | null) => void;
   setConfidenceThreshold: (v: number) => void;
   toggleClass: (className: string) => void;
-  resetFilters: () => void;            // Step 9.5 Phase 2 — restore filters to defaults
+  setMaxDistance: (v: number) => void; // F2-A
+  resetFilters: () => void;            // Step 9.5 Phase 2 — restore filters to defaults (incl. maxDistance → DISTANCE_MAX)
 };
 ```
 
@@ -221,7 +231,9 @@ See `docs/edgecases/Edge_#3.md` for discovery history.
 | `setConfidenceThreshold` | finite number | clamp to `[0, 1]` |
 | `setConfidenceThreshold` | `NaN` / `±Infinity` | `console.warn`, keep previous value |
 | `toggleClass` | any string | toggle membership; emit a new `Set` instance |
-| `resetFilters` | — | atomic: sets `confidenceThreshold = 0` and `visibleClasses = new Set()`; selection slice untouched |
+| `setMaxDistance` | finite number | clamp to `[0, ∞)` (`Math.max(0, v)`) |
+| `setMaxDistance` | `NaN` / `±Infinity` | `console.warn`, keep previous value (mirrors confidence; NaN would hide every box) |
+| `resetFilters` | — | atomic: sets `confidenceThreshold = 0`, `visibleClasses = new Set()`, `maxDistance = DISTANCE_MAX`; selection slice untouched |
 
 `visibleClasses` semantic (locked by `lib/selectors/visible-detections.test.ts`):
 **empty Set means "show all classes"** (permissive empty). The initial state is
@@ -277,10 +289,10 @@ type Viewer3DProps = {
 
 | Component | Responsibility |
 |---|---|
-| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. **F1-A:** `<Canvas flat>` disables ACES tone mapping so the point-cloud depth colors (and bbox wires) render with true, un-desaturated color — verified by screenshot, see Edge_F#1 Case 3. |
-| `Scene` | Camera target, lighting (ambient + hemisphere + directional), `<Grid>` floor, `<fog>` for depth, and scene root. The `<Grid>` mesh's `raycast` is no-oped at mount so it does not hijack `<Canvas onPointerMissed>` — without that, empty-space deselect from Step 5 silently breaks. See Edge_#9.5 Case A. Passes `isSelected`/`onClick` to each `BBox3D`. OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6` are tuned here. |
+| `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. **F1-A:** `<Canvas flat>` disables ACES tone mapping so the point-cloud depth colors (and bbox wires) render with true, un-desaturated color — verified by screenshot, see Edge_F#1 Case 3. **F2-A:** the camera is **dataset-aware**. COCO keeps `position=[0,0,-10]` looking +z with `far=100`. nuScenes (`frame.source==='nuscenes-measured'`) fits the camera to the measured box cloud via `frameBoxesForCamera(centers)` (behind+above, looking forward/−z), widens `far=600`, and passes `target`+`fog={false}` to `Scene`. Without this the COCO camera faces away from the nuScenes cloud and the COCO fog occludes it — see Edge_F#2 Case 3. |
+| `Scene` | Camera **target** (prop; default COCO `[0,0,SCENE_CENTER_Z]`, nuScenes = fitted target), lighting (ambient + hemisphere + directional), `<Grid>` floor, optional `<fog>` for depth (prop `fog`, default on; nuScenes passes `false`), and scene root. The `<Grid>` mesh's `raycast` is no-oped at mount so it does not hijack `<Canvas onPointerMissed>` — without that, empty-space deselect from Step 5 silently breaks. See Edge_#9.5 Case A. Passes `isSelected`/`onClick` to each `BBox3D`. OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6` are tuned here. |
 | `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. **F1-A:** each point carries a per-vertex `color` attribute from `depthToColor(z, zMin, zMax)` (`lib/geometry/depth-color.ts`); `<pointsMaterial vertexColors>` with a white base (multiplicative identity) shades each point by depth. The `[zMin, zMax]` domain is `depthRange(points)` fit to the **full frame** point-z range (computed pre-filter, so class toggles do NOT recolor — only frame switches do). Colors are then written for the `visibleIds`-filtered `visiblePoints`, and the color attribute rides the same geometry the dispose `useEffect` already cleans up. Base point `size` is `0.2` (with `sizeAttenuation`) and palette is **cyan→violet**; both were finalized by render verification (smaller points / dark-far-end / ACES tone mapping all made the gradient invisible). See Edge_F#1 Case 3. |
-| `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. **F1-B:** `onPointerOver`/`onPointerOut` on the same invisible mesh drive a local `hovered` state; a non-selected hovered box renders a lightened class tint (`THREE.Color(classColor).lerp(white, 0.6)`) + a static `1.06` scale (no pulse — kept distinct from the selected white+pulse look, whose scale stays in `0.96–1.04`; selection wins when both apply). Tint/scale strengths were render-verified (the initial `0.45`/`1.02` barely read on the near-black bg with 1px wires). Cursor → `pointer` while hovered via an effect whose cleanup also fires on unmount, so a hovered box that disappears (frame switch / filtered out) before `onPointerOut` still resets the cursor. Hover is 3D-local only — no store field, no 2D/ObjectList sync (Immutable Rule #2). See Edge_F#1 Case 4. **F1-C:** split into an outer (position-only) group and an inner (pulse/hover-scaled) group; when `isSelected || hovered`, mounts `<BBoxLabel>` on the OUTER group at the box top (`size.y/2 + pad`) so the selected-box pulse doesn't jitter the label anchor. |
+| `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. **F1-B:** `onPointerOver`/`onPointerOut` on the same invisible mesh drive a local `hovered` state; a non-selected hovered box renders a lightened class tint (`THREE.Color(classColor).lerp(white, 0.6)`) + a static `1.06` scale (no pulse — kept distinct from the selected white+pulse look, whose scale stays in `0.96–1.04`; selection wins when both apply). Tint/scale strengths were render-verified (the initial `0.45`/`1.02` barely read on the near-black bg with 1px wires). Cursor → `pointer` while hovered via an effect whose cleanup also fires on unmount, so a hovered box that disappears (frame switch / filtered out) before `onPointerOut` still resets the cursor. Hover is 3D-local only — no store field, no 2D/ObjectList sync (Immutable Rule #2). See Edge_F#1 Case 4. **F1-C:** split into an outer (position-only) group and an inner (pulse/hover-scaled) group; when `isSelected || hovered`, mounts `<BBoxLabel>` on the OUTER group at the box top (`size.y/2 + pad`) so the selected-box pulse doesn't jitter the label anchor. **F2-A:** the inner group also carries `quaternion={bbox3D.rotation ?? [0,0,0,1]}` — measured nuScenes boxes render at their real heading; absent (COCO) → identity, so estimated boxes / F1 are unchanged. Rotation and the uniform pulse/hover scale compose independently; the label stays on the unrotated outer group so it hangs upright. |
 | `BBoxLabel` | **F1-C:** drei `<Html>` info pill anchored to a 3D point, re-projected each frame so it tracks the box as the camera orbits/zooms. Constant on-screen size (no `distanceFactor`). Shows class-color dot + class + `confidence` as a percent. `pointer-events-none` on both the `<Html>` container and the inner node so empty-space clicks still reach `<Canvas onPointerMissed>` (deselect). `occlude` OFF for F1. Shown only for selected/hovered boxes (≤2 at once) to avoid clutter; it's an in-scene complement to `SelectedObjectInfo`, not a replacement. See Edge_F#1 Case 5. |
 | `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. **Phase 2:** confidence rendered as a sky-tinted gauge bar; on `selectedId` change the selected row is scrolled into view by manually adjusting the `<ul>` `scrollTop` (NOT `Element.scrollIntoView` — that propagates to outer scroll containers and can move the page; see Edge_#9.5 Case C). |
 
@@ -301,7 +313,7 @@ Adopt/exclude rationale lives in `docs/etc/NEW_UI.md`.
 
 | Component | Phase | Responsibility |
 |---|---|---|
-| `Header` | 2 ✅ | App title + frame meta (`Frame N/M · X detections`). Pure presentation; reads no store directly. |
+| `Header` | 2 ✅ | App title + frame meta (`Frame N/M · X detections`, X = `detections3D.length` — the 3D main view's count, F2-A). Pure presentation; reads no store directly. **F2-A:** also hosts the dataset switcher (segmented `COCO \| nuScenes`, props `datasetId`/`onSelectDataset`) and the Estimated/Measured badge driven by `Frame.source` (amber = estimated, emerald = measured) — provenance is surfaced here, app-level, not in the per-frame Filters. |
 | `HintBox` (inside `Viewer3D`) | 1 ✅ | Small overlay in the 3D viewer corner showing mouse controls. Static text; no state. Mounted as a sibling of `<Canvas>` inside `Viewer3D`'s `relative` wrapper; `pointer-events-none` so OrbitControls still receives drag events over the hint area. |
 | `AnalyticsPanel` | 3 ✅ | Right-rail container that composes `SelectedObjectInfo`, `ConfidenceHistogram`, `ClassCountBar`. Holds no state of its own. Has no background-deselect handler — deselection stays scoped to Filters / ObjectList / Viewer empty-space (information panels deselecting on background click feels accidental). |
 | `SelectedObjectInfo` | 3 ✅ | Renders class / confidence / 2D bbox / 3D bbox / frame id / detection id of the selected detection. Shows a placeholder card when `selectedObjectId` is null OR when the id is not found in the current frame (defensive — `handleSelectFrame` already clears on frame switch). |
@@ -350,7 +362,7 @@ frames — see "2D Viewer SVG Contract" below.
 |------------------|----------------------------------------|-----------------------------------|
 | `lib/coco/`      | Parse COCO JSON into `Frame[]`         | Touch React / Zustand             |
 | `lib/nuscenes/`  | (F2 ✅) Parse the offline-prepped nuScenes static JSON into `Frame[]` (`parseNuScenes`) | Touch React / Zustand; traverse raw relational tables (the prep script flattens those) |
-| `lib/geometry/`  | 2D→3D math, point cloud generation; (F2) coordinate-frame transforms (global→ego, axis convention) and 3D→2D projection | Touch React / Zustand             |
+| `lib/geometry/`  | 2D→3D math, point cloud generation; (F2) coordinate-frame transforms (global→ego, axis convention), 3D→2D projection, and 3D camera framing (`frameBoxesForCamera`) | Touch React / Zustand             |
 | `lib/selectors/` | Pure store derivations: filters (Step 7), chart aggregations (Step 9.5), (F2) distance filter | Touch React / Zustand / Three.js  |
 | `lib/ui/`        | Shared UI-layer constants (colors etc.) | Touch React / Zustand / Three.js |
 | `store/`         | UI state (selection, filters)          | Hold frame data, do parsing       |
@@ -384,18 +396,24 @@ type CocoAnnotation = {
 type CocoCategory = { id: number; name: string; supercategory?: string };
 ```
 
-## nuScenes Integration (F2 — lib core ✅, data + UI ⏳)
+## nuScenes Integration (F2-A ✅ Done)
 
 Structure/contract notes only; per-feature progress + decisions live in
 `post-mvp-checklist.md` (F2). nuScenes replaces *estimated* 3D with *measured* 3D.
 
-**Status:** the pure `lib/` core has landed (`lib/geometry/transforms.ts` +
-`projection.ts`, `lib/nuscenes/parser.ts` + `types.ts`, 33 tests) **and** the
+**Status (F2-A complete):** pure `lib/` core (`lib/geometry/transforms.ts` +
+`projection.ts` + `camera-framing.ts`, `lib/nuscenes/parser.ts` + `types.ts`),
 offline prep + sample data (`scripts/prep_nuscenes.py` → `public/sample-data/
-nuscenes/nuscenes.json` + `cam_front/`, from scene-0916; real-data run validated
-`parseNuScenes`: 583 3D boxes, 200 project into CAM_FRONT). **Remaining:** the
-`lib/selectors` distance filter and all UI (dataset switcher, Estimated/Measured
-badge, `BBox3D` reading `rotation`).
+nuscenes/nuscenes.json` + `cam_front/`, scene-0916), **and the full UI**: a
+Header dataset switcher + Estimated/Measured badge (`Frame.source`), `BBox3D`
+rotation, projected 2D + selection sync, a `lib/selectors` distance filter
+(`detectionDistance` + `selectIdsWithinDistance`) surfaced via a per-dataset
+slider swap, and per-dataset 3D camera framing + fog. Two visible-id sets are
+derived in `page.tsx` (2D for Viewer2D/ObjectList, 3D for Viewer3D) so measured
+3D-only boxes still render (Edge_F#2 Case 2). Render-verified via Playwright.
+The app **opens on nuScenes by default** (`page.tsx` initial `datasetId =
+'nuscenes'`) so the landing view is the measured-3D headline; the Header switcher
+flips to COCO. **Next:** F2-B (real LiDAR point cloud), F2-C (sequence + tracking).
 
 **Transform pipeline (implemented).** Two outputs are derived from one
 GLOBAL-frame annotation, both pure math in `lib/geometry`:
@@ -448,10 +466,14 @@ raw inputs the transforms need:
 - **F2-C** — sequence + tracking: `instance` token gives cross-frame identity, so
   `selectedObjectId` survives frame changes → meaningful autoplay.
 
-**Filter (F2-A):** add a pure **distance** selector in `lib/selectors/` (filter by
-real `z` metres). The confidence slider stays for COCO/YOLO frames; on nuScenes
-(annotation, confidence = 1.0) it is a no-op. No fake confidence is injected
-(Immutable Rule #6).
+**Filter (F2-A ✅):** a pure **distance** selector in `lib/selectors/distance-filter.ts`
+(`detectionDistance` = `|bbox3D.center|`; `selectIdsWithinDistance(detections3D, max)`).
+Because the ego→three axis flip is a pure rotation (det = +1), `|center|` is the real
+distance in metres from the ego vehicle. The UI **swaps** the slider per dataset
+(`filterMode`): nuScenes shows the **Distance** slider (metres, store `maxDistance`,
+default `DISTANCE_MAX=90` = "All"); COCO shows the **Confidence** slider. A metre
+filter is never shown over COCO's *estimated* depth, and no fake confidence is
+injected on nuScenes (confidence = 1.0 annotation) — Immutable Rule #6.
 
 ## Parser Validation Rules
 

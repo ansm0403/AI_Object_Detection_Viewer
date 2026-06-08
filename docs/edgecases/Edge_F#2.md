@@ -1,8 +1,9 @@
-# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A lib core)
+# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A)
 
-> Cases discovered while implementing the **pure `lib/` core** of F2-A (measured
-> 3D boxes + projected 2D + sync). No data download and no UI this session —
-> TDD against synthetic fixtures. See `post-mvp-checklist.md` → F2-A and
+> Case 1 was discovered implementing the **pure `lib/` core** of F2-A (TDD,
+> synthetic fixtures, no UI). Cases 2–3 were discovered during the **UI
+> integration** session (wiring the prepped data into the live app + Playwright
+> render verification). See `post-mvp-checklist.md` → F2-A and
 > `architecture.md` → "nuScenes Integration".
 
 ## Context
@@ -59,6 +60,71 @@ real nuScenes-mini frame shows too many large boxes vanishing at the image edge,
 revisit with near-plane clipping. Also unverified until real data lands: whether
 GLOBAL coordinates of large magnitude introduce float precision issues in
 `globalToEgo` (synthetic fixtures use small numbers).
+
+---
+
+## Case 2 — The 3D viewer's visible-id set must be built from `detections3D`, not `detections2D`
+
+**Discovery (wiring the distance/visibility filters in `page.tsx`).** The whole
+filter pipeline computes `visibleIds = selectVisibleDetectionIds(frame, …)`,
+which filters **`detections2D`**, and the 3D viewer (`Scene`) renders
+`frame.detections3D.filter(d => visibleIds.has(d.id))`. On COCO this is fine —
+every 3D box has a 1:1 2D box, so the 2D-derived id set covers all 3D boxes. On
+nuScenes it is **wrong**: a measured 3D box can have no 2D projection (Case 1),
+so its id is absent from the 2D-derived set and the box **silently fails to
+render in the 3D viewer** — exactly the boxes the feature exists to show. On the
+sample's frame 0, only 13 of 40 boxes have a 2D projection, so ~27 measured
+boxes would vanish.
+
+**Resolution.** Added a parallel pure selector `selectVisibleDetectionIds3D`
+(filters `detections3D` with the same confidence + permissive-empty class rules).
+`page.tsx` now derives **two** visible-id sets: a 2D set (Viewer2D + ObjectList)
+and a 3D set (Viewer3D), each intersected with the distance-filter set. Because
+shared objects have equal 2D/3D ids (Rule #1) and COCO is 1:1, the two sets
+coincide on COCO — no behavior change there; they diverge only on nuScenes,
+where the 3D set is the superset.
+
+**Why not just build the 2D set from `detections3D`?** The 2D viewer + ObjectList
+iterate `detections2D`; feeding them 3D-only ids is harmless (those ids aren't in
+`detections2D`) but conflating the two sets hides the intent. Two named selectors
+keep "what the 2D views show" and "what the 3D view shows" explicit.
+
+---
+
+## Case 3 — The COCO-tuned camera + fog hide the entire nuScenes box cloud (found by rendering)
+
+**Discovery (Playwright render verification).** First nuScenes screenshot showed
+an almost-empty 3D viewer — only ~2 of 40 boxes visible. Two COCO-tuned scene
+constants were the cause, both invisible in unit tests:
+1. **Camera direction.** The estimator packs COCO boxes into `z∈[1,8]`, so the
+   camera sits at three `(0,0,−10)` looking toward **+z**. nuScenes forward is
+   three **−z** (`egoToThree` maps ego +x forward → −z), and boxes spread to
+   `z≈−25` ahead and ±tens of metres laterally. The camera literally faced
+   *away* from them — 23/40 boxes sat behind it.
+2. **Fog.** `<fog args={['#0a0a0a', 10, 28]}>` is opaque by 28 *camera-units*.
+   A camera fit to the nuScenes cloud sits ~60 units back, so every box (35–90
+   units away) was **fully fogged out** even after the direction was fixed. Plus
+   `far=100` clipped the farther boxes.
+
+**Resolution.** Branch the camera/scene on `frame.source`:
+- nuScenes: `frameBoxesForCamera(centers)` (pure, `lib/geometry/camera-framing.ts`,
+  tested) fits the camera *behind + above* the box cloud's horizontal centre,
+  looking forward/down; `far` widened to 600; **fog disabled** (its depth cue is
+  COCO-specific, and `pointCloud` is empty in F2-A so depth-color isn't in play).
+- COCO: unchanged — keeps the tuned `(0,0,−10)`→`+z` camera, `far=100`, and fog
+  (Edge_#4 Case 2, F1-A depth color). Verified by screenshot that the COCO 3D
+  scene is pixel-wise the same as before F2.
+
+**Lesson reinforced.** "3D looks plausible but is easy to get wrong" — this was
+invisible to the 147 passing unit tests (all the *math* was correct); only
+rendering the real data surfaced that the *view* was pointed the wrong way and
+fogged. (Project memory: verify visual/3D changes by screenshotting the running
+app, not by reasoning.)
+
+**Deferred / to watch.** `frameBoxesForCamera` fits to the full box cloud, so a
+single far lateral outlier backs the camera off and shrinks the main cluster;
+acceptable for an overview (the user can orbit). If a future frame frames poorly,
+consider fitting to a percentile of boxes or to the distance-filtered set.
 
 ---
 
