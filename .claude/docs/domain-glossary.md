@@ -37,11 +37,16 @@ Structure: `images[]`, `annotations[]`, `categories[]`. **2D only.**
 **Point Cloud**
 A set of 3D points `{x, y, z}` representing space. Each point may have extra
 attributes like intensity or color. Real point clouds usually come from LiDAR.
-In this project, point clouds are estimated (fake), not real LiDAR.
+In this project there are TWO kinds: **COCO frames** show an *estimated* (fake)
+cloud scattered inside each estimated bbox; **nuScenes frames** show a *real*
+measured LiDAR cloud (F2-B). They are distinguished internally by `Point3D.detectionId`
+— estimated points carry the owning bbox's id (and follow its filter), real LiDAR
+points carry none (environment, always shown).
 
 **LiDAR**
-A sensor that measures distance with laser. Produces real point clouds.
-Point clouds are estimated (fake) today; real LiDAR points are planned in F2 (nuScenes).
+A sensor that measures distance with laser, producing a real point cloud (it spins,
+firing laser beams and timing the reflections). nuScenes frames now show the real
+LiDAR_TOP cloud (F2-B); COCO has no sensor so its cloud stays estimated.
 
 **Three.js**
 A JavaScript 3D library that wraps WebGL.
@@ -209,6 +214,28 @@ global frame, organized as a relational token graph (`sample`, `sample_data`, `e
 `calibrated_sensor`, `sample_annotation`, `instance`, `category`). Real measured 3D — the F2
 upgrade from COCO's estimated 3D. **3D-only** (no 2D boxes; we project) and large (we use the
 **mini** split, a few keyframes, prepped offline into static JSON).
+
+**`.pcd.bin` (LiDAR sweep file)** *(F2-B)*
+nuScenes stores each LiDAR sweep as a header-less binary blob: point after point, each point being
+**5 `float32`** = `x, y, z, intensity, ring` (20 bytes/point, little-endian). A full sweep is ~34k
+points. Decoding needs only Python's stdlib `struct` (unpack `'<fffff'` in a loop) — no numpy or
+nuscenes-devkit. We keep `x, y, z` and drop intensity/ring. The points are in the LiDAR **sensor
+frame** and must be transformed to align with the boxes (see Global / Ego / Sensor Frame,
+`sensorToGlobal`).
+
+**Decimation (point-cloud downsampling)** *(F2-B)*
+Reducing a point cloud's size by keeping a representative subset. A 34k-point sweep × 10 frames is too
+big/heavy to ship and draw, so the offline prep decimates each sweep to ~6.5k points. Decimation is
+**subsampling, not a coordinate transform**, so doing it in the prep script does not violate Immutable
+Rule #3 (the actual alignment math stays in `lib/`). Methods include uniform-random (simple, but
+density follows the raw cloud — clumpy near the sensor) and voxel grid (even spatial density).
+
+**Voxel Grid Downsampling** *(F2-B)*
+A decimation method: overlay a 3D grid of cubic cells ("voxels", e.g. 0.6 m per side) and keep at most
+one point per cell. This spreads the kept points evenly through space — near and far regions end up at
+similar density — which reads cleaner than uniform-random sampling (where the already-dense near-sensor
+returns stay dense). The cell size trades density for count: bigger cells → fewer, more-spread points.
+A LiDAR sweep is spatially spread, so a fairly coarse 0.6 m voxel is what lands ~6.5k points.
 
 ## State Management Terms
 

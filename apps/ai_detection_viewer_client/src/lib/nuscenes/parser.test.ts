@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { __testing, parseNuScenes } from './parser';
-import type { NuScenesAnnotation, NuScenesPrepped } from './types';
+import type { NuScenesAnnotation, NuScenesLidar, NuScenesPrepped } from './types';
 
 // Identity ego + identity sensor means GLOBAL = EGO = CAMERA coords, so the
 // expected transforms are hand-checkable. Intrinsic mirrors the projection test.
@@ -32,7 +32,10 @@ const BEHIND: NuScenesAnnotation = {
   rotation: IDENTITY_WXYZ,
 };
 
-function preppedWith(annotations: NuScenesAnnotation[]): NuScenesPrepped {
+function preppedWith(
+  annotations: NuScenesAnnotation[],
+  lidar?: NuScenesLidar,
+): NuScenesPrepped {
   return {
     version: '1.0',
     frames: [
@@ -47,8 +50,20 @@ function preppedWith(annotations: NuScenesAnnotation[]): NuScenesPrepped {
           cameraIntrinsic: K,
         },
         annotations,
+        ...(lidar ? { lidar } : {}),
       },
     ],
+  };
+}
+
+// Identity LiDAR calib + identity LiDAR ego + identity camera ego means
+// sensor = global = ego, so only the render axis flip (egoToThree:
+// (x,y,z)→(-y,z,-x)) applies — hand-checkable.
+function lidarWith(points: number[]): NuScenesLidar {
+  return {
+    points,
+    egoPose: { translation: [0, 0, 0], rotation: IDENTITY_WXYZ },
+    calibratedSensor: { translation: [0, 0, 0], rotation: IDENTITY_WXYZ },
   };
 }
 
@@ -134,6 +149,42 @@ describe('parseNuScenes defensive behavior', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const [frame] = parseNuScenes(preppedWith([FRONT, { ...FRONT }]));
     expect(frame.detections3D).toHaveLength(1);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+});
+
+describe('parseNuScenes LiDAR point cloud (F2-B)', () => {
+  it('fills pointCloud from lidar.points, one Point3D per (x,y,z) triple', () => {
+    const [frame] = parseNuScenes(
+      preppedWith([FRONT], lidarWith([1, 2, 3, 4, 5, 6])),
+    );
+    expect(frame.pointCloud).toHaveLength(2); // 6 numbers → 2 points
+  });
+
+  it('aligns each point through sensor→global→ego→three (identity poses → axis flip only)', () => {
+    const [frame] = parseNuScenes(preppedWith([FRONT], lidarWith([1, 2, 3])));
+    // egoToThree([1,2,3]) = (-y, z, -x) = [-2, 3, -1].
+    const p = frame.pointCloud[0];
+    expect(p.x).toBeCloseTo(-2, 5);
+    expect(p.y).toBeCloseTo(3, 5);
+    expect(p.z).toBeCloseTo(-1, 5);
+  });
+
+  it('LiDAR points carry NO detectionId (environment, always shown)', () => {
+    const [frame] = parseNuScenes(preppedWith([FRONT], lidarWith([1, 2, 3, 4, 5, 6])));
+    for (const p of frame.pointCloud) expect(p.detectionId).toBeUndefined();
+  });
+
+  it('yields an empty pointCloud when the frame has no lidar', () => {
+    const [frame] = parseNuScenes(preppedWith([FRONT]));
+    expect(frame.pointCloud).toEqual([]);
+  });
+
+  it('skips malformed lidar (non-triple-length points) without throwing', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const [frame] = parseNuScenes(preppedWith([FRONT], lidarWith([1, 2, 3, 4])));
+    expect(frame.pointCloud).toEqual([]);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });

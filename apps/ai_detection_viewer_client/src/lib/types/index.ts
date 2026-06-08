@@ -38,9 +38,12 @@ export type Point3D = {
   x: number;
   y: number;
   z: number;
-  // Source detection id — required so the 3D viewer can filter the point cloud
-  // by the same visibility rules as the bboxes (Edge_#4 Case 5). Always set
-  // by `generatePointCloud` from the owning detection's id.
-  detectionId: string;
+  // Source detection id. For COCO's estimated point cloud this is always set by
+  // `generatePointCloud` (the point belongs to one estimated bbox), so the 3D
+  // viewer can filter points by the same visibility rules as the bboxes
+  // (Edge_#4 Case 5). For F2-B's real LiDAR points it is ABSENT — a measured
+  // point is part of the environment, not any single detection — and such points
+  // are always shown, independent of the box filters (see `selectVisiblePoints`).
+  detectionId?: string;
   intensity?: number;
 };

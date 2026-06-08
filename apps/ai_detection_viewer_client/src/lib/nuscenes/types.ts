@@ -45,6 +45,10 @@ export type NuScenesPreppedFrame = {
   calibratedSensor: NuScenesCalibratedSensor;
   /** 3D box annotations, in the GLOBAL frame. */
   annotations: NuScenesAnnotation[];
+  /** (F2-B) Decimated LiDAR_TOP point cloud + the calibration needed to align it
+   *  to the boxes. Optional: prepped JSON produced before F2-B (or a frame whose
+   *  LiDAR sweep was unavailable) simply omits it and the parser yields no points. */
+  lidar?: NuScenesLidar;
 };
 
 export type NuScenesImage = {
@@ -76,6 +80,36 @@ export type NuScenesCalibratedSensor = {
     [number, number, number],
     [number, number, number],
   ];
+};
+
+/**
+ * (F2-B) Decimated LiDAR_TOP sweep for one keyframe.
+ *
+ * `points` are RAW LIDAR-sensor-frame coordinates (no transform applied — Rule
+ * #3), flattened as [x, y, z, x, y, z, …] to keep the JSON small (no repeated
+ * per-point keys). The prep script decimates them with a voxel grid. Alignment to
+ * the boxes happens in `lib/geometry`: sensor → global (`sensorToGlobal`, using
+ * the two poses below) → ego (`globalToEgo`, using the frame's CAM_FRONT
+ * `egoPose`) → render (`egoToThree`). Routing through GLOBAL corrects the LiDAR-vs-
+ * camera capture-time offset (the LiDAR `egoPose` here differs slightly from the
+ * frame's camera `egoPose`).
+ */
+export type NuScenesLidar = {
+  /** Decimated points in the LIDAR sensor frame, flat [x, y, z, x, y, z, …]. */
+  points: number[];
+  /** The LiDAR's `ego_pose` (car in GLOBAL at the LiDAR timestamp). */
+  egoPose: NuScenesEgoPose;
+  /** The LiDAR's `calibrated_sensor` (sensor pose relative to EGO). No intrinsic
+   *  (LiDAR is not a projective camera). */
+  calibratedSensor: NuScenesLidarCalibratedSensor;
+};
+
+/** `calibrated_sensor` for the LiDAR: pose relative to EGO, no camera intrinsic. */
+export type NuScenesLidarCalibratedSensor = {
+  /** Translation relative to the car [x, y, z] in metres. */
+  translation: NuVec3;
+  /** Orientation quaternion, nuScenes order [w, x, y, z]. */
+  rotation: NuQuat;
 };
 
 /** `sample_annotation` joined with `instance` + `category`. */

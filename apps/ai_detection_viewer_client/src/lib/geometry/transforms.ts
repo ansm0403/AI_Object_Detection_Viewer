@@ -68,6 +68,32 @@ export function globalToEgo(pGlobal: Vec3, egoPose: Pose): Vec3 {
 }
 
 /**
+ * SENSOR point → GLOBAL point (physical, z-up). The inverse direction of
+ * `globalToEgo`, composed over two child→parent hops:
+ *   p_ego    = R_calib · p_sensor + t_calib    (sensor → ego, via calibrated_sensor)
+ *   p_global = R_ego   · p_ego    + t_ego       (ego → global, via ego_pose)
+ *
+ * Used by F2-B to bring LiDAR points (born in the LIDAR_TOP sensor frame) into the
+ * GLOBAL frame, so they can then be taken into the SAME (CAM_FRONT) ego frame the
+ * boxes live in via `globalToEgo(p, camEgoPose)`. Routing through GLOBAL is what
+ * corrects for the LiDAR vs camera capture-time difference (their `ego_pose`s
+ * differ slightly because the car moved between the two sensor triggers); applying
+ * the LiDAR calibration alone would leave that offset and misalign points vs boxes.
+ *
+ * Both poses carry nuScenes-order [w, x, y, z] quaternions (reordered internally).
+ */
+export function sensorToGlobal(pSensor: Vec3, sensorCalib: Pose, egoPose: Pose): Vec3 {
+  const p = new THREE.Vector3(pSensor[0], pSensor[1], pSensor[2]);
+  // sensor → ego: rotate into the ego frame, then offset by the sensor's mount position.
+  p.applyQuaternion(toThreeQuat(quatNuToThree(sensorCalib.rotation)));
+  p.add(toVector3(sensorCalib.translation));
+  // ego → global: rotate into the world frame, then offset by the car's world position.
+  p.applyQuaternion(toThreeQuat(quatNuToThree(egoPose.rotation)));
+  p.add(toVector3(egoPose.translation));
+  return [p.x, p.y, p.z];
+}
+
+/**
  * Box orientation in GLOBAL → EGO (physical):  q_ego = q_ego_pose⁻¹ · q_box.
  * Inputs are nuScenes-order [w, x, y, z]; result is Three.js-order [x, y, z, w].
  */
@@ -118,6 +144,10 @@ export function nuSizeToLocal(size: Vec3): Vec3 {
 
 function toThreeQuat(q: QuatXYZW): THREE.Quaternion {
   return new THREE.Quaternion(q[0], q[1], q[2], q[3]);
+}
+
+function toVector3(v: Vec3): THREE.Vector3 {
+  return new THREE.Vector3(v[0], v[1], v[2]);
 }
 
 // Rotation matrix for the EGO → THREE axis flip (x,y,z)→(-y,z,-x), row-major.

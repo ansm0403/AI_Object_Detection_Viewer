@@ -1,15 +1,18 @@
-import type { Detection2D, Detection3D, Frame } from '@/lib/types';
+import type { Detection2D, Detection3D, Frame, Point3D } from '@/lib/types';
 import {
   egoQuatToThree,
   egoToThree,
   globalQuatToEgo,
   globalToEgo,
   nuSizeToLocal,
+  sensorToGlobal,
   type Pose,
+  type Vec3,
 } from '@/lib/geometry/transforms';
 import { boxCornersEgo, projectCornersToBbox } from '@/lib/geometry/projection';
 import type {
   NuScenesAnnotation,
+  NuScenesLidar,
   NuScenesPrepped,
   NuScenesPreppedFrame,
 } from './types';
@@ -23,7 +26,8 @@ import type {
  * share the `instance`-derived id (Immutable Rule #1). All coordinate math is
  * delegated to `lib/geometry` (Immutable Rule #3); confidence is a constant 1.0
  * because annotations are ground truth, never an injected fake score
- * (Immutable Rule #6). `pointCloud` stays empty in F2-A (no fake LiDAR points).
+ * (Immutable Rule #6). `pointCloud` carries the frame's real decimated LiDAR_TOP
+ * points (F2-B), aligned to the boxes; absent (older prepped JSON) → empty.
  */
 export function parseNuScenes(raw: unknown): Frame[] {
   if (!isPrepped(raw)) {
@@ -115,9 +119,45 @@ function buildFrame(pf: unknown): Frame | null {
     imageHeight: pf.image.height,
     detections2D,
     detections3D,
-    pointCloud: [],
+    pointCloud: buildLidarPoints(pf.lidar, egoPose, pf.token),
     source: 'nuscenes-measured',
   };
+}
+
+/**
+ * Decimated LiDAR sweep → render-frame `Point3D[]`, aligned to the boxes.
+ *
+ * Per point: LIDAR sensor frame → GLOBAL (`sensorToGlobal`, via the LiDAR's own
+ * calibration + ego_pose) → the box ego frame (`globalToEgo`, via the CAM_FRONT
+ * `egoPose`) → render (`egoToThree`). Routing through GLOBAL absorbs the slight
+ * LiDAR-vs-camera capture-time offset so points sit on the boxes. The points
+ * carry NO `detectionId`: a measured environment point belongs to no single
+ * detection, and is therefore always shown regardless of the box filters
+ * (`selectVisiblePoints`). Absent / malformed lidar → no points (defensive,
+ * never throws — Error Defaults).
+ */
+function buildLidarPoints(
+  lidar: unknown,
+  camEgoPose: Pose,
+  frameToken: string,
+): Point3D[] {
+  if (lidar === undefined) return [];
+  if (!isLidar(lidar)) {
+    console.warn(`[parseNuScenes] Skipping malformed lidar in frame ${frameToken}.`);
+    return [];
+  }
+  const flat = lidar.points;
+  const lidarCalib: Pose = lidar.calibratedSensor;
+  const lidarEgo: Pose = lidar.egoPose;
+
+  const points: Point3D[] = [];
+  for (let i = 0; i + 2 < flat.length; i += 3) {
+    const pSensor: Vec3 = [flat[i], flat[i + 1], flat[i + 2]];
+    const pEgo = globalToEgo(sensorToGlobal(pSensor, lidarCalib, lidarEgo), camEgoPose);
+    const [x, y, z] = egoToThree(pEgo);
+    points.push({ x, y, z }); // no detectionId — environment point
+  }
+  return points;
 }
 
 /**
@@ -201,6 +241,18 @@ function isCalibratedSensor(value: unknown): boolean {
     Array.isArray(s.cameraIntrinsic) &&
     s.cameraIntrinsic.length === 3 &&
     s.cameraIntrinsic.every((row) => isFiniteVec(row, 3))
+  );
+}
+
+function isLidar(value: unknown): value is NuScenesLidar {
+  if (value === null || typeof value !== 'object') return false;
+  const l = value as Record<string, unknown>;
+  return (
+    Array.isArray(l.points) &&
+    l.points.length % 3 === 0 &&
+    l.points.every((n) => Number.isFinite(n)) &&
+    isPose(l.egoPose) &&
+    isPose(l.calibratedSensor) // LiDAR calib has translation+rotation; no intrinsic
   );
 }
 

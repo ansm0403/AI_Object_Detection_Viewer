@@ -222,7 +222,7 @@ Sub-features can ship independently; recommended order **1A → 1B → 1C** (1C 
 
 ---
 
-## F2 — nuScenes Real-3D Integration 🔨 In Progress (F2-A ✅ done; F2-B/C planned)
+## F2 — nuScenes Real-3D Integration 🔨 In Progress (F2-A ✅, F2-B ✅ done; F2-C planned)
 
 Replace *estimated* 3D (COCO → invented depth) with *measured* 3D from **nuScenes**,
 added **alongside** COCO via a dataset switcher (not a replacement — the Step 11 YOLO /
@@ -386,14 +386,64 @@ or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
   off-screen) and that is correct; Rule #1 = "same object ⇒ same id", not "every 3D has a 2D".
   Deferred/to-watch: partial-visibility near-plane clipping, large-magnitude global-coord precision.
 
-### F2-B — Real LiDAR point cloud ⏳ Planned (after F2-A)
+### F2-B — Real LiDAR point cloud ✅ Done (prep + lib + render)
 
-- [ ] Goal: Replace the empty `pointCloud` with real decimated LiDAR points, correctly aligned to
+- [x] Goal: Replace the empty `pointCloud` with real decimated LiDAR points, correctly aligned to
       the boxes.
-- Scope (planned): offline `pcd.bin` decode + **decimation** in `scripts/`; `lib/geometry/transforms.ts`
-  gains `sensor→ego`; `PointCloud` consumes real points (F1-A depth color now shows real depth).
-- Note: this is the second calibration stage (sensor→ego). File size is the main risk → decimate
-  offline, host only a few keyframes.
+- Scope: offline `pcd.bin` decode + **voxel-grid decimation** in `scripts/prep_nuscenes.py`;
+  `lib/geometry/transforms.ts` gains `sensorToGlobal`; `lib/nuscenes` carries a `lidar` payload;
+  `lib/nuscenes/parser.ts` builds the aligned `pointCloud`; `Point3D.detectionId` becomes optional;
+  a pure `selectVisiblePoints` selector; `PointCloud` consumes the real points (F1-A depth color now
+  shows real depth).
+- Background (beginner): a LiDAR sweep (`.pcd.bin`) is a header-less binary, 5 × `float32` per point
+  (`x,y,z,intensity,ring` = 20 bytes); `struct` decodes it with no numpy/devkit. The points are born
+  in the **LiDAR sensor frame**, while the boxes live in the **CAM_FRONT ego frame**, so they must be
+  brought together: `sensorToGlobal` (LiDAR calib → LiDAR ego_pose) → `globalToEgo` (the frame's
+  CAM_FRONT ego_pose) → `egoToThree`. Routing through GLOBAL absorbs the small LiDAR-vs-camera
+  capture-time offset (the car moved a few cm between the two sensor triggers).
+- Done when:
+  - [x] `pcd.bin` is decoded offline (stdlib `struct`, no devkit/numpy) and **voxel-grid decimated**
+        (~6.5k pts/frame at voxel 0.6 m), then carried inline in `nuscenes.json` as a flat
+        `lidar.points: [x,y,z,…]` array (sensor-frame raw; **no coordinate math in prep**, Rule #3).
+  - [x] `lib/geometry/transforms.ts` gains `sensorToGlobal(pSensor, sensorCalib, egoPose)` (+4 tests),
+        composed in the parser with the existing `globalToEgo` + `egoToThree` to align points to boxes.
+  - [x] The point cloud renders, filling the environment and **aligned to the boxes** — render-verified:
+        the concentric LiDAR rings are centred on the ego/sensor origin and the boxes are embedded in
+        the surrounding point field (misalignment would separate them). F1-A per-vertex depth color +
+        `flat` tone mapping reused unchanged; real `z` now drives the gradient.
+  - [x] `Point3D.detectionId` is optional; LiDAR (environment) points carry none and are **always
+        shown** regardless of the distance slider / class toggles (the box filters act on boxes). COCO's
+        estimated points still filter by their owning box's id — `selectVisiblePoints` (pure, +4 tests)
+        encodes both, so PointCloud no longer holds the rule inline.
+  - [x] COCO path, F1 visuals, F2-A, and the full suite are unaffected (`pointCloud` was already a
+        first-class field; `detectionId` optional is backward-compatible). Suite **166 → 179**.
+        COCO estimated cloud / fog / confidence slider render-verified unchanged.
+- Decisions (this session, via AskUserQuestion):
+  - **Decimation = voxel grid, ~6k pts/frame.** A LiDAR sweep is ~34.7k pts and spatially spread, so a
+    coarse-ish 0.6 m voxel is what lands ~6.5k by voxel alone (finer voxels barely thin it → would lean
+    on the random `--max-points` cap). Voxel gives even spatial density (cleaner than uniform-random's
+    near-clumping). `--voxel-size` / `--max-points` are CLI-tunable; coords rounded to 3 dp (mm).
+  - **Transport = inline flat array in `nuscenes.json`.** ~6.5k × 10 frames ≈ 1.4 MB (compact dump, no
+    indent — pretty-printing the point arrays alone tripled the file). One fetch, simplest wiring; fine
+    for a 10-frame demo. (Separate per-frame files / binary rejected as over-scope.)
+  - **Filter = LiDAR points always shown (environment), independent of box filters.** Simplest and
+    truthful — the cloud is context, the sliders curate boxes. (Per-point distance filtering rejected
+    as extra per-point cost with little demo value.)
+  - **Alignment = full sensor→global→cam-ego correction** (vs LiDAR-calib-only). Routing through GLOBAL
+    corrects the ego_pose timestamp mismatch; correctness over a marginally simpler path.
+  - **Color = reuse F1-A depth color** (decided up front — zero new UI; nuScenes runs fog-off so depth
+    color is the only depth cue, and `depthRange` already fits per-frame `z`). Intensity color rejected
+    (new ramp + domain-fit UI for no clear gain).
+  - **Point size / count kept at F1-A's `0.2` and ~6.5k** — render-verified legible at the nuScenes
+    scale; left tunable (`--voxel-size` for density, `size` prop for radius) if a future scene needs it.
+- Tests: `transforms.test.ts` +4 (`sensorToGlobal`: identity, translation-only, sensor-mount+ego-yaw,
+  global round-trip recovers the sensor→ego point); `lib/nuscenes/parser.test.ts` +5 (lidar →
+  pointCloud length, sensor→…→three alignment value, no `detectionId`, absent lidar → `[]`, malformed
+  lidar → `[]`+warn); `lib/selectors/visible-detections.test.ts` +4 (`selectVisiblePoints`: owned obey
+  set, env always shown, mixed, `undefined` keeps all). UI (PointCloud filter swap) — no test, per
+  Testing Policy; render-verified.
+- Edge cases: `Edge_F#2.md` Case 4 (alignment must route through GLOBAL, render-verified by the
+  sensor-centred rings; sensor-frame voxel decimation is subsampling, not a Rule #3 transform).
 
 ### F2-C — Sequence + tracking + autoplay ⏳ Planned (after F2-B)
 
@@ -427,7 +477,29 @@ or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
   defined in the F2 lib-core session; distance filter + camera framing are UI mechanics, not domain
   terms).
 
-### F2 (overall) — to fill when F2-B / F2-C land
+### F2-B — completion record (LiDAR point cloud session)
+- Files **changed**: `scripts/prep_nuscenes.py` (LIDAR_TOP join + `.pcd.bin` decode + voxel-grid
+  decimate + inline `lidar` payload; compact JSON dump), `lib/geometry/transforms.ts`
+  (+`sensorToGlobal`) + `transforms.test.ts` + `lib/geometry/index.ts` (barrel),
+  `lib/nuscenes/types.ts` (+`NuScenesLidar` / `NuScenesLidarCalibratedSensor`, `lidar?` on the frame),
+  `lib/nuscenes/parser.ts` (build aligned `pointCloud` + `isLidar` guard) + `parser.test.ts`,
+  `lib/types/index.ts` (`Point3D.detectionId?` optional), `lib/selectors/visible-detections.ts`
+  (+`selectVisiblePoints`) + `visible-detections.test.ts` + `lib/selectors/index.ts` (barrel),
+  `components/viewer-3d/PointCloud.tsx` (filter via `selectVisiblePoints`). Regenerated
+  `public/sample-data/nuscenes/nuscenes.json` (scene-0916, +~6.5k pts/frame, ~1.4 MB).
+- Suite total: **166 → 179 passing** (13 new pure-logic tests: transforms 4, parser 5, selectors 4).
+  UI = no tests (Testing Policy), render-verified via Playwright.
+- Edge cases (Edge_F#2.md): Case 4 (alignment routes sensor→global→cam-ego; verified by the
+  sensor-centred LiDAR rings; voxel decimation in the sensor frame is subsampling, not a Rule #3
+  coordinate transform).
+- Architecture.md updates: nuScenes Integration status → F2-B done; prepped-JSON schema (`lidar`
+  fields); `sensorToGlobal` in the transform pipeline; `Point3D.detectionId?` optional + Core Data
+  Types; PointCloud contract (real LiDAR + `selectVisiblePoints`); Data Flow (nuScenes pointCloud);
+  selectors (`selectVisiblePoints`); Separation-of-Concerns (`scripts/` decode+decimate).
+- domain-glossary.md terms added: `.pcd.bin` (LiDAR sweep binary), Decimation, Voxel Grid Downsampling;
+  LiDAR / Point Cloud entries updated (real measured points now exist on nuScenes frames).
+
+### F2 (overall) — to fill when F2-C lands
 - Files changed / added:
 - Suite total:
 - Edge cases (Edge_F#2.md if any):

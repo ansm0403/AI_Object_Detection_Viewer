@@ -1,4 +1,4 @@
-import type { Detection2D, Frame } from '@/lib/types';
+import type { Detection2D, Frame, Point3D } from '@/lib/types';
 
 /**
  * Returns the detections in `frame` that survive the current UI filters.
@@ -65,4 +65,30 @@ export function selectVisibleDetectionIds3D(
     ids.add(d.id);
   }
   return ids;
+}
+
+/**
+ * The points that should render given the current `visibleIds` set.
+ *
+ * Two kinds of point coexist (Point3D.detectionId is now optional):
+ *  - COCO's ESTIMATED points carry a `detectionId` (they were scattered inside
+ *    one estimated bbox), so they follow that box's visibility — hidden when its
+ *    id is filtered out. Unchanged from the prior in-component filter.
+ *  - F2-B's real LiDAR points carry NO `detectionId` (a measured environment
+ *    point belongs to no single detection). They are ALWAYS shown — the box
+ *    filters (distance slider, class toggles) act on boxes, not on the
+ *    environment cloud (the user-chosen contract for F2-B).
+ *
+ * `visibleIds === undefined` keeps everything (no filtering wired). Pure, so the
+ * "environment points always show" rule is locked by a test rather than living
+ * only in the R3F component (Immutable Rule #3 spirit).
+ */
+export function selectVisiblePoints(
+  points: Point3D[],
+  visibleIds: Set<string> | undefined,
+): Point3D[] {
+  if (!visibleIds) return points;
+  return points.filter(
+    (p) => p.detectionId === undefined || visibleIds.has(p.detectionId),
+  );
 }

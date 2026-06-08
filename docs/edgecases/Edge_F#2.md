@@ -3,7 +3,8 @@
 > Case 1 was discovered implementing the **pure `lib/` core** of F2-A (TDD,
 > synthetic fixtures, no UI). Cases 2–3 were discovered during the **UI
 > integration** session (wiring the prepped data into the live app + Playwright
-> render verification). See `post-mvp-checklist.md` → F2-A and
+> render verification). Case 4 is **F2-B** (real LiDAR point cloud — alignment +
+> render verification). See `post-mvp-checklist.md` → F2-A / F2-B and
 > `architecture.md` → "nuScenes Integration".
 
 ## Context
@@ -125,6 +126,50 @@ app, not by reasoning.)
 single far lateral outlier backs the camera off and shrinks the main cluster;
 acceptable for an overview (the user can orbit). If a future frame frames poorly,
 consider fitting to a percentile of boxes or to the distance-filtered set.
+
+---
+
+## Case 4 — LiDAR points must route through GLOBAL to align with the boxes (F2-B, render-verified)
+
+**Discovery (F2-B, designing the alignment + Playwright verification).** The boxes
+live in the **CAM_FRONT ego frame** (the F2-A parser transforms each global box
+with the *camera* `sample_data`'s `ego_pose`). The real LiDAR points are born in
+the **LIDAR_TOP sensor frame** and ship with their *own* `calibrated_sensor` AND
+their *own* `ego_pose` — the LiDAR fires at a slightly different timestamp than the
+camera, so the car has moved a few cm and the two `ego_pose`s differ.
+
+**Why the naive path is subtly wrong.** Applying only the LiDAR calibration
+(sensor → ego) and dropping the points straight into the box ego frame ignores that
+ego_pose mismatch, leaving a small but real offset between points and boxes.
+
+**Resolution.** Align via the fixed world frame:
+`sensorToGlobal` (LiDAR calib → LiDAR `ego_pose`) → `globalToEgo` (the frame's
+CAM_FRONT `ego_pose`) → `egoToThree`. Going through GLOBAL cancels the
+LiDAR-vs-camera capture-time offset because GLOBAL is the one frame both ego poses
+are expressed in. `sensorToGlobal` is the new pure transform (the inverse direction
+of `globalToEgo`); the parser composes the three, all unit-tested.
+
+**Render verification (the decisive check).** Unit tests prove the math but not the
+*alignment* (same lesson as Case 3). The Playwright screenshot was conclusive: the
+decimated cloud shows the characteristic **concentric LiDAR rings centred on the
+ego/sensor origin**, with the measured boxes embedded in the surrounding point
+field. A broken transform (wrong calibration, skipped ego hop, axis error) would
+have put the rings off-origin or the cloud in a different region than the boxes; the
+co-location confirms correctness. The cm-scale ego_pose correction itself is below
+visual resolution, but is correct by construction and cheap, so it was kept.
+
+**Rule #3 note — decimation is not a transform.** The prep script voxel-grid
+*decimates* the sweep (keeps ≤1 point per spatial cell) and copies the raw
+sensor-frame coordinates. That is subsampling, not coordinate math, so it stays in
+the offline script without violating Immutable Rule #3 — every actual frame
+transform lives in `lib/geometry` and is tested. (Voxel binning uses the raw coords
+only to *group* points, never to move them.)
+
+**Deferred / to watch.** Point `size` (`0.2`) and decimation density (~6.5k/frame,
+voxel 0.6 m) were render-tuned on scene-0916; a denser scene or different camera may
+want a smaller size or finer voxel (`--voxel-size`). Depth color reuses F1-A
+unchanged — on the wide nuScenes cloud the gradient is real but reads subtler than
+on COCO's compact scene; revisit only if a future frame looks flat.
 
 ---
 
