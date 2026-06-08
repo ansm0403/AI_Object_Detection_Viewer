@@ -219,3 +219,178 @@ Sub-features can ship independently; recommended order **1A → 1B → 1C** (1C 
   - 기존 SelectedObjectInfo 패널은 유지(추가 affordance지 대체 아님).
 - 테스트: 1A만 순수 함수 유닛 테스트. 1B/1C는 UI라 테스트 없음(Testing Policy).
 -->
+
+---
+
+## F2 — nuScenes Real-3D Integration 🔨 In Progress (F2-A: lib + data ✅, UI ⏳)
+
+Replace *estimated* 3D (COCO → invented depth) with *measured* 3D from **nuScenes**,
+added **alongside** COCO via a dataset switcher (not a replacement — the Step 11 YOLO /
+confidence / histogram work stays live). This removes the project's headline weakness
+("3D is estimated") for nuScenes frames while keeping the estimated-3D story for COCO.
+
+Decided in the F2 study + planning sessions (`docs/learning/REAL_3D_DATASET_STUDY.md`):
+nuScenes over KITTI/Waymo. Web-friendly JSON, modern/360°, leverages the user's relational-DB
+experience; KITTI was the cheap stepping-stone to learn label structure + coordinate frames.
+
+Structure/contract notes live in `architecture.md` ("nuScenes Integration").
+
+### Two facts that shape the whole feature (verified in planning — do not re-litigate)
+1. **No zero-transform path.** nuScenes annotations are in the **global** frame, so even
+   "boxes only" needs a real `global→ego` transform + the z-up→y-up axis convention. Unlike
+   KITTI Level 1, there is no calibration-free path.
+2. **No 2D boxes in nuScenes.** Core annotations are 3D-only. To keep the 2D↔3D sync signature,
+   `lib/` **projects** each 3D box into the camera image. 2D + 3D come from the same `instance`
+   annotation → they share one id → **Immutable Rule #1 preserved**.
+
+### Locked decisions (from the planning AskUserQuestion)
+- **A. First slice = F2-A only:** measured 3D boxes + projected 2D boxes + 2D↔3D sync.
+  No real point cloud (F2-B), no sequence (F2-C).
+- **B. Pipeline = offline prep → static JSON, transforms in `lib/` TS.** One-time build-time
+  script (`scripts/`, like Step 11's `generate_predictions.py`) flattens nuScenes-mini's
+  relational tables and emits a compact static JSON carrying **raw** values (global boxes +
+  `ego_pose` + `calibrated_sensor` + camera `intrinsic` + `instance` token). The browser parses
+  it like COCO; **all coordinate math stays in `lib/` and is Vitest-tested** (Rule #3). No runtime
+  backend → Vercel-static identity intact.
+- **C. Filter = add a distance(z) selector; keep confidence for COCO.** Real metres now exist, so
+  "hide beyond 50 m" is a real filter. Confidence slider is a no-op on nuScenes (annotation = 1.0)
+  but stays live for COCO/YOLO. **No fake confidence injected** (Rule #6).
+- **D. rotation = optional quaternion** `bbox3D.rotation?: [x,y,z,w]`. Absent = identity, so COCO
+  estimated boxes / F1 / existing tests are untouched.
+- **(default, no objection) Coexistence via dataset switcher**, not replacement.
+- **(default, no objection) Rule #6 → `source` flag.** `Frame.source: 'coco-estimated' |
+  'nuscenes-measured'` drives an "Estimated"/"Measured" UI badge. Rule #6's spirit (never
+  misrepresent depth provenance) is upheld across both datasets, not dropped.
+
+### Immutable Rule interactions
+- **#1 (2D.id == 3D.id):** preserved — projected 2D + source 3D share the `instance`-derived id.
+  The projection step MUST carry the id through unchanged.
+- **#3 (conversion logic outside React/store):** all transforms/projection in `lib/`
+  (`lib/geometry/transforms.ts`, `projection.ts`) + `lib/nuscenes/parser.ts`. The offline script
+  only flattens/copies — it does no coordinate math.
+- **#6 (3D estimated, never claim real):** scoped, not dropped. COCO frames keep "Estimated";
+  nuScenes frames are truthfully "Measured" via the `source` flag. Injecting fake confidence is
+  still forbidden.
+- **#7 (COCO is 2D-only):** untouched. nuScenes has its own parser; we never read 3D from COCO JSON.
+
+### F2-A — Measured 3D boxes + projected 2D + sync 🔨 In Progress (lib + data ✅, UI ⏳)
+
+- [ ] Goal: A nuScenes keyframe renders real measured 3D boxes (with rotation) in the 3D viewer
+      and projected 2D boxes on the camera image, fully selection-synced — picked via the dataset
+      switcher, badged "Measured".
+- Scope (planned): `scripts/` offline prep; `public/sample-data/nuscenes/`; `lib/nuscenes/`
+  (parser + prepped-JSON types); `lib/geometry/transforms.ts` + `projection.ts` (+ tests);
+  `lib/types` (`Frame.source`, `bbox3D.rotation?`); `lib/selectors/` distance filter (+ test);
+  a dataset-source switcher + "Estimated/Measured" badge in the UI; `BBox3D` reads `rotation`.
+- Done when:
+  - [ ] A dataset switcher toggles between the COCO sample and the nuScenes sample.
+  - [ ] nuScenes 3D boxes render at measured positions with correct orientation (quaternion).
+  - [ ] Projected 2D boxes appear on the camera image and select-sync with the 3D boxes (shared id).
+  - [ ] Distance filter hides boxes beyond a threshold (metres); confidence slider no-ops gracefully.
+  - [ ] The frame shows a "Measured" badge; COCO frames still show "Estimated".
+  - [x] COCO path, F1 visuals, and the full suite are unaffected. (`source`/`rotation` are optional →
+        existing COCO frames and F1 tests untouched; full suite 114 → **147 passing**.)
+- Tests (required — pure logic): `transforms.test.ts` (global→ego round-trip, axis convention,
+  quaternion identity when absent), `projection.test.ts` (known 3D point → expected pixel; behind-camera
+  cull), `lib/selectors` distance-filter test, `lib/nuscenes/parser` test (prepped JSON → Frame, id
+  shared across 2D/3D). UI (switcher/badge/rotation render) — no tests, per Testing Policy.
+
+#### Progress — lib pure core ✅ Done (this session); data + UI ⏳ next
+
+The coordinate math + parser landed first, TDD with synthetic fixtures (no real nuScenes data, no
+download, no UI). **Done this session:**
+- [x] `lib/geometry/transforms.ts` (+13 tests) — `quatNuToThree` ([w,x,y,z]→[x,y,z,w], absent→identity),
+      `globalToEgo` (`R_ego⁻¹·(p−t_ego)`), `globalQuatToEgo`, `egoToThree` axis flip `(x,y,z)→(-y,z,-x)`
+      (det=+1, up→y, fwd→−z), `egoQuatToThree`, `nuSizeToLocal` ([w,l,h]→[l,w,h]).
+- [x] `lib/geometry/projection.ts` (+10 tests) — `egoToCamera`, `cameraToPixel` (K·p, in-front=z>0),
+      `boxCornersEgo` (8 corners), `projectCornersToBbox` (AABB of projected corners; behind-camera or
+      fully off-screen → `null`; image-edge clamp).
+- [x] `lib/nuscenes/types.ts` — prepped static-JSON schema (the contract the future offline script must
+      satisfy). Carries RAW nuScenes-native values (quaternion [w,x,y,z], size [w,l,h], global boxes,
+      `ego_pose`, `calibrated_sensor`+intrinsic, `instance` token); no coordinate math (Rule #3).
+- [x] `lib/nuscenes/parser.ts` (+10 tests) — `parseNuScenes(raw)→Frame[]`, COCO-parser defensive style.
+      id = `instanceToken` shared by 2D+3D (**Rule #1 locked by test**); `confidence=1.0` (annotation,
+      **Rule #6** — no fake score); `source='nuscenes-measured'`; `pointCloud:[]`; behind-camera/off-screen
+      box → 3D kept, 2D dropped; small `CATEGORY_MAP` (`vehicle.car→car`, `human.pedestrian.*→person`,
+      `vehicle.bicycle→bicycle`; unmapped → raw passthrough).
+- [x] `lib/types`: `Frame.source?`, `Detection3D.bbox3D.rotation?` added (optional → no breakage).
+- [x] Barrels: `lib/nuscenes/index.ts` (new), `lib/geometry/index.ts` (+transforms/projection exports).
+
+**Offline prep + sample data ✅ Done (follow-up session):**
+- [x] `scripts/prep_nuscenes.py` — stdlib-only (NO nuscenes-devkit; Python 3.13 + a beginner, so the
+      heavy devkit install was avoided). JOINs the nuScenes-mini tables by token and flattens to the
+      `NuScenesPrepped` schema; copies RAW values only, **no coordinate math** (Rule #3). CLI:
+      `--dataroot` (default `C:\data\sets\nuscenes`), `--scene-index` (0), `--num-keyframes` (10).
+- [x] Generated `public/sample-data/nuscenes/nuscenes.json` + `cam_front/` (10 jpgs) from
+      **scene-0916** (first 10 keyframes, 583 boxes — daytime parking lot/intersection).
+- [x] **Real-data validation** (temp test, since removed): `parseNuScenes` on the real JSON → 10 frames,
+      583 3D boxes, **200** project into CAM_FRONT (the rest behind/off-screen → 2D dropped, 3D kept;
+      Edge_F#2 Case 1 confirmed on real data). 2D ⊆ 3D, shared ids, rotation present, source measured.
+- **Scene choice** was data-driven: surveyed all 10 mini scenes' first-10-keyframe class composition
+      and picked **scene-0916** for variety + cleanliness — car 253 / person 217 / bicycle 19 (all three
+      palette classes) with near-zero clutter (10 boxes) and daytime lighting. The initial scene-0061 was
+      rejected (dense construction: ~100 boxes/frame, ~half `barrier`/`trafficcone`). Swap any time via
+      `--scene-index` (the prep script clears `cam_front/` on re-run). Density is still ~58/frame → the
+      distance filter (next) earns its keep.
+
+**Still deferred** (unchecked Done-when above): `lib/selectors` distance filter (+test), UI (dataset
+switcher, Estimated/Measured badge, `BBox3D` reading `rotation`).
+
+Locked decisions made this session (via AskUserQuestion): render frame = **ego**; axis rule =
+**`(x,y,z)→(-y,z,-x)`** (fwd→−z); 2D box = **AABB of 8 projected corners**; culling = **all-8-in-front
+or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
+- Decisions to make during impl: render frame choice (ego vs first-box-centred) for numerical sanity;
+  which camera (`CAM_FRONT`); how many keyframes; 2D box = projected-corner AABB vs oriented; class
+  subset to mirror COCO (person/bicycle/car) or nuScenes-native classes.
+- Edge cases: `Edge_F#2.md` Case 1 ✅ created — a 3D box can have NO 2D box (behind camera /
+  off-screen) and that is correct; Rule #1 = "same object ⇒ same id", not "every 3D has a 2D".
+  Deferred/to-watch: partial-visibility near-plane clipping, large-magnitude global-coord precision.
+
+### F2-B — Real LiDAR point cloud ⏳ Planned (after F2-A)
+
+- [ ] Goal: Replace the empty `pointCloud` with real decimated LiDAR points, correctly aligned to
+      the boxes.
+- Scope (planned): offline `pcd.bin` decode + **decimation** in `scripts/`; `lib/geometry/transforms.ts`
+  gains `sensor→ego`; `PointCloud` consumes real points (F1-A depth color now shows real depth).
+- Note: this is the second calibration stage (sensor→ego). File size is the main risk → decimate
+  offline, host only a few keyframes.
+
+### F2-C — Sequence + tracking + autoplay ⏳ Planned (after F2-B)
+
+- [ ] Goal: Load a short nuScenes scene sequence; `instance` token gives cross-frame identity so
+      `selectedObjectId` survives frame changes → meaningful autoplay (objects actually move).
+- Note: this is what makes autoplay non-trivial vs COCO's independent frames. Revisit the Step 9.5
+  "inter-frame tween" exclusion — real tracking now exists, so it becomes feasible.
+
+### F2 — to fill on completion
+- Files changed / added:
+- Suite total:
+- Edge cases (Edge_F#2.md if any):
+- Architecture.md updates made:
+- domain-glossary.md terms added:
+
+<!-- KO (move to a localized file)
+## F2 — nuScenes 실측 3D 통합 (계획)
+COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하지 않고 **데이터셋 토글로 공존**
+(Step 11 YOLO/confidence/히스토그램 작업 보존). 약점("3D는 추정")을 nuScenes 프레임에서 제거.
+
+[기획에서 확정 — 재논의 금지]
+- nuScenes엔 KITTI Level 1 같은 무변환 경로가 **없다**: 어노테이션이 global 좌표라 박스만 그려도
+  global→ego 변환 + 축관례가 필요.
+- nuScenes 코어엔 **2D 박스가 없다**: 3D 전용. 2D↔3D 동기화를 위해 lib/에서 3D→2D **투영**.
+  2D·3D가 같은 instance에서 나오므로 id 동일(Rule #1) 보존.
+
+[잠긴 결정 — AskUserQuestion]
+- A. 첫 슬라이스 = F2-A만(박스 2D투영+3D+동기화). 점구름(F2-B)·시퀀스(F2-C) 제외.
+- B. 오프라인 prep 스크립트 → 정적 JSON(원시 행렬 포함). 좌표변환은 lib/ TS + Vitest(Rule #3). 런타임 백엔드 X.
+- C. 거리(z) 필터 추가, confidence는 COCO용 유지(nuScenes에선 no-op). 가짜 confidence 금지(Rule #6).
+- D. rotation = 옵셔널 쿼터니언 [x,y,z,w]. 없으면 회전 없음(기존 COCO/F1/테스트 안 깨짐).
+- (기본값) COCO와 공존(토글), Rule #6은 source 플래그('estimated'/'measured' 배지)로 정신 보존.
+
+[Rule 상호작용] #1 보존(instance 기반 공유 id), #3 변환은 lib/, #6 source로 스코핑, #7 무관(별도 파서).
+
+- F2-A: 실측 3D박스(+회전) + 투영 2D박스 + 동기화 + 거리필터 + 배지. 점구름 빈 배열.
+  테스트(필수): transforms / projection / distance-filter / nuscenes parser 순수 로직. UI는 테스트 없음.
+- F2-B: 실측 LiDAR 점구름(sensor→ego + 오프라인 decimation). F1-A 깊이색이 진짜 깊이를 보임.
+- F2-C: 시퀀스 + tracking(instance token → 프레임 간 id) + 자동재생. Step 9.5 tween 제외 재검토 가능.
+-->
