@@ -222,7 +222,7 @@ Sub-features can ship independently; recommended order **1A → 1B → 1C** (1C 
 
 ---
 
-## F2 — nuScenes Real-3D Integration 🔨 In Progress (F2-A ✅, F2-B ✅ done; F2-C planned)
+## F2 — nuScenes Real-3D Integration ✅ Done (F2-A ✅, F2-B ✅, F2-C ✅)
 
 Replace *estimated* 3D (COCO → invented depth) with *measured* 3D from **nuScenes**,
 added **alongside** COCO via a dataset switcher (not a replacement — the Step 11 YOLO /
@@ -445,12 +445,69 @@ or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
 - Edge cases: `Edge_F#2.md` Case 4 (alignment must route through GLOBAL, render-verified by the
   sensor-centred rings; sensor-frame voxel decimation is subsampling, not a Rule #3 transform).
 
-### F2-C — Sequence + tracking + autoplay ⏳ Planned (after F2-B)
+### F2-C — Sequence + tracking + autoplay ✅ Done (tracking + autoplay + camera stability)
 
-- [ ] Goal: Load a short nuScenes scene sequence; `instance` token gives cross-frame identity so
-      `selectedObjectId` survives frame changes → meaningful autoplay (objects actually move).
-- Note: this is what makes autoplay non-trivial vs COCO's independent frames. Revisit the Step 9.5
-  "inter-frame tween" exclusion — real tracking now exists, so it becomes feasible.
+- [x] Goal: The nuScenes scene sequence (scene-0916, 10 keyframes already in `nuscenes.json`,
+      time-ordered ~0.5 s apart) gains cross-frame **tracking**: `selectedObjectId` (= `instance`
+      token) survives frame changes, so **autoplay** shows the SAME object actually moving — and the
+      camera stops bouncing on every frame.
+- Scope: `lib/sequence/` (new — pure `nextFrameIndex` + `AUTOPLAY_INTERVAL_MS`); `app/page.tsx`
+  (dataset-aware frame-switch selection policy, autoplay timer, dataset-aware `Viewer3D` key,
+  Timeline wiring); `Viewer3D.tsx` (freeze initial camera framing on mount); `Timeline.tsx`
+  (play/pause button); `Scene.tsx` (tween extension comment); `tests/integration/frame-switch.test.ts`
+  (parametrized COCO-clears / nuScenes-keeps). **COCO path untouched** — every change is dataset-gated.
+- Background (beginner):
+  - **track id / instance token** — nuScenes gives each physical object a stable `instance` token
+    that is the SAME across frames; the parser already uses it as `Detection*.id`. That stability is
+    the whole basis of tracking: keep `selectedObjectId` and the same object re-highlights frame to
+    frame. COCO ids (`imageId-annId`) are NOT stable across frames, which is exactly why COCO clears
+    the selection on a frame switch (Edge_#5 Case 6) — the F2-C split is the principled inverse.
+  - **autoplay** — a `setInterval` that steps the selected frame on a timer (here 500 ms = the real
+    ~2 Hz keyframe cadence). The *which-frame-next* math is the pure `nextFrameIndex` (loops at the
+    end); the React effect only owns the timer (Rule #3 spirit).
+  - **camera remount** — `<Viewer3D key={frame.id}>` forced a full Canvas remount per frame so
+    OrbitControls reset cleanly (Edge_#4 Case 6). During autoplay that resets the camera every
+    0.5 s (a bounce). Giving nuScenes a *stable* key keeps the Canvas mounted, so the camera holds
+    and the boxes move within a still view.
+- Done when:
+  - [x] On nuScenes, selecting an object and switching frames KEEPS it selected/highlighted; if the
+        object leaves the camera then returns, it re-highlights (render-verified: a `person`
+        instance stayed selected across frame 1→2, the SELECTED panel showed the same id). COCO still
+        clears on every switch (render-verified: placeholder after switch). Edge_F#2 Case 5.
+  - [x] A play/pause control (Timeline header, nuScenes only) steps the keyframes at ~2 fps and loops
+        at the end; pausing stops it (render-verified: Frame 2→6→10 while playing, sky "Pause" label).
+  - [x] During frame switches / autoplay the nuScenes camera holds its position+orbit (no remount;
+        initial framing frozen so `target` doesn't re-aim) — render-verified: identical viewpoint
+        across autoplay frames while the box cloud moved. COCO keeps remount-reset. Edge_F#2 Case 6.
+  - [x] Snap, not tween (decision 4-A): every rendered box pose is a real measured keyframe (Rule #6
+        honesty; the LiDAR cloud is per-keyframe anyway). Extension seams for box-tween (4-B) and
+        camera-follow (3-B) are left clean + commented, not built (no speculative code, per CLAUDE.md).
+  - [x] COCO path, F1, F2-A/B and the full suite are unaffected (all changes dataset-gated;
+        179 → **190 passing**).
+- Decisions (this session, via AskUserQuestion):
+  - **1-A — keep the selection when the object disappears** (re-highlights on re-appearance). With a
+    stable `instance` id, re-appearance is the SAME object, so re-highlighting is correct — the exact
+    inverse of COCO's clear-on-switch (unstable ids). Implemented as `tracksAcrossFrames` gating the
+    `setSelectedObject(null)` call; **Rule #2 intact** (still one `selectedObjectId`, only *when* it
+    clears differs).
+  - **2-A — 0.5 s/frame + loop.** Matches the real nuScenes keyframe cadence (honest real-time
+    motion); loops for a continuous demo. `AUTOPLAY_INTERVAL_MS = 500`.
+  - **3-A — fixed camera now, follow later.** Remove the per-frame remount on nuScenes + freeze the
+    initial framing so `target` is stable. Camera-follow (3-B) deferred; seam = the `target` prop
+    (pass the selected box center per frame). Manual frame click during autoplay keeps playing
+    (simplest; user can pause).
+  - **4-A — snap now, box-tween later.** No interpolation; seam = `BBox3D` is keyed on the stable
+    instance id so the component persists across frames and could later lerp/slerp between poses
+    (lib/geometry pure fns). Box-only tween would desync from the per-keyframe LiDAR cloud — accepted
+    as a later, opt-in polish.
+- Tests (pure logic only, per Testing Policy): `lib/sequence/autoplay.test.ts` (8) — `nextFrameIndex`
+  advance / loop-wrap / stop-at-end / not-found→0 / single-frame / empty / stale-index, plus the
+  cadence constant; `tests/integration/frame-switch.test.ts` (+3) — nuScenes KEEPS selection across a
+  switch, keeps it across a multi-frame walk (re-appearance), still no-ops on same-frame re-select
+  (COCO-clears cases retained). Autoplay timer / play button / camera (UI) — no tests, render-verified.
+- Edge cases: `Edge_F#2.md` Case 5 (dataset-aware selection persistence — the inverse of Edge_#5
+  Case 6), Case 6 (camera remount-for-reset vs no-remount-for-stability — resolved by dataset-aware
+  key + frozen framing).
 
 ### F2-A — completion record (UI integration session)
 - Files **added**: `lib/selectors/distance-filter.ts` (+`.test.ts`),
@@ -499,12 +556,53 @@ or skip 2D (keep 3D), clamp AABB to image, drop if fully off-screen**.
 - domain-glossary.md terms added: `.pcd.bin` (LiDAR sweep binary), Decimation, Voxel Grid Downsampling;
   LiDAR / Point Cloud entries updated (real measured points now exist on nuScenes frames).
 
-### F2 (overall) — to fill when F2-C lands
-- Files changed / added:
-- Suite total:
-- Edge cases (Edge_F#2.md if any):
-- Architecture.md updates made:
-- domain-glossary.md terms added:
+### F2-C — completion record (sequence + tracking + autoplay session)
+- Files **added**: `lib/sequence/autoplay.ts` (`nextFrameIndex` + `AUTOPLAY_INTERVAL_MS`) +
+  `autoplay.test.ts` (8) + `lib/sequence/index.ts` (barrel).
+- Files **changed**: `app/page.tsx` (`tracksAcrossFrames` flag; dataset-aware `handleSelectFrame` —
+  keep selection on nuScenes / clear on COCO; `isPlaying` state + `setInterval` autoplay effect using
+  `nextFrameIndex` + `getState()`; dataset-aware `Viewer3D` key; stop autoplay on dataset switch;
+  Timeline `isPlaying`/`onTogglePlay` wiring), `components/viewer-3d/Viewer3D.tsx` (freeze initial
+  `frameBoxesForCamera` to the mount frame via `useRef`+`useMemo` so the persistent nuScenes camera's
+  `target` doesn't re-aim per frame; camera-follow extension comment), `components/timeline/Timeline.tsx`
+  (optional play/pause button), `components/viewer-3d/Scene.tsx` (box-tween extension comment on the
+  stable-key map), `tests/integration/frame-switch.test.ts` (parametrized by `tracksAcrossFrames`;
+  +3 nuScenes-keep cases).
+- Suite total: **179 → 190 passing** (11 new: `nextFrameIndex` 8, frame-switch nuScenes 3). UI
+  (autoplay timer / play button / camera stability) — no tests, render-verified via Playwright.
+- Edge cases (Edge_F#2.md): Case 5 (dataset-aware selection persistence — inverse of Edge_#5 Case 6),
+  Case 6 (camera remount-for-reset vs no-remount-for-stability).
+- Architecture.md updates: nuScenes Integration status → F2-C done; Data Flow (autoplay timer +
+  tracking); Viewer3D/Scene contract (dataset-aware key + frozen framing, stable-key tracking);
+  Timeline contract (play/pause); page wiring (`tracksAcrossFrames`); folder structure (`lib/sequence/`);
+  Separation of Concerns (`lib/sequence/`); extension seams (camera-follow, box-tween).
+- domain-glossary.md terms added: `autoplay`, `tween / lerp / slerp` (track id / instance token
+  already present, cross-linked).
+
+### F2 (overall) — Done (F2-A + F2-B + F2-C)
+- **What shipped:** COCO's *estimated* 3D is now joined by nuScenes *measured* 3D via a dataset
+  switcher — measured 3D boxes (+ quaternion rotation) + projected 2D + 2D↔3D sync + distance filter
+  + Estimated/Measured badge (F2-A); real decimated LiDAR_TOP point cloud aligned to the boxes (F2-B);
+  cross-frame tracking (`instance` token survives frame switches) + autoplay + a stable camera (F2-C).
+  COCO / Step 11 / F1 all stay live and unchanged.
+- Files changed / added: see the F2-A, F2-B, F2-C completion records above (lib core
+  `lib/geometry/{transforms,projection,camera-framing}` + `lib/nuscenes/{parser,types}` +
+  `lib/selectors/distance-filter` + `lib/sequence/autoplay`; offline `scripts/prep_nuscenes.py`;
+  sample data `public/sample-data/nuscenes/`; UI across Header/Filters/Timeline/Viewer3D/Scene/BBox3D
+  + `app/page.tsx`).
+- Suite total: **114 (pre-F2) → 147 → 166 → 179 → 190 passing.**
+- Edge cases (Edge_F#2.md): Case 1 (3D box may have no 2D box), Case 2 (3D-based visible-id set),
+  Case 3 (COCO camera/fog hid the cloud), Case 4 (LiDAR routes through GLOBAL), Case 5 (dataset-aware
+  selection persistence), Case 6 (camera remount vs stability).
+- Architecture.md updates made: "nuScenes Integration" section (F2-A/B/C status + transform pipeline
+  + prepped schema), Core Data Types (`Frame.source`, `bbox3D.rotation?`, `Point3D.detectionId?`),
+  Data Flow, Store Schema (`maxDistance`), all Viewer-3D contracts, Timeline contract, Header/Filters
+  contracts, folder structure (`lib/nuscenes`, `lib/sequence`, `scripts/`), Separation of Concerns.
+- domain-glossary.md terms added across F2: quaternion / projection / coordinate frames / `.pcd.bin` /
+  decimation / voxel grid / track id / instance token / autoplay / tween-lerp-slerp.
+- **Out of scope (not done, intentionally):** multi-camera / 6-up, radar, additional scenes (swap via
+  `--scene-index`), COCO tracking (unstable ids), inter-frame tween (seam left for a later F2-D),
+  camera-follow (seam left).
 
 <!-- KO (move to a localized file)
 ## F2 — nuScenes 실측 3D 통합 (계획)

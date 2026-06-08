@@ -76,6 +76,15 @@ export function Scene({
 
       <PointCloud points={frame.pointCloud} visibleIds={visibleIds} />
 
+      {/* key=d.id. On nuScenes d.id is the `instance` token (track id), stable
+          for the SAME object across frames — and the Canvas is not remounted per
+          frame (F2-C) — so React REUSES each BBox3D component as the object moves
+          frame to frame, just updating its position/rotation props (a snap, the
+          F2-C MVP choice). ── Extension seam (box tween, decision 4-B, deferred):
+          because the component persists, it can later interpolate between its
+          previous and current pose over AUTOPLAY_INTERVAL_MS (position lerp +
+          quaternion slerp, pure fns in lib/geometry) for smooth motion. The
+          LiDAR cloud stays per-keyframe, so only the box would be tweened. */}
       {visibleDetections3D.map((d) => (
         <BBox3D
           key={d.id}
