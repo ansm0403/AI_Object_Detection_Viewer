@@ -4,11 +4,13 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import type { Point3D } from '@/lib/types';
 import { depthToColor, depthRange } from '@/lib/geometry';
+import { selectVisiblePoints } from '@/lib/selectors';
 
 type Props = {
   points: Point3D[];
-  // When provided, only points whose `detectionId` is in this set are uploaded
-  // to the GPU. `undefined` keeps all points. Edge_#4 Case 5 (Option A).
+  // Filters which points are uploaded to the GPU (see `selectVisiblePoints`):
+  // COCO's estimated points obey their owning box's id; F2-B's real LiDAR points
+  // (no detectionId) always show. `undefined` keeps all points. Edge_#4 Case 5.
   visibleIds?: Set<string>;
   size?: number;
 };
@@ -18,7 +20,7 @@ type Props = {
 // Case 3). The Canvas runs `flat` (no tone mapping) so these colors stay vivid.
 export function PointCloud({ points, visibleIds, size = 0.2 }: Props) {
   const visiblePoints = useMemo(
-    () => (visibleIds ? points.filter((p) => visibleIds.has(p.detectionId)) : points),
+    () => selectVisiblePoints(points, visibleIds),
     [points, visibleIds],
   );
 

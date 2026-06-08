@@ -7,6 +7,8 @@ import {
   globalToEgo,
   nuSizeToLocal,
   quatNuToThree,
+  sensorToGlobal,
+  type Pose,
   type QuatXYZW,
   type Vec3,
 } from './transforms';
@@ -130,5 +132,46 @@ describe('egoQuatToThree', () => {
 describe('nuSizeToLocal', () => {
   it('reorders nuScenes [w, l, h] → local-axis [l, w, h]', () => {
     expect(nuSizeToLocal([2, 4, 1.5])).toEqual([4, 2, 1.5]);
+  });
+});
+
+describe('sensorToGlobal (F2-B — LiDAR sensor → global)', () => {
+  it('identity poses with zero translation → input unchanged', () => {
+    const g = sensorToGlobal(
+      [2, -3, 4],
+      { translation: [0, 0, 0], rotation: IDENTITY_WXYZ },
+      { translation: [0, 0, 0], rotation: IDENTITY_WXYZ },
+    );
+    expectVecClose(g, [2, -3, 4]);
+  });
+
+  it('with identity rotations, adds the calib then the ego translation', () => {
+    const g = sensorToGlobal(
+      [1, 1, 1],
+      { translation: [1, 2, 3], rotation: IDENTITY_WXYZ },
+      { translation: [10, 0, 0], rotation: IDENTITY_WXYZ },
+    );
+    expectVecClose(g, [12, 3, 4]);
+  });
+
+  it('applies the sensor mount, then the +90° ego yaw, then the car position', () => {
+    const calib: Pose = { translation: [1, 0, 0], rotation: IDENTITY_WXYZ };
+    const ego: Pose = { translation: [10, 20, 0], rotation: YAW90_WXYZ };
+    // p_ego = R_calib·[2,0,0] + [1,0,0] = [3,0,0]; ego yaw90 sends x→y → [0,3,0];
+    // + car position [10,20,0] = [10,23,0].
+    expectVecClose(sensorToGlobal([2, 0, 0], calib, ego), [10, 23, 0]);
+  });
+
+  it('round-trips: globalToEgo(sensorToGlobal(p, calib, ego), ego) recovers the sensor→ego point', () => {
+    // This is the property the alignment relies on: routing a LiDAR point through
+    // GLOBAL and back into an ego frame must cleanly undo the ego hop, leaving
+    // only the sensor→ego (calibration) part. (In the app the two ego poses
+    // differ — LiDAR vs camera timestamp — which is exactly the offset GLOBAL
+    // routing corrects; here we use one ego to assert the inverse is exact.)
+    const calib: Pose = { translation: [1, 0, 0], rotation: IDENTITY_WXYZ };
+    const ego: Pose = { translation: [10, 20, 0], rotation: YAW90_WXYZ };
+    const pSensor: Vec3 = [2, 0, 0];
+    const backToEgo = globalToEgo(sensorToGlobal(pSensor, calib, ego), ego);
+    expectVecClose(backToEgo, [3, 0, 0]);
   });
 });

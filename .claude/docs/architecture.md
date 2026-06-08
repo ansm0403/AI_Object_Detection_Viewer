@@ -9,7 +9,10 @@ projection / parser), offline prep + sample data (`scripts/prep_nuscenes.py` →
 `public/sample-data/nuscenes/`, scene-0916), **and UI integration** — dataset switcher +
 Estimated/Measured badge (Header), measured 3D boxes with quaternion rotation, projected 2D boxes +
 selection sync, a `lib/selectors` distance filter (per-dataset slider swap), and per-dataset 3D camera
-framing + fog. 166 tests. **Next: F2-B** (real LiDAR point cloud), **F2-C** (sequence + tracking).
+framing + fog. **F2-B ✅ Done** (real LiDAR point cloud): offline `.pcd.bin` decode + voxel-grid
+decimation in the prep script, `sensorToGlobal` transform, aligned `pointCloud` from the parser,
+optional `Point3D.detectionId`, and the `selectVisiblePoints` selector (LiDAR/environment points always
+shown). 179 tests. **Next: F2-C** (sequence + tracking).
 For step-by-step history and per-Step decisions, see `mvp-checklist.md` (🔒 frozen).
 Post-MVP feature work (in progress) is tracked in `post-mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
@@ -115,15 +118,17 @@ apps/ai_detection_viewer_client/
 │       ├── sample.json
 │       ├── frame_001.jpg ~ frame_010.jpg
 │       └── nuscenes/       # ✅ F2 — offline-generated (scripts/prep_nuscenes.py)
-│           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes); NuScenesPrepped schema
+│           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes + ~6.5k LiDAR pts/frame); NuScenesPrepped schema. Compact (no indent) — the inline lidar.points arrays dominate size (~1.4 MB).
 │           └── cam_front/       # 10 CAM_FRONT keyframe jpgs
 └── vitest.config.ts        # include: src/**/*.test.ts + tests/**/*.test.ts
 
 scripts/                    # ✅ F2 — offline, build-time only (repo root, like Step 11's
-  prep_nuscenes.py          #   generate_predictions.py). Stdlib-only (NO nuscenes-devkit): JOINs the
-                            #   nuScenes-mini tables (sample/sample_data/ego_pose/calibrated_sensor/
+  prep_nuscenes.py          #   generate_predictions.py). Stdlib-only (NO nuscenes-devkit/numpy): JOINs
+                            #   the nuScenes-mini tables (sample/sample_data/ego_pose/calibrated_sensor/
                             #   sample_annotation/instance/category) → public/sample-data/nuscenes/.
-                            #   Copies RAW values only, no coordinate math (Rule #3). NOT a runtime backend.
+                            #   F2-B: also decodes LIDAR_TOP .pcd.bin (struct, 5×float32/pt) and
+                            #   voxel-grid decimates it. Copies RAW values only, no coordinate math
+                            #   (Rule #3; decimation is subsampling, not a transform). NOT a runtime backend.
 ```
 
 Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
@@ -174,7 +179,11 @@ type Point3D = {
   x: number;
   y: number;
   z: number;
-  detectionId: string;  // set by generatePointCloud; required for filter (Step 7)
+  // (F2-B) Optional. COCO's estimated points set it (generatePointCloud) so they
+  // filter by their owning bbox (Step 7 / Edge_#4 Case 5). Real LiDAR points
+  // (nuScenes) have NO detectionId — they are environment, not owned by any one
+  // detection — and are always shown (selectVisiblePoints).
+  detectionId?: string;
   intensity?: number;
 };
 ```
@@ -291,7 +300,7 @@ type Viewer3DProps = {
 |---|---|
 | `Viewer3D` | Hosts R3F `<Canvas>`. Camera is one-time init; never remounts unless `key` changes. `onPointerMissed` deselects. Also mounts `<HintBox>` as a `<Canvas>` sibling for the corner controls overlay. **F1-A:** `<Canvas flat>` disables ACES tone mapping so the point-cloud depth colors (and bbox wires) render with true, un-desaturated color — verified by screenshot, see Edge_F#1 Case 3. **F2-A:** the camera is **dataset-aware**. COCO keeps `position=[0,0,-10]` looking +z with `far=100`. nuScenes (`frame.source==='nuscenes-measured'`) fits the camera to the measured box cloud via `frameBoxesForCamera(centers)` (behind+above, looking forward/−z), widens `far=600`, and passes `target`+`fog={false}` to `Scene`. Without this the COCO camera faces away from the nuScenes cloud and the COCO fog occludes it — see Edge_F#2 Case 3. |
 | `Scene` | Camera **target** (prop; default COCO `[0,0,SCENE_CENTER_Z]`, nuScenes = fitted target), lighting (ambient + hemisphere + directional), `<Grid>` floor, optional `<fog>` for depth (prop `fog`, default on; nuScenes passes `false`), and scene root. The `<Grid>` mesh's `raycast` is no-oped at mount so it does not hijack `<Canvas onPointerMissed>` — without that, empty-space deselect from Step 5 silently breaks. See Edge_#9.5 Case A. Passes `isSelected`/`onClick` to each `BBox3D`. OrbitControls `rotateSpeed=0.5 / zoomSpeed=0.6 / panSpeed=0.6` are tuned here. |
-| `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. **F1-A:** each point carries a per-vertex `color` attribute from `depthToColor(z, zMin, zMax)` (`lib/geometry/depth-color.ts`); `<pointsMaterial vertexColors>` with a white base (multiplicative identity) shades each point by depth. The `[zMin, zMax]` domain is `depthRange(points)` fit to the **full frame** point-z range (computed pre-filter, so class toggles do NOT recolor — only frame switches do). Colors are then written for the `visibleIds`-filtered `visiblePoints`, and the color attribute rides the same geometry the dispose `useEffect` already cleans up. Base point `size` is `0.2` (with `sizeAttenuation`) and palette is **cyan→violet**; both were finalized by render verification (smaller points / dark-far-end / ACES tone mapping all made the gradient invisible). See Edge_F#1 Case 3. |
+| `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. **F1-A:** each point carries a per-vertex `color` attribute from `depthToColor(z, zMin, zMax)` (`lib/geometry/depth-color.ts`); `<pointsMaterial vertexColors>` with a white base (multiplicative identity) shades each point by depth. The `[zMin, zMax]` domain is `depthRange(points)` fit to the **full frame** point-z range (computed pre-filter, so class toggles do NOT recolor — only frame switches do). The visible set comes from `selectVisiblePoints(points, visibleIds)`, and the color attribute rides the same geometry the dispose `useEffect` already cleans up. Base point `size` is `0.2` (with `sizeAttenuation`) and palette is **cyan→violet**; both were finalized by render verification (smaller points / dark-far-end / ACES tone mapping all made the gradient invisible). See Edge_F#1 Case 3. **F2-B:** the cloud is now real LiDAR for nuScenes frames (COCO stays estimated). `selectVisiblePoints` (in `lib/selectors`, pure) keeps points whose `detectionId` is in `visibleIds` (COCO's owned points) AND **always keeps points with no `detectionId`** (LiDAR environment points), so the box filters (distance slider / class toggles) never thin the measured cloud. Real `z` drives the depth color; `size`/decimation density were render-verified legible at the nuScenes scale (Edge_F#2 Case 4). |
 | `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. **F1-B:** `onPointerOver`/`onPointerOut` on the same invisible mesh drive a local `hovered` state; a non-selected hovered box renders a lightened class tint (`THREE.Color(classColor).lerp(white, 0.6)`) + a static `1.06` scale (no pulse — kept distinct from the selected white+pulse look, whose scale stays in `0.96–1.04`; selection wins when both apply). Tint/scale strengths were render-verified (the initial `0.45`/`1.02` barely read on the near-black bg with 1px wires). Cursor → `pointer` while hovered via an effect whose cleanup also fires on unmount, so a hovered box that disappears (frame switch / filtered out) before `onPointerOut` still resets the cursor. Hover is 3D-local only — no store field, no 2D/ObjectList sync (Immutable Rule #2). See Edge_F#1 Case 4. **F1-C:** split into an outer (position-only) group and an inner (pulse/hover-scaled) group; when `isSelected || hovered`, mounts `<BBoxLabel>` on the OUTER group at the box top (`size.y/2 + pad`) so the selected-box pulse doesn't jitter the label anchor. **F2-A:** the inner group also carries `quaternion={bbox3D.rotation ?? [0,0,0,1]}` — measured nuScenes boxes render at their real heading; absent (COCO) → identity, so estimated boxes / F1 are unchanged. Rotation and the uniform pulse/hover scale compose independently; the label stays on the unrotated outer group so it hangs upright. |
 | `BBoxLabel` | **F1-C:** drei `<Html>` info pill anchored to a 3D point, re-projected each frame so it tracks the box as the camera orbits/zooms. Constant on-screen size (no `distanceFactor`). Shows class-color dot + class + `confidence` as a percent. `pointer-events-none` on both the `<Html>` container and the inner node so empty-space clicks still reach `<Canvas onPointerMissed>` (deselect). `occlude` OFF for F1. Shown only for selected/hovered boxes (≤2 at once) to avoid clutter; it's an in-scene complement to `SelectedObjectInfo`, not a replacement. See Edge_F#1 Case 5. |
 | `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. **Phase 2:** confidence rendered as a sky-tinted gauge bar; on `selectedId` change the selected row is scrolled into view by manually adjusting the `<ul>` `scrollTop` (NOT `Element.scrollIntoView` — that propagates to outer scroll containers and can move the page; see Edge_#9.5 Case C). |
@@ -362,12 +371,12 @@ frames — see "2D Viewer SVG Contract" below.
 |------------------|----------------------------------------|-----------------------------------|
 | `lib/coco/`      | Parse COCO JSON into `Frame[]`         | Touch React / Zustand             |
 | `lib/nuscenes/`  | (F2 ✅) Parse the offline-prepped nuScenes static JSON into `Frame[]` (`parseNuScenes`) | Touch React / Zustand; traverse raw relational tables (the prep script flattens those) |
-| `lib/geometry/`  | 2D→3D math, point cloud generation; (F2) coordinate-frame transforms (global→ego, axis convention), 3D→2D projection, and 3D camera framing (`frameBoxesForCamera`) | Touch React / Zustand             |
-| `lib/selectors/` | Pure store derivations: filters (Step 7), chart aggregations (Step 9.5), (F2) distance filter | Touch React / Zustand / Three.js  |
+| `lib/geometry/`  | 2D→3D math, point cloud generation; (F2) coordinate-frame transforms (global→ego, **sensor→global** for LiDAR, axis convention), 3D→2D projection, and 3D camera framing (`frameBoxesForCamera`) | Touch React / Zustand             |
+| `lib/selectors/` | Pure store derivations: filters (Step 7), chart aggregations (Step 9.5), (F2) distance filter, (F2-B) `selectVisiblePoints` (point-cloud visibility: owned points obey the box filter, environment points always show) | Touch React / Zustand / Three.js  |
 | `lib/ui/`        | Shared UI-layer constants (colors etc.) | Touch React / Zustand / Three.js |
 | `store/`         | UI state (selection, filters)          | Hold frame data, do parsing       |
 | `components/`    | Rendering, event handling              | Do parsing or coordinate math     |
-| `scripts/`       | (F2 ✅ `prep_nuscenes.py`) **Offline, build-time only** — flatten chosen nuScenes-mini frames into static JSON + copy assets. NOT runtime. Mirrors Step 11's `generate_predictions.py`. | Run at request time / be a backend server; do coordinate math (that lives in `lib/`, tested) |
+| `scripts/`       | (F2 ✅ `prep_nuscenes.py`) **Offline, build-time only** — flatten chosen nuScenes-mini frames into static JSON + copy assets; (F2-B) decode LIDAR_TOP `.pcd.bin` and voxel-grid **decimate** the points. NOT runtime. Mirrors Step 11's `generate_predictions.py`. | Run at request time / be a backend server; do coordinate math (decimation is subsampling, not a transform — the real transforms live in `lib/`, tested) |
 
 ## COCO Raw Schema Types
 
@@ -396,7 +405,7 @@ type CocoAnnotation = {
 type CocoCategory = { id: number; name: string; supercategory?: string };
 ```
 
-## nuScenes Integration (F2-A ✅ Done)
+## nuScenes Integration (F2-A ✅, F2-B ✅ Done)
 
 Structure/contract notes only; per-feature progress + decisions live in
 `post-mvp-checklist.md` (F2). nuScenes replaces *estimated* 3D with *measured* 3D.
@@ -413,7 +422,18 @@ derived in `page.tsx` (2D for Viewer2D/ObjectList, 3D for Viewer3D) so measured
 3D-only boxes still render (Edge_F#2 Case 2). Render-verified via Playwright.
 The app **opens on nuScenes by default** (`page.tsx` initial `datasetId =
 'nuscenes'`) so the landing view is the measured-3D headline; the Header switcher
-flips to COCO. **Next:** F2-B (real LiDAR point cloud), F2-C (sequence + tracking).
+flips to COCO.
+
+**Status (F2-B complete):** the empty `pointCloud` is replaced by the frame's real
+**LiDAR_TOP** points. The prep script decodes the `.pcd.bin` sweep (stdlib `struct`,
+5×`float32`/point) and **voxel-grid decimates** it (~6.5k pts/frame), carrying the
+raw sensor-frame points inline in `nuscenes.json` (`lidar.points`, flat array) plus
+the LiDAR `ego_pose` + `calibrated_sensor`. `parseNuScenes` aligns each point to the
+boxes — `sensorToGlobal` → `globalToEgo` → `egoToThree` — and emits `Point3D`s with
+**no** `detectionId`. Those environment points are always shown
+(`selectVisiblePoints`), independent of the box filters. Render-verified: the
+concentric LiDAR rings centre on the ego/sensor origin and the boxes sit embedded in
+the surrounding cloud. **Next:** F2-C (sequence + tracking).
 
 **Transform pipeline (implemented).** Two outputs are derived from one
 GLOBAL-frame annotation, both pure math in `lib/geometry`:
@@ -428,6 +448,15 @@ GLOBAL-frame annotation, both pure math in `lib/geometry`:
   render-flipped frame). A box with any corner behind the camera, or that falls
   fully off-screen, yields **no 2D box but still renders in 3D** — Rule #1 is
   "same object ⇒ same id", not "every 3D has a 2D". See Edge_F#2 Case 1.
+
+- *LiDAR points (F2-B):* points are born in the **LiDAR sensor frame**, so they take
+  an extra hop before joining the boxes: `sensorToGlobal` (LiDAR `calibrated_sensor`
+  → LiDAR `ego_pose`, the inverse direction of `globalToEgo`) → `globalToEgo` (the
+  frame's **CAM_FRONT** `egoPose`, the frame the boxes live in) → `egoToThree`.
+  Routing through GLOBAL is deliberate: the LiDAR and camera fire at slightly
+  different times, so their `ego_pose`s differ; going via the fixed global frame
+  absorbs that offset and keeps points on the boxes (applying the LiDAR calibration
+  alone would leave the cm-scale mismatch).
 
 Quaternion order: nuScenes is `[w,x,y,z]`; Three.js / `Detection3D.rotation` is
 `[x,y,z,w]`. `quatNuToThree` is the single conversion point (absent → identity).
@@ -446,7 +475,9 @@ only flattens and copies **raw** values. All transforms live in `lib/` TypeScrip
 raw inputs the transforms need:
 - 3D boxes in the **global** frame (center, size, rotation quaternion),
 - `ego_pose` (global→ego) and `calibrated_sensor` (ego→sensor + camera `intrinsic`),
-- the `instance` token per annotation (→ stable id; also the F2-C track id).
+- the `instance` token per annotation (→ stable id; also the F2-C track id),
+- (F2-B) `lidar`: decimated sensor-frame points (flat `[x,y,z,…]`) + the LiDAR's own
+  `ego_pose` and `calibrated_sensor` (the two extra poses `sensorToGlobal` consumes).
 
 **Two facts that shape the first slice (verified during planning):**
 1. nuScenes annotations are in the **global** frame, so even "boxes only" needs a
@@ -461,8 +492,9 @@ raw inputs the transforms need:
 - **F2-A** — measured 3D boxes (global→ego + axis) + projected 2D boxes + 2D↔3D
   sync; `bbox3D.rotation` quaternion; distance filter; `source` badge. `pointCloud`
   stays empty (no fake points). No sequence.
-- **F2-B** — real LiDAR point cloud: decode/decimate `pcd.bin` (offline), transform
-  sensor→ego in `lib/`.
+- **F2-B** ✅ — real LiDAR point cloud: decode/decimate `pcd.bin` (offline, voxel grid),
+  align in `lib/` via `sensorToGlobal` → `globalToEgo` → `egoToThree`. Environment
+  points (no `detectionId`) always render via `selectVisiblePoints`.
 - **F2-C** — sequence + tracking: `instance` token gives cross-frame identity, so
   `selectedObjectId` survives frame changes → meaningful autoplay.
 

@@ -6,6 +6,7 @@ export {
   quatNuToThree,
   globalToEgo,
   globalQuatToEgo,
+  sensorToGlobal,
   egoToThree,
   egoQuatToThree,
   nuSizeToLocal,

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Detection2D, Frame } from '@/lib/types';
+import type { Detection2D, Frame, Point3D } from '@/lib/types';
 import {
   selectVisibleDetections,
   selectVisibleDetectionIds,
+  selectVisiblePoints,
 } from './visible-detections';
 
 function det(id: string, klass: string, confidence: number): Detection2D {
@@ -114,5 +115,34 @@ describe('selectVisibleDetectionIds', () => {
     const f = frame(det('a', 'car', 0.1));
     const ids = selectVisibleDetectionIds(f, 0.9, new Set());
     expect(ids).toEqual(new Set());
+  });
+});
+
+describe('selectVisiblePoints (F2-B — env points always show)', () => {
+  const owned = (id: string): Point3D => ({ x: 0, y: 0, z: 0, detectionId: id });
+  const env: Point3D = { x: 1, y: 2, z: 3 }; // LiDAR point, no detectionId
+
+  it('keeps COCO points whose detectionId is in visibleIds, drops the rest', () => {
+    const pts = [owned('a'), owned('b'), owned('c')];
+    const result = selectVisiblePoints(pts, new Set(['a', 'c']));
+    expect(result).toEqual([owned('a'), owned('c')]);
+  });
+
+  it('always keeps LiDAR points (no detectionId) regardless of the set', () => {
+    const pts = [env, owned('a')];
+    // 'a' not in the set, but the env point survives.
+    expect(selectVisiblePoints(pts, new Set(['z']))).toEqual([env]);
+    // even an empty set keeps env points.
+    expect(selectVisiblePoints(pts, new Set())).toEqual([env]);
+  });
+
+  it('mixes both: env points pass, owned points obey the set', () => {
+    const pts = [env, owned('a'), owned('b')];
+    expect(selectVisiblePoints(pts, new Set(['b']))).toEqual([env, owned('b')]);
+  });
+
+  it('undefined visibleIds keeps every point (no filtering wired)', () => {
+    const pts = [env, owned('a')];
+    expect(selectVisiblePoints(pts, undefined)).toBe(pts);
   });
 });

@@ -2,6 +2,7 @@ export {
   selectVisibleDetections,
   selectVisibleDetectionIds,
   selectVisibleDetectionIds3D,
+  selectVisiblePoints,
 } from './visible-detections';
 export {
   detectionDistance,
