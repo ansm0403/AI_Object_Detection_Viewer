@@ -12,6 +12,13 @@ type Props = {
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   visibleIds?: Set<string>;
+  // (F2-A) OrbitControls look target. Defaults to the COCO scene center; the
+  // nuScenes path passes a target fit to the measured box cloud.
+  target?: [number, number, number];
+  // (F2-A) Whether to render the depth fog. The fog range is tuned for COCO's
+  // compact z∈[1,8] scene; on nuScenes (boxes tens of metres out) it would
+  // fully occlude every box, so the nuScenes path disables it. Default = on.
+  fog?: boolean;
 };
 
 // Roughly the midpoint of MIN_Z..MAX_Z in bbox-estimator.ts. Both the camera
@@ -23,7 +30,14 @@ const SCENE_CENTER_Z = 4.5;
 // the grid. Tune in 1-unit steps if objects clip through or float.
 const GRID_Y = -3;
 
-export function Scene({ frame, selectedId, onSelect, visibleIds }: Props) {
+export function Scene({
+  frame,
+  selectedId,
+  onSelect,
+  visibleIds,
+  target = [0, 0, SCENE_CENTER_Z],
+  fog = true,
+}: Props) {
   const visibleDetections3D = visibleIds
     ? frame.detections3D.filter((d) => visibleIds.has(d.id))
     : frame.detections3D;
@@ -39,7 +53,7 @@ export function Scene({ frame, selectedId, onSelect, visibleIds }: Props) {
 
   return (
     <>
-      <fog attach="fog" args={['#0a0a0a', 10, 28]} />
+      {fog && <fog attach="fog" args={['#0a0a0a', 10, 28]} />}
 
       <ambientLight intensity={0.6} />
       <hemisphereLight args={['#a3a3a3', '#27272a', 0.35]} />
@@ -72,7 +86,7 @@ export function Scene({ frame, selectedId, onSelect, visibleIds }: Props) {
       ))}
 
       <OrbitControls
-        target={[0, 0, SCENE_CENTER_Z]}
+        target={target}
         enableDamping
         makeDefault
         rotateSpeed={0.5}

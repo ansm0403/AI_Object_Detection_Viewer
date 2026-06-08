@@ -147,4 +147,17 @@ describe('mapCategory', () => {
       'movable_object.barrier',
     );
   });
+
+  it('maps the extra driving classes to clean short names', () => {
+    expect(__testing.mapCategory('vehicle.truck')).toBe('truck');
+    expect(__testing.mapCategory('vehicle.bus.rigid')).toBe('bus');
+    expect(__testing.mapCategory('vehicle.bus.bendy')).toBe('bus');
+    expect(__testing.mapCategory('vehicle.motorcycle')).toBe('motorcycle');
+  });
+
+  it('leaves rare categories unmapped (no indefinite palette expansion)', () => {
+    expect(__testing.mapCategory('static_object.bicycle_rack')).toBe(
+      'static_object.bicycle_rack',
+    );
+  });
 });

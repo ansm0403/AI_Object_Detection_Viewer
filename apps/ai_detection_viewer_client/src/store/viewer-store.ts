@@ -1,10 +1,16 @@
 import { create } from 'zustand';
+import { DISTANCE_MAX } from '@/lib/ui/distance';
 
 type ViewerState = {
   selectedFrameId: string | null;
   selectedObjectId: string | null;
   confidenceThreshold: number;
   visibleClasses: Set<string>;
+  // (F2-A) Max distance in metres for the nuScenes distance filter. Boxes
+  // farther than this from the ego vehicle are hidden. Default = DISTANCE_MAX
+  // (the slider's max), i.e. "show all" — the filter is off until the user
+  // drags it down. Inert on COCO frames (estimated z, no distance slider shown).
+  maxDistance: number;
 };
 
 type ViewerActions = {
@@ -12,6 +18,7 @@ type ViewerActions = {
   setSelectedObject: (id: string | null) => void;
   setConfidenceThreshold: (v: number) => void;
   toggleClass: (className: string) => void;
+  setMaxDistance: (v: number) => void;
   resetFilters: () => void;
 };
 
@@ -25,6 +32,7 @@ export const createInitialState = (): ViewerState => ({
   selectedObjectId: null,
   confidenceThreshold: 0,
   visibleClasses: new Set<string>(),
+  maxDistance: DISTANCE_MAX,
 });
 
 const clamp01 = (v: number): number => Math.min(1, Math.max(0, v));
@@ -55,5 +63,16 @@ export const useViewerStore = create<ViewerStore>((set) => ({
       }
       return { visibleClasses: next };
     }),
-  resetFilters: () => set({ confidenceThreshold: 0, visibleClasses: new Set() }),
+  setMaxDistance: (v) => {
+    if (!Number.isFinite(v)) {
+      // A NaN/∞ threshold would poison `distance <= maxDistance` in the
+      // distance selector (NaN hides everything). Mirror the confidence guard:
+      // ignore and keep the previous value. See Edge_#3.md Case 1.
+      console.warn(`[viewer-store] setMaxDistance ignored non-finite value: ${v}`);
+      return;
+    }
+    set({ maxDistance: Math.max(0, v) });
+  },
+  resetFilters: () =>
+    set({ confidenceThreshold: 0, visibleClasses: new Set(), maxDistance: DISTANCE_MAX }),
 }));

@@ -22,3 +22,6 @@ export {
   type Intrinsic,
   type PixelProjection,
 } from './projection';
+// (Vec3 is already exported from ./transforms — re-export only the function +
+// its result type to avoid a duplicate Vec3 export.)
+export { frameBoxesForCamera, type CameraFraming } from './camera-framing';

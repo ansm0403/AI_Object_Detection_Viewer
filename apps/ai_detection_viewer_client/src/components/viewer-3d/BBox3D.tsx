@@ -23,6 +23,11 @@ const HOVER_TINT_AMOUNT = 0.6; // lerp class color toward white by 60%
 // units. Small so the pill hugs the box without floating far away.
 const LABEL_Y_PAD = 0.15;
 
+// Identity quaternion [x, y, z, w] — no rotation. Used for COCO estimated boxes
+// (and any box without measured orientation) so they keep their axis-aligned
+// look exactly as before F2.
+const IDENTITY_QUAT: [number, number, number, number] = [0, 0, 0, 1];
+
 type Props = {
   detection: Detection3D;
   isSelected?: boolean;
@@ -88,8 +93,13 @@ export function BBox3D({ detection, isSelected = false, onClick }: Props) {
     // Outer group: position only. The label lives here so the selected-box pulse
     // (applied to the inner group) does not jitter the label's anchor.
     <group position={detection.bbox3D.center}>
-      {/* Inner group carries the pulse/hover scale. */}
-      <group ref={groupRef}>
+      {/* Inner group carries the pulse/hover scale AND the measured orientation
+          (F2-A). The quaternion [x,y,z,w] comes straight off Detection3D (set by
+          lib/nuscenes for measured boxes; absent → identity for COCO). Rotation
+          and uniform scale compose independently, so the F1 pulse/hover scale is
+          unaffected. The wireframe + click mesh rotate with the box; the label
+          stays on the unrotated outer group so it hangs upright above the box. */}
+      <group ref={groupRef} quaternion={detection.bbox3D.rotation ?? IDENTITY_QUAT}>
         {/* Invisible full-volume mesh for reliable raycasting — line segments alone are hard to click.
             DoubleSide ensures clicks register from inside the bbox volume when the camera orbits in.
             Hover (F1-B) hangs off this same mesh; stopPropagation keeps only the front box highlighted
