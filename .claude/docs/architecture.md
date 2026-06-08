@@ -3,8 +3,11 @@
 
 # Architecture
 
-**Current Status: Steps 1–11 complete. Step 10 ✅ README + Vercel deploy config.
-Step 11 ✅ YOLOv8n prediction data — sample.json now has real confidence scores (0.274–0.904).**
+**Current Status: MVP (Steps 1–11) complete.** Post-MVP: **F1 ✅** (visual impact pass — point-cloud
+depth color, 3D hover, `<Html>` labels). **F2-A** (nuScenes real-3D) — **lib core ✅** (transforms /
+projection / parser, 147 tests) and **offline prep + sample data ✅** (`scripts/prep_nuscenes.py` →
+`public/sample-data/nuscenes/`, scene-0916); **remaining: `lib/selectors` distance filter + UI**
+(dataset switcher, Estimated/Measured badge, `BBox3D` rotation render).
 For step-by-step history and per-Step decisions, see `mvp-checklist.md` (🔒 frozen).
 Post-MVP feature work (in progress) is tracked in `post-mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
@@ -69,8 +72,17 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── pointcloud-generator.test.ts # 8 tests (incl. detectionId lock)
 │   │   │   ├── depth-color.ts               # ✅ F1-A — pure depthToColor + depthRange (per-frame z domain)
 │   │   │   ├── depth-color.test.ts          # 15 tests (endpoints, monotonic, clamp, degenerate, range)
+│   │   │   ├── transforms.ts                # ✅ F2 — global→ego + axis convention z-up→y-up (THREE Quaternion/Matrix4)
+│   │   │   ├── transforms.test.ts           # 13 tests — global→ego yaw, axis flip, quaternion order/absent, size reorder
+│   │   │   ├── projection.ts                # ✅ F2 — ego→camera + intrinsic; 8-corner AABB; behind-camera/off-screen cull
+│   │   │   ├── projection.test.ts           # 10 tests — known 3D→pixel, behind-camera null, off-screen clamp
 │   │   │   ├── frame-enricher.ts            # orchestrator: enrichFrame()
 │   │   │   └── index.ts                     # barrel
+│   │   ├── nuscenes/       # ✅ F2 (parser+types) — prepped nuScenes static JSON → internal Frame[]
+│   │   │   ├── parser.ts                     # ✅ parseNuScenes: prepped JSON → Frame[] (NOT raw relational tables)
+│   │   │   ├── parser.test.ts                # 10 tests — id share (Rule #1), source/confidence, behind-camera 2D drop, defensive
+│   │   │   ├── types.ts                      # ✅ prepped-JSON schema (nuScenes-native: quat [w,x,y,z], size [w,l,h], global)
+│   │   │   └── index.ts                      # barrel
 │   │   ├── selectors/      # ✅ Step 7 — pure store derivations
 │   │   │   ├── visible-detections.ts        # filter by threshold + visibleClasses
 │   │   │   ├── visible-detections.test.ts   # 11 tests; locks permissive-empty semantic
@@ -93,8 +105,17 @@ apps/ai_detection_viewer_client/
 ├── public/
 │   └── sample-data/        # sample COCO JSON + frame images
 │       ├── sample.json
-│       └── frame_001.jpg ~ frame_010.jpg
+│       ├── frame_001.jpg ~ frame_010.jpg
+│       └── nuscenes/       # ✅ F2 — offline-generated (scripts/prep_nuscenes.py)
+│           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes); NuScenesPrepped schema
+│           └── cam_front/       # 10 CAM_FRONT keyframe jpgs
 └── vitest.config.ts        # include: src/**/*.test.ts + tests/**/*.test.ts
+
+scripts/                    # ✅ F2 — offline, build-time only (repo root, like Step 11's
+  prep_nuscenes.py          #   generate_predictions.py). Stdlib-only (NO nuscenes-devkit): JOINs the
+                            #   nuScenes-mini tables (sample/sample_data/ego_pose/calibrated_sensor/
+                            #   sample_annotation/instance/category) → public/sample-data/nuscenes/.
+                            #   Copies RAW values only, no coordinate math (Rule #3). NOT a runtime backend.
 ```
 
 Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
@@ -111,6 +132,12 @@ type Frame = {
   detections2D: Detection2D[];
   detections3D: Detection3D[];
   pointCloud: Point3D[];
+  // (F2 ✅ added; UI badge pending) Provenance of the 3D data. Drives the UI
+  // "Estimated" vs "Measured" badge so we never misrepresent depth source
+  // (Immutable Rule #6 honored across datasets, not dropped). COCO frames =
+  // 'coco-estimated'; nuScenes frames = 'nuscenes-measured'. Optional, so
+  // existing COCO frames (which omit it) are unaffected.
+  source?: 'coco-estimated' | 'nuscenes-measured';
 };
 
 type Detection2D = {
@@ -124,7 +151,15 @@ type Detection3D = {
   id: string;        // shared with Detection2D.id
   class: string;
   confidence: number;
-  bbox3D: { center: [number, number, number]; size: [number, number, number] };
+  bbox3D: {
+    center: [number, number, number];
+    size: [number, number, number];
+    // (F2 ✅ added) Orientation as a quaternion [x, y, z, w] (Three.js order).
+    // Absent = no rotation (identity), so existing COCO estimated boxes stay
+    // valid and F1 tests don't break. Three.js + nuScenes are quaternion-native
+    // (nuScenes stores [w,x,y,z]; the parser reorders). See domain-glossary.
+    rotation?: [number, number, number, number];
+  };
 };
 
 type Point3D = {
@@ -314,18 +349,22 @@ frames — see "2D Viewer SVG Contract" below.
 | Layer            | Responsibility                         | Must NOT do                       |
 |------------------|----------------------------------------|-----------------------------------|
 | `lib/coco/`      | Parse COCO JSON into `Frame[]`         | Touch React / Zustand             |
-| `lib/geometry/`  | 2D→3D math, point cloud generation     | Touch React / Zustand             |
-| `lib/selectors/` | Pure store derivations: filters (Step 7) and aggregations for charts (Step 9.5) | Touch React / Zustand / Three.js  |
+| `lib/nuscenes/`  | (F2 ✅) Parse the offline-prepped nuScenes static JSON into `Frame[]` (`parseNuScenes`) | Touch React / Zustand; traverse raw relational tables (the prep script flattens those) |
+| `lib/geometry/`  | 2D→3D math, point cloud generation; (F2) coordinate-frame transforms (global→ego, axis convention) and 3D→2D projection | Touch React / Zustand             |
+| `lib/selectors/` | Pure store derivations: filters (Step 7), chart aggregations (Step 9.5), (F2) distance filter | Touch React / Zustand / Three.js  |
 | `lib/ui/`        | Shared UI-layer constants (colors etc.) | Touch React / Zustand / Three.js |
 | `store/`         | UI state (selection, filters)          | Hold frame data, do parsing       |
 | `components/`    | Rendering, event handling              | Do parsing or coordinate math     |
+| `scripts/`       | (F2 ✅ `prep_nuscenes.py`) **Offline, build-time only** — flatten chosen nuScenes-mini frames into static JSON + copy assets. NOT runtime. Mirrors Step 11's `generate_predictions.py`. | Run at request time / be a backend server; do coordinate math (that lives in `lib/`, tested) |
 
 ## COCO Raw Schema Types
 
 External COCO JSON is described by a separate type set in `lib/coco/types.ts`.
 These are kept distinct from the internal `Frame` / `Detection2D` types so that
-swapping the input dataset (e.g. KITTI in the future) does not leak through
-the rest of the app.
+adding another input dataset (nuScenes — see "nuScenes Integration" below) does
+not leak through the rest of the app. nuScenes is added *alongside*
+COCO (a dataset switcher), not as a replacement, so the Step 11 YOLO / confidence
+work stays live.
 
 ```ts
 type CocoDataset = {
@@ -344,6 +383,75 @@ type CocoAnnotation = {
 };
 type CocoCategory = { id: number; name: string; supercategory?: string };
 ```
+
+## nuScenes Integration (F2 — lib core ✅, data + UI ⏳)
+
+Structure/contract notes only; per-feature progress + decisions live in
+`post-mvp-checklist.md` (F2). nuScenes replaces *estimated* 3D with *measured* 3D.
+
+**Status:** the pure `lib/` core has landed (`lib/geometry/transforms.ts` +
+`projection.ts`, `lib/nuscenes/parser.ts` + `types.ts`, 33 tests) **and** the
+offline prep + sample data (`scripts/prep_nuscenes.py` → `public/sample-data/
+nuscenes/nuscenes.json` + `cam_front/`, from scene-0916; real-data run validated
+`parseNuScenes`: 583 3D boxes, 200 project into CAM_FRONT). **Remaining:** the
+`lib/selectors` distance filter and all UI (dataset switcher, Estimated/Measured
+badge, `BBox3D` reading `rotation`).
+
+**Transform pipeline (implemented).** Two outputs are derived from one
+GLOBAL-frame annotation, both pure math in `lib/geometry`:
+- *3D render coords:* `globalToEgo` (`R_ego⁻¹·(p−t_ego)`, physical z-up) → axis
+  flip `egoToThree` `(x,y,z)→(-y,z,-x)` (det=+1 pure rotation: up→y, fwd→−z;
+  preserves handedness so quaternions/orientation stay correct). Rotation:
+  `globalQuatToEgo` then `egoQuatToThree` (= `q_flip · q_ego`). Size `[w,l,h]`
+  (nuScenes) → `[l,w,h]` local-axis order (`nuSizeToLocal`).
+- *2D box:* the SAME physical-ego box is projected (`egoToCamera` + intrinsic
+  `cameraToPixel`) and the AABB of its 8 projected corners becomes the
+  `Detection2D.bbox`. Projection stays in the physical convention (NOT the
+  render-flipped frame). A box with any corner behind the camera, or that falls
+  fully off-screen, yields **no 2D box but still renders in 3D** — Rule #1 is
+  "same object ⇒ same id", not "every 3D has a 2D". See Edge_F#2 Case 1.
+
+Quaternion order: nuScenes is `[w,x,y,z]`; Three.js / `Detection3D.rotation` is
+`[x,y,z,w]`. `quatNuToThree` is the single conversion point (absent → identity).
+
+**Why a prep step at all.** nuScenes is a relational token graph
+(`sample → sample_data → {ego_pose, calibrated_sensor}`, `sample_annotation →
+instance → category`) and ships large LiDAR files. Traversing/decoding that in the
+browser at runtime is impractical and we run no backend. So a **one-time offline
+script** (`scripts/`, build-time only — like Step 11's `generate_predictions.py`)
+selects a few keyframes from **nuScenes-mini**, flattens the tables, copies the few
+camera images, and emits a compact static JSON the browser parses like COCO.
+
+**Where the coordinate math lives.** The prep script does *no* coordinate math — it
+only flattens and copies **raw** values. All transforms live in `lib/` TypeScript
+(Immutable Rule #3) and are Vitest-tested. The prepped JSON therefore carries the
+raw inputs the transforms need:
+- 3D boxes in the **global** frame (center, size, rotation quaternion),
+- `ego_pose` (global→ego) and `calibrated_sensor` (ego→sensor + camera `intrinsic`),
+- the `instance` token per annotation (→ stable id; also the F2-C track id).
+
+**Two facts that shape the first slice (verified during planning):**
+1. nuScenes annotations are in the **global** frame, so even "boxes only" needs a
+   real transform (global→ego) + the z-up→y-up axis convention. There is **no**
+   zero-transform path like KITTI Level 1.
+2. nuScenes core annotations are **3D-only** — no 2D boxes. To keep the 2D↔3D sync
+   signature, `lib/` **projects** each 3D box into the camera image (intrinsic +
+   extrinsics) to produce the `Detection2D`. 2D and 3D derive from the **same
+   `instance` annotation**, so they share one id → Immutable Rule #1 preserved.
+
+**Phasing** (see F2 in `post-mvp-checklist.md`):
+- **F2-A** — measured 3D boxes (global→ego + axis) + projected 2D boxes + 2D↔3D
+  sync; `bbox3D.rotation` quaternion; distance filter; `source` badge. `pointCloud`
+  stays empty (no fake points). No sequence.
+- **F2-B** — real LiDAR point cloud: decode/decimate `pcd.bin` (offline), transform
+  sensor→ego in `lib/`.
+- **F2-C** — sequence + tracking: `instance` token gives cross-frame identity, so
+  `selectedObjectId` survives frame changes → meaningful autoplay.
+
+**Filter (F2-A):** add a pure **distance** selector in `lib/selectors/` (filter by
+real `z` metres). The confidence slider stays for COCO/YOLO frames; on nuScenes
+(annotation, confidence = 1.0) it is a no-op. No fake confidence is injected
+(Immutable Rule #6).
 
 ## Parser Validation Rules
 
