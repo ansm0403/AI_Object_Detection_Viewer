@@ -1,11 +1,13 @@
-# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A)
+# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A / F2-B / F2-C)
 
 > Case 1 was discovered implementing the **pure `lib/` core** of F2-A (TDD,
 > synthetic fixtures, no UI). Cases 2–3 were discovered during the **UI
 > integration** session (wiring the prepped data into the live app + Playwright
 > render verification). Case 4 is **F2-B** (real LiDAR point cloud — alignment +
-> render verification). See `post-mvp-checklist.md` → F2-A / F2-B and
-> `architecture.md` → "nuScenes Integration".
+> render verification). Cases 5–6 are **F2-C** (sequence + tracking + autoplay —
+> dataset-aware selection persistence + camera stability). See
+> `post-mvp-checklist.md` → F2-A / F2-B / F2-C and `architecture.md` →
+> "nuScenes Integration".
 
 ## Context
 
@@ -170,6 +172,86 @@ voxel 0.6 m) were render-tuned on scene-0916; a denser scene or different camera
 want a smaller size or finer voxel (`--voxel-size`). Depth color reuses F1-A
 unchanged — on the wide nuScenes cloud the gradient is real but reads subtler than
 on COCO's compact scene; revisit only if a future frame looks flat.
+
+---
+
+## Case 5 — Frame-switch must KEEP the selection on nuScenes (the inverse of Edge_#5 Case 6) (F2-C)
+
+**Discovery (F2-C, wiring tracking).** Step 8 made `handleSelectFrame` clear
+`selectedObjectId` on *every* frame switch (Edge_#5 Case 6). The reason was
+COCO-specific: COCO ids are `imageId-annId`, **unstable across frames**, so a
+kept id could ghost-highlight a stale object or accidentally match a *different*
+object that happens to share the generated id. For F2-C this clear is exactly
+wrong: nuScenes ids are `instance` tokens — **stable for the SAME physical object
+across frames** — so clearing on switch throws away the cross-frame identity that
+makes tracking (and meaningful autoplay) possible.
+
+**Why not just "stop clearing".** COCO still needs the clear (its premise is
+unchanged). So the behavior has to branch on the dataset, not flip globally.
+
+**Resolution.** A single `tracksAcrossFrames` flag (`datasetId === 'nuscenes'`) in
+`page.tsx` gates the `setSelectedObject(null)` call: COCO clears, nuScenes keeps.
+Keeping the id means:
+- if the same object is in the next frame → it stays highlighted (tracking);
+- if the object is briefly out of view → no id match, so nothing is highlighted
+  (the honest result), and it **re-highlights when the object returns** — correct
+  here precisely because re-appearance is the SAME object (unlike COCO, where it
+  would be a coincidence). This is decision **1-A**.
+
+**Immutable Rule #2 preserved.** There is still exactly one `selectedObjectId`;
+only *when* it is cleared differs by dataset. No `selected2D/3D`, no per-dataset
+selection field.
+
+**Test + render coverage.** `tests/integration/frame-switch.test.ts` parametrizes
+the mirrored `handleSelectFrame` by `tracksAcrossFrames`: COCO-clears (3 retained
+cases) + nuScenes-keeps (switch keeps id, multi-frame walk keeps id, same-frame
+re-select no-ops). Render-verified: a `person` instance stayed selected across a
+manual frame 1→2 switch (the SELECTED panel showed the same id); on COCO the panel
+went back to its placeholder after a switch.
+
+**Deferred / to watch.** The kept id can point at an object with no 2D projection
+in the current frame (Case 1), so `SelectedObjectInfo` (which looks the id up in
+`detections2D`) shows its placeholder even though the 3D box is still highlighted —
+expected, but if it ever reads as "lost selection" to a user, surface the 3D-only
+selection in the panel.
+
+---
+
+## Case 6 — Camera: remount-for-reset (Step 8) fights no-remount-for-stability (autoplay) (F2-C)
+
+**Discovery (F2-C, camera stabilization).** Step 8 resolved Edge_#4 Case 6 by
+remounting the whole `<Canvas>` on every frame switch (`<Viewer3D key={frame.id}>`)
+so OrbitControls resets cleanly — good for a *deliberate* COCO frame jump. But
+autoplay switches frames every 500 ms, so the remount **resets the camera ~2×/s**:
+the view bounces and any orbit the user set is wiped each frame. The very thing
+that gives COCO a clean reset makes the nuScenes sequence unwatchable.
+
+**A second, subtler trap.** Simply making the `key` stable (no remount) is not
+enough. `Viewer3D` fits the camera to the box cloud with `frameBoxesForCamera`
+and passes the result as OrbitControls `target`. If that is recomputed each frame
+from the *moving* boxes, the `target` changes every frame and OrbitControls
+**re-aims** — the camera drifts/re-frames per frame even without a remount,
+defeating the goal.
+
+**Resolution (decision 3-A, fixed camera).**
+- **Dataset-aware key:** COCO keeps `key={frame.id}` (remount-reset, unchanged);
+  nuScenes uses one **stable** key so the Canvas + OrbitControls persist across
+  frames and autoplay — the camera holds and the boxes move within a still view
+  (the "objects move" effect).
+- **Freeze the framing:** the nuScenes `frameBoxesForCamera` result is captured at
+  **mount** (`useRef(frame).current` + `useMemo`) so `target` is stable across
+  frames; the short scene's box cloud is consistent enough that frame 0's fit
+  frames the whole sequence.
+
+**Render verification.** Across two autoplay screenshots (Frame 6 → Frame 10) the
+camera viewpoint/grid/orientation are pixel-stable while the box cloud clearly
+changed — camera fixed, boxes moving. COCO frame switches still reset as before.
+
+**Extension seam (camera-follow, 3-B, deferred).** `target` is the single aim
+point. To make the camera FOLLOW the selected object later, compute `target` from
+the selected box's current center each frame instead of the frozen framing — no
+other wiring changes, since the prop already flows to OrbitControls. Left
+commented, not built (no speculative code, per CLAUDE.md).
 
 ---
 

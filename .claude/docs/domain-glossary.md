@@ -205,8 +205,24 @@ must satisfy; the browser parses it like COCO. Schema: `lib/nuscenes/types.ts`.
 
 **track id / instance token**
 A stable id for the SAME physical object across frames of a sequence. nuScenes' `instance` token
-provides it. It is what lets `selectedObjectId` survive a frame change (F2-C) and makes autoplay
+provides it. It is what lets `selectedObjectId` survive a frame change (F2-C) and makes [[autoplay]]
 show real motion — COCO has no such cross-frame identity.
+
+**autoplay** *(F2-C)*
+Stepping through a frame sequence on a timer so the scene "plays" like a video. Here it advances the
+selected keyframe every `AUTOPLAY_INTERVAL_MS = 500` ms (≈ nuScenes' real ~2 Hz keyframe cadence) and
+loops at the end. The *which-frame-next* decision is the pure `nextFrameIndex` in `lib/sequence`; the
+React `setInterval` only owns the timing. Meaningful only with a **track id** (so the same object is
+seen moving) — wired for nuScenes, hidden on COCO (independent frames → a slideshow, not motion).
+
+**tween / lerp / slerp** *(F2-C, deferred)*
+*Tween* (in-be**tween**ing) = generating smooth intermediate frames between two keyframes so motion
+looks continuous instead of snapping. *lerp* (linear interpolation) blends two positions: `a + (b−a)·t`
+for `t ∈ [0,1]`. *slerp* (spherical linear interpolation) is the rotation equivalent — it interpolates
+between two **quaternions** along the shortest arc at constant angular speed (a plain lerp of
+quaternions would distort orientation). F2-C ships **snap** (no tween) so every rendered pose is a real
+measured keyframe; a future box-tween would lerp the center + slerp the rotation between consecutive
+keyframes (pure fns in `lib/geometry`), while the LiDAR cloud stays per-keyframe.
 
 **nuScenes**
 A modern (2019) autonomous-driving dataset: 360° cameras + LiDAR + radar, 3D annotations in the

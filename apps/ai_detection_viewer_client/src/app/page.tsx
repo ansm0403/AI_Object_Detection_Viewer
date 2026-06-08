@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { parseCoco } from '@/lib/coco';
 import { parseNuScenes } from '@/lib/nuscenes';
 import { enrichFrame } from '@/lib/geometry';
+import { AUTOPLAY_INTERVAL_MS, nextFrameIndex } from '@/lib/sequence';
 import {
   selectClassCounts,
   selectConfidenceBuckets,
@@ -42,6 +43,19 @@ export default function Index() {
   // parseNuScenes (measured 3D) and must NOT be re-enriched.
   const [frames, setFrames] = useState<Frame[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // (F2-C) Autoplay: step through the keyframe sequence on a timer. Only
+  // meaningful on nuScenes, where objects keep their `instance` id across frames
+  // (track id) so playing shows real motion; COCO frames are independent.
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
+  // are `instance` tokens — stable for the SAME object across frames — so the
+  // object selection should SURVIVE a frame switch (and re-highlight if the
+  // object leaves then re-enters). COCO ids are `imageId-annId`, unstable across
+  // frames, so its selection is cleared on every switch (Edge_#5 Case 6). This
+  // one flag drives both the selection-persistence and the camera-stability
+  // (no-remount) branches below.
+  const tracksAcrossFrames = datasetId === 'nuscenes';
 
   const selectedFrameId = useViewerStore((s) => s.selectedFrameId);
   const setSelectedFrame = useViewerStore((s) => s.setSelectedFrame);
@@ -173,18 +187,49 @@ export default function Index() {
     [currentFrame],
   );
 
-  // Frame switch clears the object selection so a stale id from frame N
-  // cannot ghost-highlight in frame M (or accidentally re-highlight if
-  // M happens to share the id). Edge_#5.md Case 6. Kept in page.tsx
-  // (not in the store) so store actions stay single-purpose.
+  // Frame switch. The object-selection policy is DATASET-AWARE (F2-C):
+  //  - COCO: clear the selection. COCO ids are `imageId-annId`, unstable across
+  //    frames, so a kept id could ghost-highlight (a stale object) or
+  //    accidentally re-highlight a different object that happens to share the id.
+  //    Edge_#5 Case 6 — this is why the clear exists.
+  //  - nuScenes: KEEP the selection. The id is an `instance` token, stable for
+  //    the SAME physical object across frames, so keeping it tracks that object;
+  //    if the object leaves the frame the highlight simply isn't drawn (no id
+  //    match), and re-appears correctly when the object returns (Edge_F#2 Case 5).
+  // Kept in page.tsx (not the store) so store actions stay single-purpose, and
+  // Immutable Rule #2 holds — still one `selectedObjectId`, only *when* we clear
+  // it differs.
   const handleSelectFrame = useCallback(
     (id: string) => {
       if (id === selectedFrameId) return;
       setSelectedFrame(id);
-      setSelectedObject(null);
+      if (!tracksAcrossFrames) setSelectedObject(null);
     },
-    [selectedFrameId, setSelectedFrame, setSelectedObject],
+    [selectedFrameId, setSelectedFrame, setSelectedObject, tracksAcrossFrames],
   );
+
+  // (F2-C) Autoplay timer. Steps to the next keyframe every
+  // AUTOPLAY_INTERVAL_MS (~2 Hz, the real nuScenes cadence) while `isPlaying`.
+  // The next index is the pure `nextFrameIndex` (loops at the end); reaching a
+  // hard stop (loop=false) would flip `isPlaying` off. The current frame is read
+  // via `getState()` each tick rather than closed over, so the interval never
+  // goes stale as frames advance. Autoplay runs on nuScenes only (the play
+  // control is hidden on COCO), where advancing keeps the tracked selection.
+  useEffect(() => {
+    if (!isPlaying || !frames || frames.length <= 1) return;
+    const timer = setInterval(() => {
+      const currentId = useViewerStore.getState().selectedFrameId;
+      const idx = frames.findIndex((f) => f.id === currentId);
+      const next = nextFrameIndex(idx, frames.length, { loop: true });
+      if (next === null) {
+        setIsPlaying(false);
+        return;
+      }
+      // nuScenes-only path → keep the tracked object selection (no clear).
+      setSelectedFrame(frames[next].id);
+    }, AUTOPLAY_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [isPlaying, frames, setSelectedFrame]);
 
   // Dataset switch: clear the object selection and reset all filters (the class
   // universe and the meaningful metric filter both differ between datasets).
@@ -195,6 +240,7 @@ export default function Index() {
       setDatasetId(id);
       setSelectedObject(null);
       resetFilters();
+      setIsPlaying(false); // (F2-C) stop autoplay when leaving the sequence
     },
     [datasetId, setSelectedObject, resetFilters],
   );
@@ -290,10 +336,16 @@ export default function Index() {
           />
         </div>
         <div className="md:col-span-7">
-          {/* key forces full Canvas remount on frame change so the OrbitControls
-              camera resets cleanly. Edge_#4.md Case 6 (remount option). */}
+          {/* (F2-C) DATASET-AWARE key.
+              - COCO: key=frame.id → full Canvas remount per frame, so
+                OrbitControls resets cleanly on every switch. Edge_#4 Case 6.
+              - nuScenes: a single STABLE key → the Canvas does NOT remount on
+                frame switch, so the camera holds its position/orbit across
+                frames and autoplay. Frame-to-frame the boxes move within a still
+                camera (the "objects move" effect); without this the camera would
+                bounce every 0.5 s during playback. Edge_F#2 Case 6. */}
           <Viewer3D
-            key={currentFrame.id}
+            key={tracksAcrossFrames ? 'nuscenes-sequence' : currentFrame.id}
             frame={currentFrame}
             selectedId={selectedObjectId}
             onSelect={setSelectedObject}
@@ -301,10 +353,17 @@ export default function Index() {
           />
         </div>
         <div className="md:col-span-12">
+          {/* (F2-C) Autoplay controls are passed only when the dataset tracks
+              objects (nuScenes); on COCO the play button is hidden (independent
+              frames → playback would be a meaningless slideshow). */}
           <Timeline
             frames={frames}
             selectedFrameId={selectedFrameId}
             onSelectFrame={handleSelectFrame}
+            isPlaying={tracksAcrossFrames ? isPlaying : undefined}
+            onTogglePlay={
+              tracksAcrossFrames ? () => setIsPlaying((p) => !p) : undefined
+            }
           />
         </div>
         <div className="md:col-span-5">
