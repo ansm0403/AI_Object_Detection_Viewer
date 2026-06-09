@@ -137,6 +137,14 @@ Useful for many similar objects (e.g., 50 3D bboxes).
 
 Introduced for the F2 nuScenes integration. Background: `docs/learning/REAL_3D_DATASET_STUDY.md`.
 
+**Ego Vehicle (에고 차량)**
+The vehicle carrying all the sensors — the car doing the recording. "Ego" is Latin for "self."
+In autonomous-driving datasets, every other object's position is expressed *relative to the ego
+vehicle* (see Ego Frame below). In this project the ego is always at the origin (0, 0, 0) of
+the 3D viewer; other boxes appear at their measured distance and direction from it.
+Distinct from the ego *frame* (which is the coordinate system): the ego vehicle is the physical
+thing; the ego frame is the mathematical abstraction anchored to it.
+
 **Coordinate Frame (좌표계)**
 An agreed origin `(0,0,0)` and axis directions for measuring positions. The SAME real
 point gets DIFFERENT numbers in different frames. A "transform" is the rule that converts
@@ -267,6 +275,55 @@ one point per cell. This spreads the kept points evenly through space — near a
 similar density — which reads cleaner than uniform-random sampling (where the already-dense near-sensor
 returns stay dense). The cell size trades density for count: bigger cells → fewer, more-spread points.
 A LiDAR sweep is spatially spread, so a fairly coarse 0.6 m voxel is what lands ~6.5k points.
+
+## Camera Model Terms
+
+**Pinhole Camera Model (핀홀 카메라 모델)**
+The standard mathematical model of how a camera captures 3D space onto a 2D image. Imagine a
+box with a single tiny hole (the "pinhole") in one wall: light from every point in the scene
+travels through that hole and lands on the opposite wall, forming an image.
+
+Key behaviors that matter for this project:
+- **Distance → size**: an object twice as far away appears half as tall in the image.
+  (A car at 10 m fills more of the frame than the same car at 30 m.)
+- **FOV boundary**: anything outside the camera's angular cone is not captured at all —
+  even a 1 m-tall sign *right beside* the car is invisible if it's outside the FOV angle.
+- **Behind the camera**: objects with a negative depth (behind the pinhole) project to garbage
+  and are culled. `projectCornersToBbox` in this project guards this case.
+Real cameras use lenses (not a literal pinhole), but the same projection math applies once lens
+distortion is corrected. The **intrinsic matrix K** encodes the pinhole parameters (focal
+length, image centre). See also: Camera Intrinsics, Projection.
+
+**Field of View (FOV, 시야각)**
+The angular cone of the world a camera can capture. nuScenes CAM_FRONT is approximately 70°
+horizontal. A physical object *inside* that cone is visible in the 2D image; one *outside* it
+is invisible even if it is directly adjacent to the ego vehicle.
+Consequence for this project: a 3D-measured box may have no 2D projection (it is outside the
+70° FOV), so the 2D viewer shows nothing for that object while the 3D viewer still renders its
+box. The `Selected` panel shows "—" for the 2D bbox row in this case (Edge_F#2 Case 1).
+
+**Chase Cam (체이스 캠, 3인칭 추격 시점)**
+The 3D viewer's default camera perspective: the Three.js camera is placed *behind and above*
+the ego vehicle's box cloud, looking forward and downward at the scene — identical to the
+"follow cam" used in car-racing video games. Computed by `frameBoxesForCamera`
+(`lib/geometry/camera-framing.ts`): the camera sits at `cloud_centre + back + up`, where
+`back` and `up` scale with the cloud's horizontal spread so the whole scene fits in view.
+
+This is fundamentally different from the 2D camera (which is mounted on the ego, looking
+horizontally forward at ~eye level). Because of that difference, the *same ego-relative
+position* looks very different in the two views:
+
+```
+2D view (front camera):       3D view (chase cam):
+┌──────────────────────┐      👁 (behind + above)
+│  namu  [🚗]  namu    │        ╲
+│    (car fills image) │         ╲
+└──────────────────────┘     ─────[ego]──[🚗]─────
+  car appears LARGE             car appears SMALL
+```
+
+This visual discrepancy is expected and is not a bug. The coordinate data is identical in both
+views; only the camera vantage point differs.
 
 ## State Management Terms
 

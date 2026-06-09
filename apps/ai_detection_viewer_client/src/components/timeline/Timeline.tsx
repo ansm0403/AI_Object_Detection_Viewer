@@ -17,6 +17,11 @@ type TimelineProps = {
   // VIEW flag — it does NOT touch `selectedObjectId` (Immutable Rule #2).
   cameraMode?: 'fixed' | 'follow';
   onToggleCameraMode?: () => void;
+  // Jump back to the first frame (and stop playback). Like Filters' reset, but
+  // for the sequence position. Passed nuScenes-only — COCO frames are
+  // independent so "return to frame 1" carries no sequence meaning; when the
+  // callback is omitted the button is not rendered.
+  onReset?: () => void;
 };
 
 export function Timeline({
@@ -27,6 +32,7 @@ export function Timeline({
   onTogglePlay,
   cameraMode = 'fixed',
   onToggleCameraMode,
+  onReset,
 }: TimelineProps) {
   if (frames.length === 0) return null;
 
@@ -63,6 +69,24 @@ export function Timeline({
             >
               <span aria-hidden="true">◎</span>
               {cameraMode === 'follow' ? 'Following' : 'Follow'}
+            </button>
+          )}
+          {onReset && (
+            <button
+              type="button"
+              onClick={onReset}
+              aria-label="Reset to first frame"
+              title="Reset to first frame"
+              className={[
+                'inline-flex items-center gap-1.5 rounded px-2.5 py-1',
+                'text-xs font-medium transition-colors',
+                'bg-zinc-800 text-zinc-200 hover:bg-zinc-700 ring-1 ring-zinc-700',
+              ].join(' ')}
+            >
+              {/* Monochrome glyph (U+21BA) to match the ◎ / ▶ transport
+                  buttons — ⏮ rendered as a color emoji and stood out. */}
+              <span aria-hidden="true">↺</span>
+              Reset
             </button>
           )}
           {onTogglePlay && (

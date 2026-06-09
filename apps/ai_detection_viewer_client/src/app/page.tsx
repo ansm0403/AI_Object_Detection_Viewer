@@ -225,6 +225,16 @@ export default function Index() {
     [selectedFrameId, setSelectedFrame, setSelectedObject, tracksAcrossFrames],
   );
 
+  // Reset the sequence to the first frame and stop playback (nuScenes only —
+  // wired below). Mirrors the Filters reset affordance but for the sequence
+  // position: during/after autoplay the user can return to frame 1 without
+  // scrolling the timeline back. The tracked object selection is intentionally
+  // KEPT (nuScenes policy, Immutable Rule #2) — only the frame position resets.
+  const handleResetSequence = useCallback(() => {
+    setIsPlaying(false);
+    if (frames && frames.length > 0) setSelectedFrame(frames[0].id);
+  }, [frames, setSelectedFrame]);
+
   // (F2-C) Autoplay timer. Steps to the next keyframe every
   // AUTOPLAY_INTERVAL_MS (~2 Hz, the real nuScenes cadence) while `isPlaying`.
   // The next index is the pure `nextFrameIndex` (loops at the end); reaching a
@@ -394,6 +404,9 @@ export default function Index() {
                 ? () => setCameraMode((m) => (m === 'fixed' ? 'follow' : 'fixed'))
                 : undefined
             }
+            // Reset-to-frame-1 is sequence-only → nuScenes; COCO frames are
+            // independent so it's hidden there (callback omitted).
+            onReset={tracksAcrossFrames ? handleResetSequence : undefined}
           />
         </div>
         <div className="md:col-span-5">
