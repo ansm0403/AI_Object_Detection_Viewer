@@ -1,4 +1,4 @@
-# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A / F2-B / F2-C / F2-D)
+# Edge Case Log F#2 — nuScenes Real-3D Integration (F2-A / F2-B / F2-C / F2-D / F2-E)
 
 > Case 1 was discovered implementing the **pure `lib/` core** of F2-A (TDD,
 > synthetic fixtures, no UI). Cases 2–3 were discovered during the **UI
@@ -6,8 +6,10 @@
 > render verification). Case 4 is **F2-B** (real LiDAR point cloud — alignment +
 > render verification). Cases 5–6 are **F2-C** (sequence + tracking + autoplay —
 > dataset-aware selection persistence + camera stability). Cases 7–8 are **F2-D**
-> (motion/camera polish — camera-follow fallback + box-tween honesty). See
-> `post-mvp-checklist.md` → F2-A / F2-B / F2-C / F2-D and `architecture.md` →
+> (motion/camera polish — camera-follow fallback + box-tween honesty). Case 9 is
+> **F2-E** (found months later by a résumé/portfolio consistency review, not by a
+> feature session — a placeholder rendered as a real score). See
+> `post-mvp-checklist.md` → F2-A / F2-B / F2-C / F2-D / F2-E and `architecture.md` →
 > "nuScenes Integration".
 
 ## Context
@@ -341,6 +343,58 @@ points + boxes stay co-located; pausing leaves boxes on clean measured poses; CO
 (no tween props, no `playing`) is unchanged. The glide itself is a per-frame
 animation not captured in stills — its correctness rests on the unit-tested math +
 the play-gated wiring.
+
+---
+
+## Case 9 — A type-placeholder `confidence: 1.0` was rendered as a real "100%" score on measured frames (F2-E)
+
+**Discovery (2026-10-25, résumé/portfolio consistency review).** The résumé and
+portfolio describe the viewer as exploring "AI object detection (COCO · YOLOv8)
+results". Checking that sentence against the data showed it is only true for COCO:
+nuScenes boxes are **human-labelled ground-truth annotations** with no model score at
+all (`nuscenes.json` has no `confidence`/`score` field). Yet the live app — which
+**lands on nuScenes** — showed `person 1.00` on every 2D box, `person 100%` on the
+3D pill, a full gauge + `1.00` on every ObjectList row, `Confidence 1.000` in the
+inspector, and a histogram with a single bar in the top bucket. A reviewer's first
+impression was "an AI that is 100 % sure about everything".
+
+**Root cause.** F2-A decided "no fake confidence injected" and kept the confidence
+*slider* a no-op on nuScenes, but `Detection2D/3D.confidence` is a required `number`,
+so the parser fills a constant `1.0` as a type placeholder (locked by the test
+"measures (not fakes) confidence as 1.0"). Nothing downstream distinguished "real
+score" from "placeholder": five independent surfaces (Viewer2D label, BBoxLabel,
+ObjectList, SelectedObjectInfo, ConfidenceHistogram) each formatted the number as if
+it were a YOLO score. The honesty flag that exists — `Frame.source` driving the
+Estimated/Measured badge — was only consulted by the Header and Viewer3D camera.
+
+**Resolution (F2-E).** One pure predicate, `frameHasConfidence(frame)` in
+`lib/selectors/frame-has-confidence.ts` (`source !== 'nuscenes-measured'`; absent
+`source` → `true` so legacy COCO frames are unchanged), consulted by all five
+surfaces:
+
+| Surface | Measured frame now shows |
+|---|---|
+| `Viewer2D` bbox label | class only (`person`) |
+| `BBoxLabel` (3D pill) | class only — `confidence` prop made optional, `BBox3D` passes `undefined` via a `showConfidence` prop set in `Scene` |
+| `ObjectList` row | "—" in place of gauge + number |
+| `SelectedObjectInfo` Confidence row | "—" (same affordance as the missing-modality bbox rows, Case 1) |
+| `AnalyticsPanel` | histogram replaced by a note "Measured annotations · no confidence scores" in the same section slot (no reflow) |
+
+**Why the data was left at `1.0`.** Changing the type to `confidence?: number`
+would ripple through every selector (threshold filtering, buckets) and the
+Step 11 COCO path for no user-visible gain; the slider already short-circuits on
+nuScenes. This is a *display* rule keyed on provenance, the same shape as `Filters`
+swapping the confidence slider for the distance slider. Keying on `Frame.source`
+rather than the dataset id means any future measured dataset inherits the rule.
+
+**Render verification (Playwright, both datasets, an object selected).** nuScenes:
+2D labels `person`, 3D pill `person`, list `—`, inspector `—`, note shown, no `%`
+anywhere on the page. COCO: `car 0.35` / `person 0.85` labels, pill `person 85%`,
+list `0.85`, inspector `0.849`, histogram drawn — unchanged.
+
+**Takeaway.** A placeholder that satisfies the type system is still a value the UI
+will happily print. Whenever a field is filled "because the type needs it", the
+surfaces that render that field need a provenance check, not just the filters.
 
 ---
 

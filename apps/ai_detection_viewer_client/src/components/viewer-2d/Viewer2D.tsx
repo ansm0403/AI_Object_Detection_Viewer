@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { Frame } from '@/lib/types';
 import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
+import { frameHasConfidence } from '@/lib/selectors';
 
 type Viewer2DProps = {
   frame: Frame;
@@ -32,6 +33,7 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
       (a, b) =>
         a.bbox.width * a.bbox.height - b.bbox.width * b.bbox.height,
     );
+  const showConfidence = frameHasConfidence(frame);
   return (
     // 선택 해제 핸들러는 <svg>가 아니라 wrapper에 둔다.
     // 이미지의 종횡비가 4:3과 다를 때 생기는 letterbox/pillarbox 영역을 클릭해도
@@ -94,7 +96,11 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
         const isSelected = d.id === selectedId;
         const color = isSelected ? SELECTED_COLOR : getClassColor(d.class);
         const strokeWidth = isSelected ? SELECTED_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;
-        const labelText = `${d.class} ${d.confidence.toFixed(2)}`;
+        // Measured (nuScenes) frames: class only — the 1.0 is a parser
+        // placeholder, not a score (Rule #6). Same flag as the 3D label pill.
+        const labelText = showConfidence
+          ? `${d.class} ${d.confidence.toFixed(2)}`
+          : d.class;
         // 글자당 약 7px로 fontSize=12 sans-serif를 근사. 의도적으로 약간 크게 잡아
         // 불확실할 때 end-anchor 쪽으로 치우치게 함; 오판해도 시각적으로 표시 안 남.
         const estLabelWidth = labelText.length * 7;

@@ -13,3 +13,4 @@ export {
   selectConfidenceBuckets,
 } from './confidence-buckets';
 export { selectClassCounts } from './class-counts';
+export { frameHasConfidence } from './frame-has-confidence';

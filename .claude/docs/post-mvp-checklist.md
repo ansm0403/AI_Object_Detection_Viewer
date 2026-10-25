@@ -756,6 +756,47 @@ F2-C 추적 위에 얹는 "보이는 매끄러움" 2종. 새 데이터/새 화�
   deferred here as clean seams and are now **planned as F2-D** (D-2 tween, D-1 camera-follow) — see
   the F2-D section above.
 
+## F2-E — Hide the nuScenes confidence placeholder (Rule #6) ✅ Done (2026-10-25)
+- **Goal:** stop presenting measured (human-labelled) nuScenes annotations as "100 %-confident AI
+  detections". `lib/nuscenes/parser.ts` fills `confidence: 1.0` only because the `Detection` type
+  requires a number; five UI surfaces rendered that placeholder as a real score — 2D bbox label
+  `person 1.00`, 3D label pill `person 100%`, ObjectList gauge + `1.00`, SelectedObjectInfo `1.000`,
+  and the histogram collapsing to one bar in the top bucket. Surfaced by the résumé/portfolio
+  consistency review (the app lands on nuScenes, so it was the first number a reviewer saw).
+- **Scope:** new pure selector `lib/selectors/frame-has-confidence.ts` — `frameHasConfidence(frame)`
+  = `frame.source !== 'nuscenes-measured'` (absent `source` → true, legacy COCO) + 3 tests, exported
+  from the barrel. UI: `Viewer2D` (label = class only), `BBoxLabel` (`confidence?` optional → percent
+  omitted), `BBox3D` (`showConfidence` prop, default `true`), `Scene` (passes
+  `frameHasConfidence(frame)`), `ObjectList` (gauge + number → "—"), `SelectedObjectInfo` (Confidence
+  row → "—"), `AnalyticsPanel` (histogram → local `NoConfidenceNote`, same section slot so no reflow).
+  Parser, sample data, store, and the whole COCO path untouched.
+- **Done when:** nuScenes shows no confidence number on any surface; COCO unchanged. ✅
+- **Tests:** 203 → **206 passing** (+3 `frameHasConfidence`). `tsc --noEmit` 0 errors. UI
+  render-verified with Playwright, not unit-tested (Testing Policy): nuScenes → 2D labels `person`,
+  3D pill `person`, list `—`, panel `—`, note shown; COCO → `car 0.35`, `person 85%`, `0.85`,
+  `0.849`, histogram drawn.
+- **Decisions:** (1) keyed on `Frame.source` (provenance — the same flag as the Estimated/Measured
+  badge), not on the dataset id, so any future measured dataset inherits the rule. (2) The data stays
+  `1.0` and the parser test "measures (not fakes) confidence as 1.0" still holds — this is a display
+  rule, the same shape as `Filters` swapping the confidence slider for the distance slider. (3) "—"
+  rather than removing rows, for consistency with the 2D/3D bbox "—" rows (Edge_F#2 Case 1).
+- **Edge refs:** Edge_F#2 Case 9.
+
+<!-- KO (move to a localized file)
+## F2-E — nuScenes confidence 자리 채움 값 숨김 (Rule #6) ✅ 완료 (2026-10-25)
+- 목표: 사람이 라벨링한 nuScenes 어노테이션을 "100% 확신하는 AI 탐지"처럼 보이지 않게. 파서는 타입이
+  숫자를 요구해서 `confidence: 1.0`을 채울 뿐인데, 2D 라벨 `person 1.00`·3D 라벨 `person 100%`·객체 리스트
+  게이지+`1.00`·선택 패널 `1.000`·히스토그램(마지막 구간 막대 하나) 다섯 곳이 이를 실제 점수처럼 그렸다.
+  이력서·포트폴리오 정합성 검토에서 발견(앱이 nuScenes로 진입하므로 검토자가 가장 먼저 보는 숫자).
+- 범위: 순수 셀렉터 `frameHasConfidence(frame)` (= `source !== 'nuscenes-measured'`, source 없으면 true)
+  + 테스트 3개. UI 5곳은 "—" / 클래스만 / 안내문("Measured annotations · no confidence scores")으로 대체.
+  파서·데이터·스토어·COCO 경로는 그대로.
+- 테스트 203 → 206. Playwright 렌더 검증 완료.
+- 결정: 데이터셋 id가 아니라 출처 플래그(`Frame.source`) 기준. 데이터는 1.0 유지(표시 규칙일 뿐). 행 삭제
+  대신 "—"로 통일(2D/3D bbox "—" 행과 동일).
+- Edge refs: Edge_F#2 Case 9.
+-->
+
 <!-- KO (move to a localized file)
 ## F2 — nuScenes 실측 3D 통합 (계획)
 COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하지 않고 **데이터셋 토글로 공존**

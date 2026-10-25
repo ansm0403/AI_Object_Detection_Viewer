@@ -6,7 +6,12 @@ type Props = {
   /** Local position relative to the parent group (the bbox center). */
   position: [number, number, number];
   label: string;
-  confidence: number;
+  /**
+   * Model score to show as a percent. Omit on measured (nuScenes) frames —
+   * their 1.0 is a parser placeholder, not a confidence (Rule #6) — and the
+   * pill shows the class alone.
+   */
+  confidence?: number;
   /** Class color, used as the accent dot. */
   color: string;
 };
@@ -41,9 +46,11 @@ export function BBoxLabel({ position, label, confidence, color }: Props) {
           style={{ backgroundColor: color }}
         />
         <span className="font-medium">{label}</span>
-        <span className="tabular-nums text-zinc-400">
-          {(confidence * 100).toFixed(0)}%
-        </span>
+        {confidence !== undefined && (
+          <span className="tabular-nums text-zinc-400">
+            {(confidence * 100).toFixed(0)}%
+          </span>
+        )}
       </div>
     </Html>
   );

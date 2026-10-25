@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import type { Frame } from '@/lib/types';
 import { getClassColor } from '@/lib/ui/class-colors';
+import { frameHasConfidence } from '@/lib/selectors';
 
 type ObjectListProps = {
   frame: Frame;
@@ -16,6 +17,9 @@ type ObjectListProps = {
 
 export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectListProps) {
   const selectedRef = useRef<HTMLLIElement | null>(null);
+  // Measured (nuScenes) frames have no model score — the parser's 1.0 is a
+  // placeholder, so the gauge + number are replaced by "—" (Rule #6).
+  const showConfidence = frameHasConfidence(frame);
 
   // Scroll selected row into view when selection changes from outside the list.
   // Adjusts the <ul>'s scrollTop directly instead of calling scrollIntoView —
@@ -89,18 +93,24 @@ export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectLi
                   style={{ backgroundColor: color }}
                 />
                 <span className="flex-1 text-sm text-zinc-100 truncate">{d.class}</span>
-                <span className="flex items-center gap-1.5 shrink-0">
-                  {/* Confidence gauge track */}
-                  <span className="w-12 h-1 rounded bg-zinc-800 overflow-hidden">
-                    <span
-                      className="block h-full bg-sky-400/70 rounded"
-                      style={{ width: `${d.confidence * 100}%` }}
-                    />
+                {showConfidence ? (
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    {/* Confidence gauge track */}
+                    <span className="w-12 h-1 rounded bg-zinc-800 overflow-hidden">
+                      <span
+                        className="block h-full bg-sky-400/70 rounded"
+                        style={{ width: `${d.confidence * 100}%` }}
+                      />
+                    </span>
+                    <span className="text-xs text-zinc-400 tabular-nums w-8 text-right">
+                      {d.confidence.toFixed(2)}
+                    </span>
                   </span>
-                  <span className="text-xs text-zinc-400 tabular-nums w-8 text-right">
-                    {d.confidence.toFixed(2)}
+                ) : (
+                  <span className="text-xs text-zinc-500 tabular-nums w-8 text-right shrink-0">
+                    —
                   </span>
-                </span>
+                )}
                 <span className="text-xs text-zinc-600 tabular-nums shrink-0 ml-1">
                   {d.id}
                 </span>

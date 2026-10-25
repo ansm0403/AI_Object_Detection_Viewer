@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Grid, OrbitControls } from '@react-three/drei';
 import type { Detection3D, Frame } from '@/lib/types';
+import { frameHasConfidence } from '@/lib/selectors';
 import { PointCloud } from './PointCloud';
 import { BBox3D } from './BBox3D';
 
@@ -112,6 +113,9 @@ export function Scene({
             detection={d}
             isSelected={d.id === selectedId}
             onClick={() => onSelect?.(d.id)}
+            // Measured frames have no model score → label omits the percent
+            // (Rule #6). Same provenance flag as the Header badge.
+            showConfidence={frameHasConfidence(frame)}
             // (F2-D-2) tween inputs. `frameId` resets each box's interpolation
             // clock on a keyframe switch; `playing` gates the tween (off → exact
             // measured pose). `next*` is the same object's next-keyframe pose, or

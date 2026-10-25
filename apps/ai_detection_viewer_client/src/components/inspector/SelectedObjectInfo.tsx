@@ -2,6 +2,7 @@
 
 import type { Frame } from '@/lib/types';
 import { getClassColor } from '@/lib/ui/class-colors';
+import { frameHasConfidence } from '@/lib/selectors';
 
 type Props = {
   frame: Frame;
@@ -51,9 +52,16 @@ export function SelectedObjectInfo({ frame, selectedId }: Props) {
         <span className="text-zinc-100">{primary.class}</span>
       </Row>
       <Row label="Confidence">
-        <span className="text-zinc-100 tabular-nums">
-          {primary.confidence.toFixed(3)}
-        </span>
+        {frameHasConfidence(frame) ? (
+          <span className="text-zinc-100 tabular-nums">
+            {primary.confidence.toFixed(3)}
+          </span>
+        ) : (
+          // Measured (nuScenes) annotations carry no model score; the parser's
+          // 1.0 is a type placeholder, not a confidence (Rule #6). Show "—",
+          // the same way the missing-modality bbox rows below do.
+          <span className="text-zinc-500 text-xs">—</span>
+        )}
       </Row>
       <Row label="2D bbox">
         {d2 ? (

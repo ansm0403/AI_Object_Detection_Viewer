@@ -39,6 +39,10 @@ type Props = {
   detection: Detection3D;
   isSelected?: boolean;
   onClick?: () => void;
+  // Whether `detection.confidence` is a real model score. False on measured
+  // (nuScenes) frames, whose 1.0 is a parser placeholder — the label then
+  // omits the percent (Rule #6). Decided by `frameHasConfidence(frame)` in Scene.
+  showConfidence?: boolean;
   // (F2-D-2) Inter-frame tween inputs (nuScenes autoplay; absent on COCO).
   // `frameId` changes each keyframe and resets the tween clock; `playing` gates
   // the tween (off → exact measured pose, Rule #6); `nextCenter`/`nextRotation`
@@ -53,6 +57,7 @@ export function BBox3D({
   detection,
   isSelected = false,
   onClick,
+  showConfidence = true,
   frameId,
   playing = false,
   nextCenter,
@@ -203,7 +208,7 @@ export function BBox3D({
         <BBoxLabel
           position={[0, sy / 2 + LABEL_Y_PAD, 0]}
           label={detection.class}
-          confidence={detection.confidence}
+          confidence={showConfidence ? detection.confidence : undefined}
           color={baseColor}
         />
       )}
