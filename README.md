@@ -91,7 +91,7 @@ COCO 프레임은 2D bbox에서 *추정한* 3D를, nuScenes 프레임은 실제 
 
 ## 라이브 데모
 
-🔗 ai-object-detection-viewer-ai-detec.vercel.app
+🔗 https://aidviewer.ansmoon.dev (옛 주소 https://ai-object-detection-viewer-ai-detec.vercel.app 도 그대로 동작)
 
 > 두 가지 샘플 데이터가 내장되어 있습니다 (앱은 nuScenes로 기본 진입):
 >
