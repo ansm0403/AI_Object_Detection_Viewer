@@ -193,6 +193,31 @@ No explicit dispose needed.
 is manual: use the browser DevTools WebGL memory inspector (or `THREE.WebGLRenderer.info`)
 after navigating multiple frames in Step 8.
 
+**Post-hoc measurement (2026-05-29; recorded here 2026-10-25).** The cleanup above was
+added preventively from code review, so whether it was *actually* needed was measured
+afterwards by comparing a build **with** the cleanup against one with it removed
+(`git restore` to flip). A temporary probe in `Scene.tsx` logged
+`gl.info.memory.geometries` every second while the same frame stayed fixed and the
+**class toggles** were flipped repeatedly (~14 observations); the confidence slider was
+not part of the run.
+
+| Build | `geometries` sequence | Reading |
+|---|---|---|
+| cleanup removed | 12, 9, 16, 19, 17, 20, 27, 30, 28, 31, 38, 41, 39, 49 | climbs to 49 — dips, but the floor keeps rising (not strictly monotonic) |
+| cleanup present | 12, 4, 10, 12, 4, 6, 12, 10, 12, 4, 6, 12, 10 | oscillates 4–12 with the visible class count; no upward drift |
+
+Two things the measurement corrected about the "Downstream risk" paragraph above:
+1. The **frame-switch path did not leak** even without the cleanup — at the time
+   `<Viewer3D key={frame.id}>` remounted the whole Canvas, and R3F disposes everything on
+   Canvas unmount. The leak showed only where `visibleIds` swaps geometries **inside a
+   live Canvas** (class toggles / confidence slider).
+2. Since F2-C the nuScenes Canvas is **not** remounted per frame (stable key for autoplay),
+   so the frame-switch path now also relies on this cleanup. Edge_#9's 10-frame round-trip
+   audit (9↔13, no growth) was taken with the cleanup present.
+
+No FPS or MB figures were recorded — only the geometry count. Résumé/portfolio wording
+should say "accumulated to 49", not "slowed down" or "monotonic".
+
 ---
 
 ## Case 5 — `pointCloud` locked at `enrichFrame` time, ignores future filters (FIXED in Step 7)

@@ -443,7 +443,7 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
 
 | 항목 | 문제 | 해결 |
 |---|---|---|
-| GPU 메모리 누수 | `BufferGeometry` / `EdgesGeometry`가 dispose되지 않아 프레임 전환마다 누적 | `PointCloud.tsx` / `BBox3D.tsx`에 `useEffect` cleanup으로 `geometry.dispose()` 호출 |
+| GPU 메모리 누수 | `BufferGeometry` / `EdgesGeometry`는 GC가 회수하지 않아, 필터로 geometry가 교체될 때마다 GPU에 잔존 (프레임 전환은 Canvas 리마운트가 정리해 누적이 없었음 — 2026-05-29 실측: cleanup 없음 12 → 49, 있음 4~12) | `PointCloud.tsx` / `BBox3D.tsx`에 `useEffect` cleanup으로 `geometry.dispose()` 호출 (코드 리뷰에서 예방 적용 후 실측으로 검증, Edge_#4 Case 4) |
 | 카메라 상태 누적 (COCO) | 프레임 전환 시 이전 프레임의 카메라 위치 / 회전이 새 씬에 그대로 적용 | `<Viewer3D key={frame.id}>` remount 패턴으로 R3F 캔버스 전체 재초기화 |
 | 자동재생 카메라 바운스 (nuScenes) | remount 패턴이 자동재생 시 0.5초마다 카메라를 리셋해 화면이 튐 | nuScenes는 **stable key**로 캔버스를 유지(no-remount) + 초기 framing을 freeze → 박스만 움직이고 카메라는 고정 |
 | 포인트 클라우드 필터링 | 필터 변경 시 enrich 단계의 전체 포인트가 모두 렌더링됨 | `Point3D.detectionId`로 렌더 시점에 `visibleIds` 필터, 필터 변경 시 geometry만 재빌드 |
