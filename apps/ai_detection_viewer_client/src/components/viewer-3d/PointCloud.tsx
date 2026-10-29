@@ -58,7 +58,7 @@ export function PointCloud({ points, visibleIds, size = 0.2 }: Props) {
   // 같은 프레임을 고정한 채 클래스 토글을 반복하면 geometry가 정상 12개에서
   // 49개까지 계속 누적됐다(오르내리며 바닥이 올라감: 12, 9, 16, 19, … 49).
   //
-  // 원인: WebGL 버퍼는 JS GC가 회수하지 못해 명시적 해제가 필요하다. 게다가 R3F는
+  // 원인: three.js 렌더러가 dispose() 전까지 버퍼 참조를 붙잡아 GC로 풀리지 않는다. 게다가 R3F는
   //   JSX 자식으로 선언한 geometry만 자동 dispose하고, 위처럼 명령형으로 만들어 prop으로
   //   주입한 것은 사용자 책임이라 매 재생성마다 이전 인스턴스가 GPU에 그대로 잔존한다.
   //
