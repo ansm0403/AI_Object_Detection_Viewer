@@ -1,0 +1,89 @@
+{
+  "url": "https://aidviewer.ansmoon.dev/",
+  "date": "2026-10-26",
+  "lighthouseVersion": "12.8.2",
+  "entryDataset": "nuscenes (app default since F2-A)",
+  "conditions": {
+    "formFactor": "mobile",
+    "screenEmulation": {
+      "mobile": true,
+      "width": 412
+    },
+    "throttlingMethod": "simulate",
+    "rttMs": 150,
+    "throughputKbps": 1638.4,
+    "cpuSlowdownMultiplier": 4,
+    "chrome": "headless=new, clean profile (no extensions)",
+    "categories": [
+      "performance"
+    ]
+  },
+  "command": "npx -y lighthouse@12 https://aidviewer.ansmoon.dev/ --only-categories=performance --form-factor=mobile --screenEmulation.mobile --throttling-method=simulate --output=json --chrome-flags=\"--headless=new\"  (x5)",
+  "runs": [
+    {
+      "run": 1,
+      "fetchTime": "2026-10-26T08:24:33.103Z",
+      "performance": 52,
+      "lcp_s": 5.57,
+      "fcp_s": 0.77,
+      "tbt_ms": 1866,
+      "speed_index_s": 2.15,
+      "cls": 0
+    },
+    {
+      "run": 2,
+      "fetchTime": "2026-10-26T08:24:54.638Z",
+      "performance": 65,
+      "lcp_s": 5.64,
+      "fcp_s": 0.77,
+      "tbt_ms": 573,
+      "speed_index_s": 1.64,
+      "cls": 0
+    },
+    {
+      "run": 3,
+      "fetchTime": "2026-10-26T08:25:14.600Z",
+      "performance": 53,
+      "lcp_s": 5.51,
+      "fcp_s": 0.79,
+      "tbt_ms": 1624,
+      "speed_index_s": 2.03,
+      "cls": 0
+    },
+    {
+      "run": 4,
+      "fetchTime": "2026-10-26T08:25:35.271Z",
+      "performance": 61,
+      "lcp_s": 5.5,
+      "fcp_s": 0.78,
+      "tbt_ms": 749,
+      "speed_index_s": 1.75,
+      "cls": 0
+    },
+    {
+      "run": 5,
+      "fetchTime": "2026-10-26T08:25:55.794Z",
+      "performance": 47,
+      "lcp_s": 5.59,
+      "fcp_s": 1.47,
+      "tbt_ms": 2729,
+      "speed_index_s": 4.75,
+      "cls": 0
+    }
+  ],
+  "average": {
+    "performance": 55.6,
+    "lcp_s": 5.56,
+    "fcp_s": 0.92,
+    "tbt_ms": 1508.2,
+    "speed_index_s": 2.46,
+    "cls": 0
+  },
+  "lcpElement": "<image href=\"/sample-data/nuscenes/cam_front/...CAM_FRONT...jpg\" width=1600 height=900> (Viewer2D SVG image)",
+  "largestTransfers": [
+    "nuscenes.json 545 KB",
+    "cam_front jpg x10 ~150-170 KB each"
+  ],
+  "totalByteWeightKB": 2404,
+  "note": "run*.json are full Lighthouse reports with only the base64 screenshot audits removed. Baseline 98.8 / LCP 0.8s (2026-05-29, COCO entry, Chrome DevTools) has no surviving report file; see README Lighthouse table (prose record only)."
+}

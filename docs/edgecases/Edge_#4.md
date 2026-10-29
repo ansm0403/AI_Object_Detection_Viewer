@@ -207,10 +207,12 @@ not part of the run.
 | cleanup present | 12, 4, 10, 12, 4, 6, 12, 10, 12, 4, 6, 12, 10 | oscillates 4–12 with the visible class count; no upward drift |
 
 Two things the measurement corrected about the "Downstream risk" paragraph above:
-1. The **frame-switch path did not leak** even without the cleanup — at the time
+1. The **frame-switch path was not a leak source** even without the cleanup — at the time
    `<Viewer3D key={frame.id}>` remounted the whole Canvas, and R3F disposes everything on
-   Canvas unmount. The leak showed only where `visibleIds` swaps geometries **inside a
-   live Canvas** (class toggles / confidence slider).
+   Canvas unmount (`forceContextLoss`). This is from the R3F code, not the probe: the probe
+   lives inside the Canvas and remounts with it, so it cannot observe across a frame switch.
+   The leak risk is where `visibleIds` swaps geometries **inside a live Canvas** — measured
+   with class toggles; the confidence slider takes the same code path but was not measured.
 2. Since F2-C the nuScenes Canvas is **not** remounted per frame (stable key for autoplay),
    so the frame-switch path now also relies on this cleanup. Edge_#9's 10-frame round-trip
    audit (9↔13, no growth) was taken with the cleanup present.

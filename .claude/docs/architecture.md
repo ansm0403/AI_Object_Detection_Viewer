@@ -27,7 +27,7 @@ frames no longer render the parser's placeholder `confidence: 1.0` as a score â€
 For step-by-step history and per-Step decisions, see `mvp-checklist.md` (ðŸ”’ frozen).
 Post-MVP feature work (in progress) is tracked in `post-mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
-For Step 9.5 UI feature candidates and adopt/exclude rationale, see `docs/etc/NEW_UI.md`.
+For Step 9.5 UI feature candidates and adopt/exclude rationale, see `docs/etc/NEW_UI.md` (private notes, not in the public repo).
 
 ## Folder Structure
 
@@ -391,7 +391,7 @@ their current pose (no jump, no NaN). All visible boxes tween (cost negligible).
 
 All Step 9.5 components follow the same controlled-component pattern as
 Step 5+ (props in, callbacks out; `page.tsx` is the single wire point).
-Adopt/exclude rationale lives in `docs/etc/NEW_UI.md`.
+Adopt/exclude rationale lives in `docs/etc/NEW_UI.md` (private notes, not in the public repo).
 
 | Component | Phase | Responsibility |
 |---|---|---|

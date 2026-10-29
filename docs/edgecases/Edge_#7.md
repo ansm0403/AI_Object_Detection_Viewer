@@ -94,7 +94,7 @@ either way.
 | Issue | Original log | Status |
 |---|---|---|
 | `pointCloud` ignored filters (orphan points after class/threshold filtering) | `Edge_#4.md` Case 5 | **Fixed in Step 7** (Option A: `Point3D.detectionId` required; render-time filter) |
-| SVG bbox click priority in overlapping bboxes | `Edge_#2.md` Case 1 / `Edge_#4.md` Case 1 | **Fixed in Step 7 follow-up** (paint-order sort by bbox area ascending; long-form write-up in `docs/etc/blog-svg-paint-order-and-click-priority.md`) |
+| SVG bbox click priority in overlapping bboxes | `Edge_#2.md` Case 1 / `Edge_#4.md` Case 1 | **Fixed in Step 7 follow-up** (paint-order sort by bbox area ascending; long-form write-up: [velog](https://velog.io/@tkdans312/Making-two-views-different-in-the-same-direction-2D-3D-click-consistency)) |
 
 Both Step 7 cases above are deferred *to the right consuming step* (Step 8 needs
 the union-of-frames decision before frame navigation lands; Step 9 owns

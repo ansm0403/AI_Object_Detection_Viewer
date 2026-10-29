@@ -100,8 +100,9 @@ COCO 프레임은 2D bbox에서 *추정한* 3D를, nuScenes 프레임은 실제 
 > - **MS COCO val2017** — person / bicycle / car 10장에 YOLOv8n 추론을 돌려 실제 confidence
 >   분포를 채운 데이터. 2D bbox로부터 3D를 추정. `Estimated` 배지.
 >
-> 좌측 2D 이미지의 바운딩 박스, 우측 3D 씬의 박스/점구름, 우상단 객체 리스트,
-> 우하단 분석 패널이 모두 같은 선택 상태(`selectedObjectId`)를 공유합니다.
+> 데스크톱 기준 위쪽 왼쪽 2D 이미지의 바운딩 박스, 위쪽 오른쪽 3D 씬의 박스/점구름, 아래쪽 왼쪽
+> 객체 리스트, 아래쪽 오른쪽 분석 패널이 모두 같은 선택 상태(`selectedObjectId`)를 공유합니다.
+> (nuScenes에서 카메라에 투영되지 않는 3D 전용 박스는 3D 씬에만 나타납니다.)
 
 ---
 
@@ -200,7 +201,7 @@ COCO를 대체하지 않고 **데이터셋 스위처로 공존**시켜, "추정 
 | 2D 오버레이 | SVG (`viewBox` + `<rect>`) | bbox 좌표를 산술 없이 매핑, 브라우저가 스케일링 처리 |
 | 3D 데이터 | nuScenes-mini, COCO val2017 | 실측 3D(nuScenes)와 추정 3D(COCO)를 데이터셋 스위처로 공존·비교 |
 | 데이터 파이프라인 | Python 3.13 (stdlib만) | 오프라인 prep 스크립트가 nuScenes 관계형 테이블 → 정적 JSON으로 평탄화, `.pcd.bin` LiDAR를 `struct`로 디코드 (devkit 미설치) |
-| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 단위 + 통합 테스트 **203개** |
+| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 단위 + 통합 테스트 **206개** |
 | 모노레포 | Nx 22.7 | 단일 워크스페이스에서 client/server 분리 (server는 현재 범위 외) |
 | 배포 | Vercel | Next.js 공식, GitHub 연동 자동 배포. 런타임 백엔드 없이 정적 서빙 유지 |
 
@@ -232,7 +233,7 @@ threshold 오버레이도 자유롭게 그릴 수 있었습니다.
 
 COCO/nuScenes 파싱, 2D→3D·3D→2D 좌표 변환, 셀렉터는 모두 `lib/` 아래의 순수 함수입니다.
 React 컴포넌트와 Zustand store는 이 함수들의 호출자일 뿐, 도메인 로직을 직접 들고 있지 않습니다.
-이 경계 덕분에 203개 테스트의 대부분이 React 환경 없이도 빠르게 돌아갑니다.
+이 경계 덕분에 206개 테스트의 대부분이 React 환경 없이도 빠르게 돌아갑니다.
 
 ### 5. nuScenes 선택 (KITTI / Waymo 대신)
 
@@ -276,7 +277,7 @@ npm install
 npx nx dev ai_detection_viewer_client
 # → http://localhost:3000
 
-# 3. 테스트 (Vitest, 203개)
+# 3. 테스트 (Vitest, 206개)
 npx nx test ai_detection_viewer_client
 # 또는 앱 디렉토리에서
 cd apps/ai_detection_viewer_client && npm test
@@ -380,7 +381,8 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
   카메라가 `+z` 쪽에 있어 `-z` 방향을 응시하고 있어 깊이 의미가 정반대로 나타남.
 - **해결**: 카메라 위치를 `[0, 0, +14]` → `[0, 0, -10]`로 옮겨 `+z` 방향을 응시하게 함.
   estimator·tests·spec 한 줄도 건드리지 않고 한 줄만 변경.
-- **코드**: [`Viewer3D.tsx#L18-L25`](apps/ai_detection_viewer_client/src/components/viewer-3d/Viewer3D.tsx#L18-L25)
+- **코드**: [`Viewer3D.tsx#L65`](https://github.com/ansm0403/AI_Object_Detection_Viewer/blob/982dbd8b14f403e100c4581dbd4324237fb5036e/apps/ai_detection_viewer_client/src/components/viewer-3d/Viewer3D.tsx#L65)
+  (COCO 카메라. nuScenes는 같은 줄에서 실측 박스에 맞춘 위치를 씀)
   · 상세: `docs/edgecases/Edge_#4.md` Case 2
 
 ### 2. 겹친 2D bbox 클릭 우선순위 불일치
@@ -389,9 +391,11 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
   COCO `annotations` 배열 순서에 따라 시각적으로 앞에 있는 큰 객체를 클릭해도 가려진
   작은 객체가 선택되는 경우 발생.
 - **해결**: detection 목록을 bbox 면적 오름차순으로 정렬해 큰 bbox가 마지막에 paint되어
-  hit-test 스택 최상단을 차지하게 함. 3D estimator의 "큰 면적 = 가까운 z" 컨벤션과
-  동일한 proxy를 공유하므로 2D/3D 두 뷰가 단일 깊이 모델을 공유.
-- **코드**: [`Viewer2D.tsx#L22-L34`](apps/ai_detection_viewer_client/src/components/viewer-2d/Viewer2D.tsx#L22-L34)
+  hit-test 스택 최상단을 차지하게 함. COCO(추정 3D)에서는 3D estimator도 "큰 면적 = 가까운 z"를
+  쓰므로 두 뷰의 앞뒤 판단이 일치함. nuScenes는 3D가 실측 위치라 2D 정렬만 면적 근사.
+- **한계**: 면적은 깊이의 근사라, 큰 박스 안에 완전히 들어간 작은 박스는 2D에서 클릭되지 않고
+  객체 리스트로 선택함.
+- **코드**: [`Viewer2D.tsx#L26-L35`](https://github.com/ansm0403/AI_Object_Detection_Viewer/blob/982dbd8b14f403e100c4581dbd4324237fb5036e/apps/ai_detection_viewer_client/src/components/viewer-2d/Viewer2D.tsx#L26-L35)
   · 상세: `docs/edgecases/Edge_#2.md` Case 1
 
 ### 3. drei `<Grid>` raycast가 "빈 공간 deselect" 깨뜨림
@@ -403,7 +407,7 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
 - **해결**: `useRef`로 grid mesh를 잡고 mount 직후 `useEffect`에서 해당 mesh의 `raycast`
   메소드를 no-op으로 덮어씀. 시각은 유지하면서 raycaster에는 "보이지 않게" 만들어
   deselect 계약을 복구.
-- **코드**: [`Scene.tsx#L31-L38`](apps/ai_detection_viewer_client/src/components/viewer-3d/Scene.tsx#L31-L38)
+- **코드**: [`Scene.tsx#L65-L72`](https://github.com/ansm0403/AI_Object_Detection_Viewer/blob/982dbd8b14f403e100c4581dbd4324237fb5036e/apps/ai_detection_viewer_client/src/components/viewer-3d/Scene.tsx#L65-L72)
   · 상세: `docs/edgecases/Edge_#9.5.md` Case A
 
 <details>
@@ -443,7 +447,7 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
 
 | 항목 | 문제 | 해결 |
 |---|---|---|
-| GPU 메모리 누수 | `BufferGeometry` / `EdgesGeometry`는 GC가 회수하지 않아, 필터로 geometry가 교체될 때마다 GPU에 잔존 (프레임 전환은 Canvas 리마운트가 정리해 누적이 없었음 — 2026-05-29 실측: cleanup 없음 12 → 49, 있음 4~12) | `PointCloud.tsx` / `BBox3D.tsx`에 `useEffect` cleanup으로 `geometry.dispose()` 호출 (코드 리뷰에서 예방 적용 후 실측으로 검증, Edge_#4 Case 4) |
+| GPU 메모리 누수 | `BufferGeometry` / `EdgesGeometry`는 three.js 렌더러가 `dispose()` 전까지 GPU 버퍼를 붙잡아 GC로 회수되지 않아, 필터로 geometry가 교체될 때마다 GPU에 잔존 (당시 프레임 전환은 Canvas 리마운트로 WebGL 컨텍스트째 정리되는 구조 — R3F 코드 기준. 2026-05-29 클래스 토글 반복 실측: cleanup 없음 12 → 49, 있음 4~12) | `PointCloud.tsx` / `BBox3D.tsx`에 `useEffect` cleanup으로 `geometry.dispose()` 호출 (코드 리뷰에서 예방 적용 후 실측으로 검증, Edge_#4 Case 4) |
 | 카메라 상태 누적 (COCO) | 프레임 전환 시 이전 프레임의 카메라 위치 / 회전이 새 씬에 그대로 적용 | `<Viewer3D key={frame.id}>` remount 패턴으로 R3F 캔버스 전체 재초기화 |
 | 자동재생 카메라 바운스 (nuScenes) | remount 패턴이 자동재생 시 0.5초마다 카메라를 리셋해 화면이 튐 | nuScenes는 **stable key**로 캔버스를 유지(no-remount) + 초기 framing을 freeze → 박스만 움직이고 카메라는 고정 |
 | 포인트 클라우드 필터링 | 필터 변경 시 enrich 단계의 전체 포인트가 모두 렌더링됨 | `Point3D.detectionId`로 렌더 시점에 `visibleIds` 필터, 필터 변경 시 geometry만 재빌드 |
@@ -456,6 +460,16 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
 | Tailwind JIT arbitrary class | 상수 문자열에서 추출 실패로 그리드가 무너짐 | grid 클래스를 `page.tsx` JSX className에 직접 기입, JIT extraction 신뢰성 회복 |
 
 세부 사례와 의사결정 근거는 [`docs/edgecases/`](docs/edgecases/) 하위 문서에 남겨두었습니다.
+
+### Lighthouse 측정 기록
+
+| 시점 | 진입 화면 | Performance | LCP | 측정 도구 | 근거 |
+|---|---|---|---|---|---|
+| MVP · 2026-05-29 | COCO (sample.json 14KB) | **98.8** | 0.8s | Chrome DevTools Lighthouse, 모바일 Slow 4G, 5회 평균 | 당시 로컬 작업 기록(산문)만 남아 있고 리포트 파일은 없음 |
+| 현재 배포본 · 2026-10-26 | nuScenes (nuscenes.json 545KB 전송 + CAM_FRONT 1600×900) | **55.6** (52·65·53·61·47) | 5.6s | Lighthouse 12.8 CLI, headless Chrome, 모바일 412px, simulated Slow 4G (150ms RTT · 1.6Mbps · CPU×4), 5회 평균 | [`docs/perf/lighthouse/2026-10-26/`](docs/perf/lighthouse/2026-10-26/) (summary.json + 리포트 5개) |
+
+nuScenes를 기본 진입으로 바꾼 뒤(F2-A) 첫 화면이 실측 이미지와 LiDAR JSON을 받게 되어 LCP가 0.8s → 5.6s로 커졌습니다.
+LCP 요소는 2D 뷰어의 CAM_FRONT `<image>`, TBT는 평균 1.5s(CPU 4배 감속 기준)입니다. 두 수치는 측정 시점과 진입 화면이 다르므로 항상 함께 인용합니다.
 
 ---
 
@@ -474,7 +488,7 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
   DB 경험과 맞닿아 있었습니다.
 - **프레임레이트 디커플링** — 씬은 ~60fps로 그려지지만 키프레임은 ~2Hz로 갱신됩니다. 이 간극을
   `useFrame`의 시간 기반 보간(lerp/slerp)으로 메우는 패턴은 처음 다뤄본 개념이었습니다.
-- **WebGL 메모리 모델** — `BufferGeometry`, `EdgesGeometry`는 GC가 회수하지 않습니다.
+- **WebGL 메모리 모델** — three.js 렌더러는 `dispose()` 전까지 `BufferGeometry`·`EdgesGeometry`의 GPU 버퍼를 붙잡아 GC로 회수되지 않습니다.
   `useEffect` cleanup에서 명시적으로 `.dispose()`를 호출해야 한다는 것을 메모리 누수
   audit으로 직접 확인하며 익혔습니다.
 - **순수 함수와 React의 경계** — 도메인 로직을 `lib/`에 가두니 테스트 작성 비용이 크게
@@ -484,9 +498,9 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
   곧 동기화 지옥이 되리라 깨달았습니다. `selectedObjectId` 하나로 통일한 결정이 후속 작업
   (객체 리스트, 필터, 분석 패널, nuScenes 추적)에서 모두 자연스럽게 확장된 점이 가장 큰
   학습이었습니다.
-- **SVG paint order = z-order** — 2D에서 큰 bbox가 작은 bbox를 가려 클릭이 막히는 문제를
-  3D 추정기의 "큰 면적 → 가까운 z"와 정렬해 해결한 경험은, 2D와 3D를 동시에 다룰 때
-  좌표 변환만큼이나 **렌더 순서**가 중요하다는 것을 보여주었습니다.
+- **SVG paint order = z-order** — 겹친 2D bbox의 클릭 순서를 3D 추정기의 "큰 면적 → 가까운 z"에
+  맞춰 정한 경험은, 2D와 3D를 동시에 다룰 때 좌표 변환만큼이나 **렌더 순서**가 중요하다는 것을
+  보여주었습니다.
 
 ---
 
@@ -503,3 +517,18 @@ contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여�
 - **COCO 프레임 간 추적 없음** — COCO는 `Detection.id`의 프레임 간 연속성을 보장하지 않습니다.
   휴리스틱으로 흉내내는 것은 포트폴리오에서 오히려 신뢰를 깎는다고 판단해 의도적으로 제외했습니다
   (nuScenes는 `instance` 토큰으로 실제 추적 제공).
+
+---
+
+## 데이터 출처 · 라이선스
+
+내장 샘플 데이터는 시연용이며, 각 데이터셋의 약관을 따릅니다.
+
+- **nuScenes-mini `scene-0916`** (`public/sample-data/nuscenes/`) — CAM_FRONT 이미지와 3D 박스·LiDAR를
+  가공한 JSON. nuScenes 데이터셋은 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+  (비상업적 이용)과 [nuScenes Terms of Use](https://www.nuscenes.org/terms-of-use)를 따릅니다.
+- **MS COCO val2017** (`public/sample-data/frame_*.jpg`) — 이미지 10장, 원본 주소는 `sample.json`의 `coco_url`.
+  이미지 저작권은 COCO가 아닌 원저작자에게 있어 [Flickr 이용약관](https://www.flickr.com/help/terms)을
+  따르고, COCO 원본 주석(`sample.gt_backup.json`)은 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)입니다
+  ([COCO Terms of Use](https://cocodataset.org/#termsofuse)).
+- `sample.json`의 박스와 confidence는 이 이미지들에 Ultralytics YOLOv8n을 돌린 추론 결과(COCO 형식)입니다.

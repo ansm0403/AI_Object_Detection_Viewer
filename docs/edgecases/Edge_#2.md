@@ -133,10 +133,13 @@ on top of the SVG paint stack, capturing clicks in overlap regions.
   ground truth. The 3D viewer also gets this case wrong in the same
   direction, so the two views remain *consistent* even when both are
   wrong. ObjectList is the documented escape hatch.
+  *(Since F2, this holds for COCO frames only: nuScenes 3D boxes sit at measured
+  positions, so there only the 2D sort is an area approximation.)*
 - Sub-object depth (e.g. bicycle front wheel vs. back wheel as separate
   click targets) is impossible at this data model — every detection carries
   a single z. Resolving this would require COCO segmentation polygons or
-  instance masks, which is out of MVP scope. See `docs/etc/` blog write-up
+  instance masks, which is out of MVP scope. See the
+  [blog write-up](https://velog.io/@tkdans312/Making-two-views-different-in-the-same-direction-2D-3D-click-consistency)
   for the long-form analysis.
 
 **Tests.** None added — UI rendering is not in the unit-test scope (CLAUDE.md
