@@ -49,11 +49,11 @@ export function Viewer3D({
   // frame's framing keeps target stable; the scene's box cloud is consistent
   // across the short sequence, so frame 0's fit is representative.
   //
-  // ── Extension seam (camera-follow, decision 3-B, deferred): `target` is the
-  // single point the camera aims at. To make the camera FOLLOW the selected
-  // object later, pass that object's current center as `target` per frame
-  // (recomputed from `selectedId` + `frame.detections3D`) instead of this frozen
-  // framing. No other wiring changes — the prop already flows to OrbitControls.
+  // ── Camera follow (F2-D-1, built below as `followTarget`): `target` is the
+  // single point the camera aims at. In 'follow' mode the selected object's
+  // current center replaces this frozen framing as `target`; this framing stays
+  // the default AND the fallback (nothing selected / object not in this frame).
+  // Only the aim point changes — no remount, no key change.
   const mountFrame = useRef(frame).current;
   const framing = useMemo(
     () =>
