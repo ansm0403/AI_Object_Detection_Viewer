@@ -74,7 +74,12 @@ export function cameraToPixel(pCam: Vec3, K: Intrinsic): PixelProjection {
 /**
  * Eight corners of a box given its EGO-frame center, local-axis extents
  * [l, w, h] (see `nuSizeToLocal`), and EGO orientation quaternion [x, y, z, w].
- * Corner order is irrelevant — only the AABB of the set is used downstream.
+ *
+ * Corner ORDER is part of the contract (F4 draws the box's edges from it):
+ * corner index = 4·ix + 2·iy + iz, where each i is 0 for the − side and 1 for
+ * the + side of that local axis (x = length / heading, y = width, z = height).
+ * So corners 4–7 are the +x face — the FRONT of the box. `BOX_EDGES` and
+ * `BOX_FRONT_FACE` below are written against this order.
  */
 export function boxCornersEgo(
   center: Vec3,
@@ -96,6 +101,49 @@ export function boxCornersEgo(
     }
   }
   return corners;
+}
+
+/**
+ * The 12 edges of a box as pairs of corner indices (order of `boxCornersEgo`):
+ * two corners share an edge when exactly one of their three axis bits differs.
+ */
+export const BOX_EDGES: ReadonlyArray<readonly [number, number]> = [
+  // along z (height)
+  [0, 1], [2, 3], [4, 5], [6, 7],
+  // along y (width)
+  [0, 2], [1, 3], [4, 6], [5, 7],
+  // along x (length)
+  [0, 4], [1, 5], [2, 6], [3, 7],
+];
+
+/**
+ * The front (+x, heading side) face as a closed loop of corner indices. Drawing
+ * it differently from the other edges shows which way the box is facing.
+ */
+export const BOX_FRONT_FACE: readonly [number, number, number, number] = [4, 5, 7, 6];
+
+/**
+ * (F4) Project EGO-frame box corners to pixel coordinates, keeping the corner
+ * order — so the caller can draw the projected 3D box (its 12 edges) on the
+ * photo instead of only its bounding rectangle.
+ *
+ * Returns `null` when any corner is at or behind the camera plane: a line to
+ * such a corner would be drawn in a meaningless place. Pixels are NOT clamped
+ * to the image — a box cut by the image edge keeps its true shape and the
+ * viewer clips it.
+ */
+export function projectBoxCorners(
+  corners: Vec3[],
+  sensor: Pose,
+  K: Intrinsic,
+): [number, number][] | null {
+  const pixels: [number, number][] = [];
+  for (const corner of corners) {
+    const pixel = cameraToPixel(egoToCamera(corner, sensor), K);
+    if (!pixel.inFront) return null;
+    pixels.push([pixel.u, pixel.v]);
+  }
+  return pixels;
 }
 
 /**

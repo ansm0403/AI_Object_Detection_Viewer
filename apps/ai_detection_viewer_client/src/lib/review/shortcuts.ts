@@ -17,7 +17,9 @@ export type ReviewAction =
   /** Toggle one reject reason (number keys 1–6, in `REJECT_REASONS` order). */
   | { type: 'reason'; reason: RejectReason }
   /** Jump to the next frame that still has unreviewed boxes. */
-  | { type: 'next-frame' };
+  | { type: 'next-frame' }
+  /** Camera image: full view ↔ zoom on the selected box. */
+  | { type: 'toggle-zoom' };
 
 /** The parts of a `KeyboardEvent` the resolver reads (kept minimal for tests). */
 export type ShortcutEvent = {
@@ -39,6 +41,7 @@ export const SHORTCUT_KEYS = {
   next: 'J',
   previous: 'K',
   nextFrame: 'N',
+  zoom: 'Z',
 } as const;
 
 // <input> types that take typed text. A range slider or a checkbox is an
@@ -110,6 +113,8 @@ export function resolveShortcut(event: ShortcutEvent): ReviewAction | null {
       return { type: 'clear' };
     case 'n':
       return { type: 'next-frame' };
+    case 'z':
+      return { type: 'toggle-zoom' };
     default:
       break;
   }

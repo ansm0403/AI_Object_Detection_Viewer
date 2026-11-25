@@ -15,7 +15,11 @@ import {
   type Pose,
   type Vec3,
 } from '@/lib/geometry/transforms';
-import { boxCornersEgo, projectCornersToBbox } from '@/lib/geometry/projection';
+import {
+  boxCornersEgo,
+  projectBoxCorners,
+  projectCornersToBbox,
+} from '@/lib/geometry/projection';
 import type {
   NuScenesAnnotation,
   NuScenesLidar,
@@ -103,19 +107,20 @@ function buildFrame(pf: unknown): Frame | null {
 
     // 2D box = AABB of the 3D box projected into the camera image. Skipped (but
     // the 3D box is kept) when the box is behind the camera or fully off-screen.
-    const bbox = projectCornersToBbox(
-      boxCornersEgo(centerEgo, localSize, quatEgo),
-      sensor,
-      K,
-      pf.image.width,
-      pf.image.height,
-    );
+    const cornersEgo = boxCornersEgo(centerEgo, localSize, quatEgo);
+    const bbox = projectCornersToBbox(cornersEgo, sensor, K, pf.image.width, pf.image.height);
     if (bbox) {
+      // (F4) Also keep the eight projected corners, so the camera view can draw
+      // the 3D box itself (edges + front face), not only this rectangle. A
+      // non-null bbox means every corner is in front of the camera, so the
+      // corner projection cannot fail here; the fallback is purely defensive.
+      const corners = projectBoxCorners(cornersEgo, sensor, K);
       detections2D.push({
         id: ann.instanceToken,
         class: className,
         confidence: 1.0,
         bbox,
+        ...(corners ? { corners } : {}),
       });
     }
   }

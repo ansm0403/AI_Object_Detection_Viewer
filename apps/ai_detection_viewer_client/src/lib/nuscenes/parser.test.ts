@@ -264,6 +264,19 @@ describe('parseNuScenes annotation info (F4)', () => {
     expect(frame.detections3D[1].annotation).toEqual({ token: 'ann-2' });
   });
 
+  it('keeps the eight projected corners on the 2D box, bounded by its rectangle', () => {
+    // FRONT: centre (3,5,10), [w,l,h] = [2,4,1.5] → local [l,w,h] = [4,2,1.5].
+    // Corner 0 = (3−2, 5−1, 10−0.75) = (1, 4, 9.25) with identity poses.
+    const [frame] = parseNuScenes(preppedWith([FRONT, BEHIND]));
+    expect(frame.detections2D).toHaveLength(1);
+    const { corners, bbox } = frame.detections2D[0];
+    expect(corners).toHaveLength(8);
+    expect(corners![0][0]).toBeCloseTo(800 + 1000 / 9.25, 6);
+    expect(corners![0][1]).toBeCloseTo(450 + 4000 / 9.25, 6);
+    // Unclamped corners can only lie on or outside the (image-clamped) rectangle's far sides.
+    expect(Math.min(...corners!.map((c) => c[0]))).toBeCloseTo(bbox.x, 6);
+  });
+
   it('does not copy the review facts onto the projected 2D box', () => {
     // The verdict is about the 3D box; the 2D box is only its projection.
     const [frame] = parseNuScenes(preppedWith([REVIEWABLE]));

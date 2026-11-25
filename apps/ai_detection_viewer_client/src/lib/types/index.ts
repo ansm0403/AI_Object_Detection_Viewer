@@ -18,6 +18,12 @@ export type Detection2D = {
   class: string;
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
+  // (F4) Pixel positions of the 3D box's eight corners in this image, in the
+  // corner order of `boxCornersEgo` (corners 4-7 = the front face). Present only
+  // when the 2D box is the PROJECTION of a 3D box (nuScenes); `bbox` is then the
+  // rectangle around these points. Lets the camera view draw the projected 3D
+  // box itself. Not clamped to the image.
+  corners?: [number, number][];
 };
 
 export type Detection3D = {

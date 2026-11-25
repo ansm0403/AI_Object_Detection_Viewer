@@ -10,6 +10,7 @@ import {
   type ReviewRecord,
   type Verdict,
 } from '@/lib/review';
+import { EvidenceStrip, type BoxEvidence } from './EvidenceStrip';
 import { REJECT_REASON_LABELS, REVIEW_BLOCK_MESSAGES, VERDICT_LABELS } from './labels';
 
 type Props = {
@@ -17,6 +18,8 @@ type Props = {
   record: ReviewRecord | undefined;
   /** Why a verdict cannot be given right now; `null` = it can. */
   blocked: ReviewBlock | null;
+  /** Dataset facts about the selected box; `null` when no box is selected. */
+  evidence: BoxEvidence | null;
   onVerdict: (verdict: Verdict) => void;
   onToggleReason: (reason: RejectReason) => void;
   onNote: (note: string) => void;
@@ -42,6 +45,7 @@ type Props = {
 export function ReviewControls({
   record,
   blocked,
+  evidence,
   onVerdict,
   onToggleReason,
   onNote,
@@ -57,6 +61,7 @@ export function ReviewControls({
 
   return (
     <div className="shrink-0 flex flex-col gap-2 px-3 py-2 border-b border-zinc-800">
+      <EvidenceStrip evidence={evidence} />
       <div className="flex gap-2">
         <VerdictButton
           tone="approve"

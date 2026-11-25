@@ -11,9 +11,10 @@ describe('resolveShortcut — key map', () => {
     expect(press('u')).toEqual({ type: 'verdict', verdict: 'unsure' });
   });
 
-  it('maps C to clear, N to next frame', () => {
+  it('maps C to clear, N to next frame, Z to the camera zoom', () => {
     expect(press('c')).toEqual({ type: 'clear' });
     expect(press('n')).toEqual({ type: 'next-frame' });
+    expect(press('z')).toEqual({ type: 'toggle-zoom' });
   });
 
   it('maps J / K to next / previous in the queue', () => {
@@ -58,7 +59,7 @@ describe('resolveShortcut — when shortcuts must not fire', () => {
   });
 
   it('acts once per press for verdicts, clear, reasons and frame jumps', () => {
-    for (const key of ['a', 'r', 'u', 'c', 'n', '2']) {
+    for (const key of ['a', 'r', 'u', 'c', 'n', 'z', '2']) {
       expect(press(key, { repeat: true })).toBeNull();
     }
   });

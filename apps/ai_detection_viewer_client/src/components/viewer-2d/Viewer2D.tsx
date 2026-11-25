@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { Frame } from '@/lib/types';
+import type { Detection2D, Frame } from '@/lib/types';
+import { BOX_EDGES, BOX_FRONT_FACE, zoomRegion } from '@/lib/geometry';
 import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
 import { frameHasConfidence } from '@/lib/selectors';
 import { PANEL_CLASS, ViewerLabel } from '@/components/workspace';
@@ -15,12 +16,36 @@ type Viewer2DProps = {
   visibleIds?: Set<string>;
   // (F3) Name tag in the top-left corner (e.g. the camera name). Optional.
   label?: string;
+  // (F4) Zoom mode. When true and the selected box is in this image, the view
+  // crops to the area around it and draws the projected 3D box (its 12 edges,
+  // front face highlighted) instead of the bounding rectangle. With nothing
+  // selected — or a box that is not in this image — the full image is shown.
+  zoom?: boolean;
+  // (F4) Flips Full ↔ Zoom. When omitted the toggle is not rendered and the
+  // viewer behaves exactly as before F4 (COCO).
+  onToggleZoom?: () => void;
+  // (F4) Key shown next to the toggle (the page owns the shortcut).
+  zoomShortcut?: string;
 };
 
 const SELECTED_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_WIDTH = 2;
+// Zoom-mode strokes are in SCREEN pixels (`vector-effect: non-scaling-stroke`):
+// the crop changes with every box, and widths given in image pixels would get
+// thicker or thinner with it.
+const WIRE_COLOR = '#ffffff';
+const FRONT_COLOR = '#38bdf8'; // sky-400
 
-export function Viewer2D({ frame, selectedId, onSelect, visibleIds, label }: Viewer2DProps) {
+export function Viewer2D({
+  frame,
+  selectedId,
+  onSelect,
+  visibleIds,
+  label,
+  zoom = false,
+  onToggleZoom,
+  zoomShortcut,
+}: Viewer2DProps) {
   const [imageError, setImageError] = useState(false);
   useEffect(() => { setImageError(false); }, [frame.id]);
   // 화면에 그릴 2D detection 목록을 만드는 부분. SVG는 CSS z-index를 무시하고
@@ -37,6 +62,25 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds, label }: Vie
         a.bbox.width * a.bbox.height - b.bbox.width * b.bbox.height,
     );
   const showConfidence = frameHasConfidence(frame);
+
+  // (F4) What the zoom centres on: the selected box, if it is drawn here.
+  const selected = selectedId
+    ? detections.find((d) => d.id === selectedId) ?? null
+    : null;
+  const zoomed = zoom && selected !== null;
+  const region = zoomed
+    ? zoomRegion(selected.bbox, frame.imageWidth, frame.imageHeight)
+    : { x: 0, y: 0, width: frame.imageWidth, height: frame.imageHeight };
+  // The selected object exists in 3D but has no projection in this image
+  // (beside / behind the camera, Edge_F#2 Case 1). Say so, instead of leaving
+  // the reviewer looking for a highlight that cannot be there. Only on viewers
+  // that have the zoom toggle, i.e. where boxes are projections of 3D boxes.
+  const outsideImage =
+    onToggleZoom !== undefined &&
+    selectedId != null &&
+    !frame.detections2D.some((d) => d.id === selectedId) &&
+    frame.detections3D.some((d) => d.id === selectedId);
+
   return (
     // 크기는 부모 칸이 정한다(F3: WorkspaceShell). 이 컴포넌트는 받은 칸을 채우기만
     // 하고, 사진은 preserveAspectRatio="meet"로 칸 안에 비율을 유지해 들어간다.
@@ -51,8 +95,11 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds, label }: Vie
       onClick={() => onSelect?.(null)}
     >
     {label && <ViewerLabel>{label}</ViewerLabel>}
+    {onToggleZoom && (
+      <ZoomToggle zoom={zoom} onToggle={onToggleZoom} shortcut={zoomShortcut} />
+    )}
     <svg
-      viewBox={`0 0 ${frame.imageWidth} ${frame.imageHeight}`}
+      viewBox={`${region.x} ${region.y} ${region.width} ${region.height}`}
       preserveAspectRatio="xMidYMid meet"
       className="w-full h-full block"
     >
@@ -77,12 +124,12 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds, label }: Vie
             fill="#27272a"
           />
           <text
-            x={frame.imageWidth / 2}
-            y={frame.imageHeight / 2}
+            x={region.x + region.width / 2}
+            y={region.y + region.height / 2}
             textAnchor="middle"
             dominantBaseline="middle"
             fill="#71717a"
-            fontSize={14}
+            fontSize={(14 * region.width) / frame.imageWidth}
             fontFamily="sans-serif"
           >
             Image unavailable
@@ -100,6 +147,32 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds, label }: Vie
       )}
       {detections.map((d) => {
         const isSelected = d.id === selectedId;
+
+        // (F4) Zoomed view: the selected box is drawn as its projected 3D box
+        // (below); the others stay as faint clickable rectangles without labels
+        // so they do not compete with it.
+        if (zoomed) {
+          return (
+            <rect
+              key={d.id}
+              x={d.bbox.x}
+              y={d.bbox.y}
+              width={d.bbox.width}
+              height={d.bbox.height}
+              fill="transparent"
+              stroke={isSelected ? 'none' : getClassColor(d.class)}
+              strokeOpacity={0.4}
+              strokeWidth={1.2}
+              vectorEffect="non-scaling-stroke"
+              className="cursor-pointer"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect?.(d.id);
+              }}
+            />
+          );
+        }
+
         const color = isSelected ? SELECTED_COLOR : getClassColor(d.class);
         const strokeWidth = isSelected ? SELECTED_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;
         // Measured (nuScenes) frames: class only — the 1.0 is a parser
@@ -154,7 +227,121 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds, label }: Vie
           </g>
         );
       })}
+      {zoomed && <ProjectedBox detection={selected} />}
     </svg>
+    {zoomed && selected.corners && (
+      <span className="absolute left-2 bottom-2 z-10 pointer-events-none select-none inline-flex items-center gap-2 rounded px-2 py-0.5 text-[10px] text-zinc-300 bg-zinc-950/75 ring-1 ring-zinc-700">
+        <span className="inline-flex items-center gap-1">
+          <span className="w-3 h-0.5 bg-white" />
+          3D box projected
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span className="w-3 h-0.5 bg-sky-400" />
+          front
+        </span>
+      </span>
+    )}
+    {outsideImage && (
+      <span className="absolute left-1/2 bottom-2.5 z-10 -translate-x-1/2 whitespace-nowrap pointer-events-none select-none rounded px-2.5 py-1 text-[11px] text-amber-200 bg-zinc-950/80 ring-1 ring-amber-500/45">
+        Selected box is outside {label ?? 'this camera'} · check it in the 3D view
+      </span>
+    )}
     </div>
+  );
+}
+
+/**
+ * (F4) The selected 3D box as it projects into the photo: its 12 edges in
+ * white, with the front (heading) face outlined in sky blue and crossed, so the
+ * reviewer can compare the box's extent AND orientation with the object. Falls
+ * back to the plain bounding rectangle when the box carries no projected
+ * corners (data without them).
+ */
+function ProjectedBox({ detection }: { detection: Detection2D }) {
+  const corners = detection.corners;
+  if (!corners || corners.length !== 8) {
+    return (
+      <rect
+        x={detection.bbox.x}
+        y={detection.bbox.y}
+        width={detection.bbox.width}
+        height={detection.bbox.height}
+        fill="none"
+        stroke={WIRE_COLOR}
+        strokeWidth={2}
+        vectorEffect="non-scaling-stroke"
+        pointerEvents="none"
+      />
+    );
+  }
+  const front = new Set<number>(BOX_FRONT_FACE);
+  const line = (a: number, b: number, stroke: string, width: number, key: string) => (
+    <line
+      key={key}
+      x1={corners[a][0]}
+      y1={corners[a][1]}
+      x2={corners[b][0]}
+      y2={corners[b][1]}
+      stroke={stroke}
+      strokeWidth={width}
+      strokeLinecap="round"
+      vectorEffect="non-scaling-stroke"
+    />
+  );
+  const [f0, f1, f2, f3] = BOX_FRONT_FACE;
+  return (
+    <g pointerEvents="none">
+      {BOX_EDGES.filter(([a, b]) => !(front.has(a) && front.has(b))).map(([a, b]) =>
+        line(a, b, WIRE_COLOR, 1.6, `e${a}-${b}`),
+      )}
+      {BOX_FRONT_FACE.map((a, i) =>
+        line(a, BOX_FRONT_FACE[(i + 1) % 4], FRONT_COLOR, 2.2, `f${a}`),
+      )}
+      {/* Diagonals mark the front face so the heading reads at a glance. */}
+      {line(f0, f2, FRONT_COLOR, 1.2, 'd1')}
+      {line(f1, f3, FRONT_COLOR, 1.2, 'd2')}
+    </g>
+  );
+}
+
+function ZoomToggle({
+  zoom,
+  onToggle,
+  shortcut,
+}: {
+  zoom: boolean;
+  onToggle: () => void;
+  shortcut?: string;
+}) {
+  const segment = (active: boolean) =>
+    [
+      'px-1.5 py-0.5 rounded-[3px]',
+      active ? 'bg-sky-400/25 text-sky-100 ring-1 ring-inset ring-sky-400/45' : 'text-zinc-400',
+    ].join(' ');
+  return (
+    <button
+      type="button"
+      aria-pressed={zoom}
+      aria-label={zoom ? 'Show the full camera image' : 'Zoom the camera image to the selected box'}
+      aria-keyshortcuts={shortcut}
+      title="Full image / zoom to the selected box"
+      // The wrapper deselects on click; this is a control, not empty space.
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle();
+        // Same reason as the verdict buttons: do not leave a focused button
+        // behind for Space / Enter to re-trigger.
+        if (e.detail > 0) e.currentTarget.blur();
+      }}
+      className="absolute top-2 right-2 z-10 inline-flex items-center gap-0.5 rounded p-0.5 text-[10px] font-semibold uppercase tracking-wider bg-zinc-950/75 ring-1 ring-zinc-700 hover:ring-zinc-500"
+    >
+      <span className={segment(!zoom)}>Full</span>
+      <span className={segment(zoom)}>Zoom</span>
+      {shortcut && (
+        <kbd className="ml-1 mr-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-[3px] border border-zinc-600 font-mono text-[10px] leading-none text-zinc-500">
+          {shortcut}
+        </kbd>
+      )}
+    </button>
   );
 }

@@ -20,6 +20,9 @@ export {
   cameraToPixel,
   boxCornersEgo,
   projectCornersToBbox,
+  projectBoxCorners,
+  BOX_EDGES,
+  BOX_FRONT_FACE,
   type Intrinsic,
   type PixelProjection,
 } from './projection';
@@ -27,3 +30,4 @@ export {
 // its result type to avoid a duplicate Vec3 export.)
 export { frameBoxesForCamera, selectFollowTarget, type CameraFraming } from './camera-framing';
 export { lerpVec3, slerpQuat } from './interpolation';
+export { zoomRegion, type ImageRegion } from './camera-zoom';

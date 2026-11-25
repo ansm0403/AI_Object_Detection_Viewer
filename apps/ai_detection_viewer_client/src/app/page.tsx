@@ -27,6 +27,7 @@ import {
   useReviewShortcuts,
 } from '@/components/review';
 import {
+  SHORTCUT_KEYS,
   buildQueue,
   getReview,
   getReviewBlock,
@@ -79,6 +80,11 @@ export default function Index() {
   // (F4) How the object list / review queue is ordered. A VIEW preference, like
   // `cameraMode`: page-level, not saved, reset on a dataset switch.
   const [queueOrder, setQueueOrder] = useState<QueueOrder>('scene');
+  // (F4-D) Camera image: zoom on the selected box (default) or the full frame.
+  // In the full frame a distant box is ~14×25 px — too small to judge — so
+  // review starts zoomed; Z or the corner toggle shows the whole photo. A VIEW
+  // flag, like `cameraMode`: no effect on selection (Rule #2).
+  const [cameraZoom, setCameraZoom] = useState(true);
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -394,6 +400,9 @@ export default function Index() {
         case 'next-frame':
           handleNextReviewFrame();
           break;
+        case 'toggle-zoom':
+          setCameraZoom((z) => !z);
+          break;
       }
     },
     [
@@ -550,6 +559,18 @@ export default function Index() {
   const label3D = isMeasured ? 'LiDAR · measured 3D' : '3D · estimated from 2D';
   const label2D = isMeasured ? 'CAM_FRONT' : 'Image';
   const frameReviewCounts = reviewProgress?.byFrame.get(currentFrame.id);
+  // (F4-D) Dataset facts about the selected box, for the strip above the
+  // verdict buttons. Null when nothing (in this frame) is selected.
+  const selectedBox = selectedObjectId
+    ? currentFrame.detections3D.find((d) => d.id === selectedObjectId) ?? null
+    : null;
+  const selectedEvidence = selectedBox
+    ? {
+        lidarPoints: selectedBox.annotation?.lidarPoints,
+        visibility: selectedBox.annotation?.visibility,
+        inCamera: currentFrame.detections2D.some((d) => d.id === selectedBox.id),
+      }
+    : null;
 
   return (
     <WorkspaceShell
@@ -622,6 +643,11 @@ export default function Index() {
           onSelect={setSelectedObject}
           visibleIds={visibleIds}
           label={label2D}
+          // (F4-D) Zoom + projected 3D box, only where 2D boxes ARE projections
+          // of reviewed 3D boxes. COCO gets no toggle and stays as before.
+          zoom={reviewEnabled && cameraZoom}
+          onToggleZoom={reviewEnabled ? () => setCameraZoom((z) => !z) : undefined}
+          zoomShortcut={SHORTCUT_KEYS.zoom}
         />
       }
       details={
@@ -651,6 +677,7 @@ export default function Index() {
                         : undefined
                     }
                     blocked={reviewBlock}
+                    evidence={selectedEvidence}
                     onVerdict={handleVerdict}
                     onToggleReason={handleToggleReason}
                     onNote={handleNote}

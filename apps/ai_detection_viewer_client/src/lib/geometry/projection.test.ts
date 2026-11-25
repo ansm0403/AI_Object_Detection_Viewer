@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BOX_EDGES,
+  BOX_FRONT_FACE,
   boxCornersEgo,
   cameraToPixel,
   egoToCamera,
+  projectBoxCorners,
   projectCornersToBbox,
   type Intrinsic,
 } from './projection';
@@ -119,5 +122,84 @@ describe('projectCornersToBbox', () => {
     expect(bbox).not.toBeNull();
     expect(bbox!.x).toBe(0); // clamped left edge
     expect(bbox!.x + bbox!.width).toBeLessThanOrEqual(IMAGE_W);
+  });
+});
+
+// F4 — the camera view draws the projected 3D box itself, so the ORDER of the
+// corners (and the edge / front-face tables written against it) is a contract.
+describe('box corner order, BOX_EDGES, BOX_FRONT_FACE', () => {
+  // Identity orientation, [l,w,h] = [4,2,1] at the origin.
+  const corners = boxCornersEgo([0, 0, 0], [4, 2, 1], [0, 0, 0, 1]);
+
+  it('orders corners as index = 4·ix + 2·iy + iz (− side = 0, + side = 1)', () => {
+    expect(corners[0]).toEqual([-2, -1, -0.5]);
+    expect(corners[1]).toEqual([-2, -1, 0.5]);
+    expect(corners[2]).toEqual([-2, 1, -0.5]);
+    expect(corners[4]).toEqual([2, -1, -0.5]);
+    expect(corners[7]).toEqual([2, 1, 0.5]);
+  });
+
+  it('has 12 distinct edges, each joining corners that differ along exactly one axis', () => {
+    expect(BOX_EDGES).toHaveLength(12);
+    expect(new Set(BOX_EDGES.map(([a, b]) => `${Math.min(a, b)}-${Math.max(a, b)}`)).size).toBe(12);
+    for (const [a, b] of BOX_EDGES) {
+      const differing = [0, 1, 2].filter((axis) => corners[a][axis] !== corners[b][axis]);
+      expect(differing).toHaveLength(1);
+    }
+  });
+
+  it('front face = the four corners on the +x (heading) side, as a closed loop', () => {
+    expect(BOX_FRONT_FACE).toHaveLength(4);
+    for (const index of BOX_FRONT_FACE) expect(corners[index][0]).toBe(2);
+    // Consecutive loop corners share an edge (so it draws a rectangle, not an X).
+    BOX_FRONT_FACE.forEach((a, i) => {
+      const b = BOX_FRONT_FACE[(i + 1) % 4];
+      const isEdge = BOX_EDGES.some(([p, q]) => (p === a && q === b) || (p === b && q === a));
+      expect(isEdge).toBe(true);
+    });
+  });
+
+  it('the front face follows the box heading when the box is rotated', () => {
+    // Yaw +90° about z: the local +x (front) axis now points along ego +y.
+    const yawed = boxCornersEgo([0, 0, 0], [4, 2, 1], [0, 0, Math.SQRT1_2, Math.SQRT1_2]);
+    for (const index of BOX_FRONT_FACE) expect(yawed[index][1]).toBeCloseTo(2, 10);
+  });
+});
+
+describe('projectBoxCorners', () => {
+  it('returns the pixel of every corner, in corner order', () => {
+    // [l,w,h] = [2,2,2] centred at (0,0,10): the near face is at z=9, the far at z=11.
+    const corners = boxCornersEgo([0, 0, 10], [2, 2, 2], [0, 0, 0, 1]);
+    const pixels = projectBoxCorners(corners, IDENTITY_SENSOR, K);
+    expect(pixels).toHaveLength(8);
+    // corner 0 = (-1,-1,9) → u = 800 − 1000/9, v = 450 − 1000/9
+    expect(pixels![0][0]).toBeCloseTo(800 - 1000 / 9, 6);
+    expect(pixels![0][1]).toBeCloseTo(450 - 1000 / 9, 6);
+    // corner 7 = (1,1,11) → u = 800 + 1000/11, v = 450 + 1000/11
+    expect(pixels![7][0]).toBeCloseTo(800 + 1000 / 11, 6);
+    expect(pixels![7][1]).toBeCloseTo(450 + 1000 / 11, 6);
+  });
+
+  it('agrees with projectCornersToBbox: the rectangle is the bounds of the corners', () => {
+    const corners = boxCornersEgo([1, 0.5, 12], [4, 2, 1.5], [0, 0, 0.3826834, 0.9238795]);
+    const pixels = projectBoxCorners(corners, IDENTITY_SENSOR, K)!;
+    const bbox = projectCornersToBbox(corners, IDENTITY_SENSOR, K, IMAGE_W, IMAGE_H)!;
+    const us = pixels.map((p) => p[0]);
+    const vs = pixels.map((p) => p[1]);
+    expect(bbox.x).toBeCloseTo(Math.min(...us), 6);
+    expect(bbox.y).toBeCloseTo(Math.min(...vs), 6);
+    expect(bbox.x + bbox.width).toBeCloseTo(Math.max(...us), 6);
+    expect(bbox.y + bbox.height).toBeCloseTo(Math.max(...vs), 6);
+  });
+
+  it('returns null when any corner is behind the camera', () => {
+    const straddling = boxCornersEgo([0, 0, 0.5], [2, 2, 2], [0, 0, 0, 1]); // z from −0.5 to 1.5
+    expect(projectBoxCorners(straddling, IDENTITY_SENSOR, K)).toBeNull();
+  });
+
+  it('does not clamp to the image (the viewer clips)', () => {
+    const corners = boxCornersEgo([-7.9, 0, 10], [2, 2, 0], [0, 0, 0, 1]);
+    const pixels = projectBoxCorners(corners, IDENTITY_SENSOR, K)!;
+    expect(Math.min(...pixels.map((p) => p[0]))).toBeLessThan(0);
   });
 });
