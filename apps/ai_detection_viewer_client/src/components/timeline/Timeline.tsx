@@ -28,6 +28,27 @@ type TimelineProps = {
   // "reviewed/total" instead of the bare box count, so finished and untouched
   // frames can be told apart at a glance. Omitted on COCO (not reviewed).
   reviewCounts?: Map<string, ReviewCounts>;
+  // (F5) Ready-made badge per frame id. When passed, a frame's badge shows this
+  // instead of the counts above — the timeline does not know what the text
+  // means (evaluate mode passes "N missed"). A frame without an entry falls
+  // back to its count.
+  badges?: Map<string, TimelineBadge>;
+};
+
+export type TimelineBadge = {
+  text: string;
+  /** Tooltip. */
+  title?: string;
+  /** `alert` = needs attention (rose), `good` = nothing wrong (emerald), `muted` = no data. */
+  tone: 'alert' | 'good' | 'muted';
+};
+
+const BADGE_BASE = 'absolute top-1 right-1 px-1.5 py-0.5 text-[10px] tabular-nums rounded ring-1';
+
+const BADGE_TONE: Record<TimelineBadge['tone'], string> = {
+  alert: 'bg-zinc-950/80 text-rose-300 ring-rose-400/40',
+  good: 'bg-zinc-950/80 text-emerald-300 ring-zinc-800',
+  muted: 'bg-zinc-950/80 text-zinc-500 ring-zinc-800',
 };
 
 export function Timeline({
@@ -40,6 +61,7 @@ export function Timeline({
   onToggleCameraMode,
   onReset,
   reviewCounts,
+  badges,
 }: TimelineProps) {
   if (frames.length === 0) return null;
 
@@ -119,6 +141,7 @@ export function Timeline({
       <ul className="flex flex-1 min-w-0 items-center gap-2 overflow-x-auto px-2 py-1">
         {frames.map((frame, idx) => {
           const isActive = frame.id === selectedFrameId;
+          const badge = badges?.get(frame.id);
           return (
             <li key={frame.id} className="shrink-0">
               <button
@@ -155,10 +178,16 @@ export function Timeline({
                 {/* Object-count badge — always shown including 0. Counts 3D
                     boxes, the same basis as the header and the object list
                     (F3 decision 4). */}
-                <CountBadge
-                  total={frame.detections3D.length}
-                  reviewed={reviewCounts?.get(frame.id)?.reviewed}
-                />
+                {badge ? (
+                  <span className={`${BADGE_BASE} ${BADGE_TONE[badge.tone]}`} title={badge.title}>
+                    {badge.text}
+                  </span>
+                ) : (
+                  <CountBadge
+                    total={frame.detections3D.length}
+                    reviewed={reviewCounts?.get(frame.id)?.reviewed}
+                  />
+                )}
                 <span
                   className={[
                     'absolute bottom-0 left-0 right-0 px-1 py-0.5',
@@ -184,7 +213,7 @@ export function Timeline({
 // "reviewed/total" — green once anything is reviewed, and a filled green badge
 // when the whole frame is done.
 function CountBadge({ total, reviewed }: { total: number; reviewed: number | undefined }) {
-  const base = 'absolute top-1 right-1 px-1.5 py-0.5 text-[10px] tabular-nums rounded ring-1';
+  const base = BADGE_BASE;
   if (reviewed === undefined) {
     return <span className={`${base} bg-zinc-950/80 text-zinc-300 ring-zinc-800`}>{total}</span>;
   }

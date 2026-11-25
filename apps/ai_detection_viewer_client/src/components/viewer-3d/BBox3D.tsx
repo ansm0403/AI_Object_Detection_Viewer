@@ -43,6 +43,11 @@ type Props = {
   // (nuScenes) frames, whose 1.0 is a parser placeholder — the label then
   // omits the percent (Rule #6). Decided by `frameHasConfidence(frame)` in Scene.
   showConfidence?: boolean;
+  // (F5) Wire colour to use INSTEAD of the class colour (evaluate mode passes
+  // the outcome colour). Only the colour value changes — the box is not rebuilt.
+  // Selection (white) and hover (a lighter tint) still apply on top; the label
+  // pill keeps the class colour. Omitted → the class colour, as before.
+  color?: string;
   // (F2-D-2) Inter-frame tween inputs (nuScenes autoplay; absent on COCO).
   // `frameId` changes each keyframe and resets the tween clock; `playing` gates
   // the tween (off → exact measured pose, Rule #6); `nextCenter`/`nextRotation`
@@ -58,6 +63,7 @@ export function BBox3D({
   isSelected = false,
   onClick,
   showConfidence = true,
+  color,
   frameId,
   playing = false,
   nextCenter,
@@ -133,18 +139,21 @@ export function BBox3D({
     }
   });
 
+  // The class colour: always the colour of the label pill.
   const baseColor = getClassColor(detection.class);
+  // (F5) The wire's resting colour: the override when one is given.
+  const restColor = color ?? baseColor;
 
-  // Lightened class tint for the hover look. Memoized so the material isn't
-  // handed a fresh THREE.Color every render.
+  // Lightened tint for the hover look. Memoized so the material isn't handed a
+  // fresh THREE.Color every render.
   const hoverColor = useMemo(
-    () => new THREE.Color(baseColor).lerp(new THREE.Color('#ffffff'), HOVER_TINT_AMOUNT),
-    [baseColor],
+    () => new THREE.Color(restColor).lerp(new THREE.Color('#ffffff'), HOVER_TINT_AMOUNT),
+    [restColor],
   );
 
   // Selection wins over hover, so a selected box keeps its white + pulse look
   // even while hovered.
-  const wireColor = isSelected ? SELECTED_COLOR : hovered ? hoverColor : baseColor;
+  const wireColor = isSelected ? SELECTED_COLOR : hovered ? hoverColor : restColor;
 
   // Cursor feedback. Only the effect-when-hovered branch touches the cursor, so
   // its cleanup runs both on un-hover AND on unmount — that unmount path is the

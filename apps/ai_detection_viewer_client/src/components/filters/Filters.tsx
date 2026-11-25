@@ -20,6 +20,15 @@ type Props = {
   // slider instead. Exactly one is shown; we never present a metre filter over
   // estimated depth (Immutable Rule #6).
   filterMode: 'confidence' | 'distance';
+  // (F5) Evaluate mode reuses the confidence slider as the model's minimum
+  // score: another name, and a resting value that is not 0. All three default
+  // to the plain confidence filter, so the COCO bar is unchanged.
+  thresholdLabel?: string;
+  thresholdTitle?: string;
+  /** The threshold's resting value — what Reset returns to and compares with. */
+  defaultThreshold?: number;
+  /** (F5) What the count on the right counts: "40/40 visible" (default) or "26/26 results". */
+  countNoun?: string;
   maxDistance: number;
   onChangeThreshold: (v: number) => void;
   onChangeDistance: (v: number) => void;
@@ -35,6 +44,10 @@ export function Filters({
   visibleCount,
   totalCount,
   filterMode,
+  thresholdLabel,
+  thresholdTitle,
+  defaultThreshold = 0,
+  countNoun = 'visible',
   maxDistance,
   onChangeThreshold,
   onChangeDistance,
@@ -47,7 +60,7 @@ export function Filters({
   // ignored so toggling datasets doesn't leave Reset spuriously enabled.
   const metricIsDefault =
     filterMode === 'confidence'
-      ? confidenceThreshold === 0
+      ? confidenceThreshold === defaultThreshold
       : maxDistance >= DISTANCE_MAX;
   const isDefault = metricIsDefault && visibleClasses.size === 0;
 
@@ -62,7 +75,12 @@ export function Filters({
         {filterMode === 'distance' ? (
           <DistanceSlider value={maxDistance} onChange={onChangeDistance} />
         ) : (
-          <ConfidenceSlider value={confidenceThreshold} onChange={onChangeThreshold} />
+          <ConfidenceSlider
+            value={confidenceThreshold}
+            onChange={onChangeThreshold}
+            label={thresholdLabel}
+            title={thresholdTitle}
+          />
         )}
       </div>
       <span aria-hidden="true" className="hidden lg:block w-px h-5 bg-zinc-800 shrink-0" />
@@ -78,7 +96,7 @@ export function Filters({
         onClick={(e) => e.stopPropagation()}
       >
         <span className="text-xs text-zinc-400 tabular-nums">
-          {visibleCount}/{totalCount} visible
+          {visibleCount}/{totalCount} {countNoun}
         </span>
         <button
           type="button"

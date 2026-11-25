@@ -29,6 +29,10 @@ type HeaderProps = {
   practiceActive?: boolean;
   practiceRequested?: boolean;
   onTogglePractice?: () => void;
+  // (F5) A control placed after the provenance badge (the page passes the
+  // Review | Evaluate switch on nuScenes). Like `children`, the Header does not
+  // know what it is.
+  modeSwitch?: ReactNode;
 };
 
 const DATASETS: { id: DatasetId; label: string }[] = [
@@ -47,6 +51,7 @@ export function Header({
   practiceActive = false,
   practiceRequested = false,
   onTogglePractice,
+  modeSwitch,
 }: HeaderProps) {
   const measured = source === 'nuscenes-measured';
   // Only render a badge when we know the provenance.
@@ -56,6 +61,10 @@ export function Header({
         // are not the dataset's annotations any more — say that, in the amber
         // used for "not the real thing".
         text: 'Practice · labels modified',
+        // (F5) With the mode switch in the bar, the full text no longer fits
+        // one line below 1280px. The short form still says the one thing that
+        // matters there — this is NOT "Measured"; the tooltip has the rest.
+        shortText: 'Practice',
         className: 'bg-amber-500/15 text-amber-300 ring-amber-500/40',
         title:
           'Practice set — some boxes were deliberately changed. These are NOT the original nuScenes annotations.',
@@ -63,6 +72,7 @@ export function Header({
     : source
     ? {
         text: measured ? 'Measured' : 'Estimated',
+        shortText: undefined,
         // Measured = real sensor 3D (emerald); Estimated = inferred from 2D (amber).
         className: measured
           ? 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30'
@@ -76,7 +86,11 @@ export function Header({
   return (
     // (F3) A flush app bar across the top of the workspace (not a floating card).
     <header className="flex items-center justify-between flex-wrap gap-x-4 gap-y-2 h-full bg-zinc-900 border-b border-zinc-800 px-4 py-2">
-      <div className="flex items-center gap-3">
+      {/* (F5) flex-wrap: with the mode switch this group is wider than a phone
+          screen (500px at 390px wide) and pushed the page sideways. On the
+          supported desktop widths (≥ 1024px) it still fits one line, so nothing
+          wraps there (Edge_F#5 Case 4). */}
+      <div className="flex items-center flex-wrap gap-x-3 gap-y-1.5">
         <span className="text-sm font-semibold text-zinc-100 tracking-tight">
           AI Detection Viewer
         </span>
@@ -113,9 +127,18 @@ export function Header({
             title={badge.title}
             className={`text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ring-1 ring-inset ${badge.className}`}
           >
-            {badge.text}
+            {badge.shortText ? (
+              <>
+                <span className="xl:hidden">{badge.shortText}</span>
+                <span className="hidden xl:inline">{badge.text}</span>
+              </>
+            ) : (
+              badge.text
+            )}
           </span>
         )}
+
+        {modeSwitch}
 
         {onTogglePractice && (
           <button

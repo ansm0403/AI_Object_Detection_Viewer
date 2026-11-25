@@ -7,6 +7,7 @@ import { fetchJson } from '@/lib/data/fetch-json';
 import { enrichFrame } from '@/lib/geometry';
 import { AUTOPLAY_INTERVAL_MS, nextFrameIndex } from '@/lib/sequence';
 import {
+  detectionDistance,
   selectClassCounts,
   selectConfidenceBuckets,
   selectIdsWithinDistance,
@@ -18,9 +19,33 @@ import { Viewer3D } from '@/components/viewer-3d';
 import { ObjectList } from '@/components/object-list';
 import { Filters } from '@/components/filters';
 import { Header, type DatasetId } from '@/components/header';
-import { Timeline } from '@/components/timeline';
+import { Timeline, type TimelineBadge } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
 import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
+import {
+  BoxColorLegend,
+  EvaluationHeadline,
+  EvaluationPanel,
+  ModeSwitch,
+  OverlayLegend,
+  ResultList,
+  SelectedResult,
+  useFrameResults,
+  usePredictions,
+  type WorkMode,
+} from '@/components/evaluation';
+import {
+  DEFAULT_MIN_SCORE,
+  IOU_THRESHOLD,
+  evaluateFrames,
+  findResult,
+  isPredictionId,
+  selectionIdOf,
+  visibilityText,
+  type EvalKind,
+  type EvaluationRules,
+} from '@/lib/evaluation';
+import { DISTANCE_MAX } from '@/lib/ui/distance';
 import {
   ExportMenu,
   PracticeScoreCard,
@@ -66,6 +91,13 @@ const DATASET_SOURCES: Record<DatasetId, string> = {
   nuscenes: '/sample-data/nuscenes/nuscenes.json',
 };
 
+// (F5) Camera-detector predictions for a dataset, written offline by
+// scripts/predict_nuscenes.py. A separate file on purpose: the labels file does
+// not change when the model is re-run, and review works without it.
+const PREDICTION_SOURCES: Partial<Record<DatasetId, string>> = {
+  nuscenes: '/sample-data/nuscenes/predictions.json',
+};
+
 // Set intersection (no Set.prototype.intersection in our target runtimes).
 const intersectIds = (a: Set<string>, b: Set<string>): Set<string> =>
   new Set([...a].filter((id) => b.has(id)));
@@ -109,6 +141,18 @@ export default function Index() {
   // "practice" or "measured" for one render while the other data is still shown.
   const [practice, setPractice] = useState(false);
   const [plantedErrors, setPlantedErrors] = useState<PlantedError[] | null>(null);
+  // (F5) What the workspace is used for: reviewing the labels, or evaluating a
+  // camera detector against them. A VIEW setting like `cameraMode` — the frame
+  // and the selected object are shared by both modes (Rule #2: still one
+  // `selectedObjectId`). nuScenes only; reset to 'review' on a dataset switch.
+  const [mode, setMode] = useState<WorkMode>('review');
+  // The model's predictions, loaded next to the dataset. Independent of the
+  // dataset request: if this one fails, review still works.
+  const predictions = usePredictions(PREDICTION_SOURCES[datasetId] ?? null);
+  // (F5) Which outcomes the result list and the camera image show (empty = all
+  // four, the same convention as `visibleClasses`). A VIEW filter of evaluate
+  // mode; it never changes a number.
+  const [shownKinds, setShownKinds] = useState<ReadonlySet<EvalKind>>(() => new Set());
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -268,15 +312,33 @@ export default function Index() {
     return next === null ? null : frames[next];
   }, [tracksAcrossFrames, frames, selectedFrameId]);
 
+  // (F4) Review applies to MEASURED 3D boxes only. COCO's 3D is estimated from
+  // 2D — there is no annotated 3D box to approve or reject (Rule #6) — so on
+  // COCO none of the review UI is rendered and the page looks as it did in F3.
+  const reviewEnabled =
+    datasetId === 'nuscenes' && frames?.[0]?.source === 'nuscenes-measured';
+  // (F5) Evaluate mode is on screen. Needs the same measured labels as review,
+  // and the REAL ones: a practice set has deliberately wrong labels and cannot
+  // be the answer key for a model (keyed on `plantedErrors`, i.e. on the data
+  // actually shown, like every other honesty check).
+  const evaluating = mode === 'evaluate' && reviewEnabled && plantedErrors === null;
+
+  // In evaluate mode the store's `confidenceThreshold` is the MODEL's minimum
+  // score (set on entering, see `handleSelectMode`). It must not filter the
+  // labels — they carry a placeholder confidence, not a score — and the
+  // distance slider is not shown, so the distance filter is off as well.
+  const labelThreshold = evaluating ? 0 : confidenceThreshold;
+  const labelMaxDistance = evaluating ? DISTANCE_MAX : maxDistance;
+
   // Distance filter (F2-A): ids of 3D boxes within maxDistance of the ego
   // vehicle. On COCO this passes everything (estimated centers are well within
   // the 90 m default) so it is a no-op there; on nuScenes it is the real filter.
   const withinDistance = useMemo(
     () =>
       currentFrame
-        ? selectIdsWithinDistance(currentFrame.detections3D, maxDistance)
+        ? selectIdsWithinDistance(currentFrame.detections3D, labelMaxDistance)
         : new Set<string>(),
-    [currentFrame, maxDistance],
+    [currentFrame, labelMaxDistance],
   );
 
   // Two visible-id sets. The 2D set drives Viewer2D; the 3D set drives Viewer3D
@@ -288,11 +350,11 @@ export default function Index() {
     () =>
       currentFrame
         ? intersectIds(
-            selectVisibleDetectionIds(currentFrame, confidenceThreshold, visibleClasses),
+            selectVisibleDetectionIds(currentFrame, labelThreshold, visibleClasses),
             withinDistance,
           )
         : new Set<string>(),
-    [currentFrame, confidenceThreshold, visibleClasses, withinDistance],
+    [currentFrame, labelThreshold, visibleClasses, withinDistance],
   );
   // The 3D rule as a function of the frame, so the SAME rule can be applied to
   // a frame other than the current one (F4: the queue of the frame we are about
@@ -300,10 +362,10 @@ export default function Index() {
   const visibleIds3DOf = useCallback(
     (frame: Frame) =>
       intersectIds(
-        selectVisibleDetectionIds3D(frame, confidenceThreshold, visibleClasses),
-        selectIdsWithinDistance(frame.detections3D, maxDistance),
+        selectVisibleDetectionIds3D(frame, labelThreshold, visibleClasses),
+        selectIdsWithinDistance(frame.detections3D, labelMaxDistance),
       ),
-    [confidenceThreshold, visibleClasses, maxDistance],
+    [labelThreshold, visibleClasses, labelMaxDistance],
   );
   const visibleIds3D = useMemo(
     () => (currentFrame ? visibleIds3DOf(currentFrame) : new Set<string>()),
@@ -322,11 +384,76 @@ export default function Index() {
     [currentFrame],
   );
 
-  // (F4) Review applies to MEASURED 3D boxes only. COCO's 3D is estimated from
-  // 2D — there is no annotated 3D box to approve or reject (Rule #6) — so on
-  // COCO none of the review UI is rendered and the page looks as it did in F3.
-  const reviewEnabled =
-    datasetId === 'nuscenes' && frames?.[0]?.source === 'nuscenes-measured';
+  // (F5) The evaluation: every frame's labels against the model's predictions
+  // at the current minimum score. Computed here, at the selector level, from
+  // (frames, predictions, score) — nothing is filtered when the file is parsed,
+  // so moving the slider re-scores everything. Only computed in evaluate mode.
+  const evaluationRules = useMemo<EvaluationRules>(
+    () => ({ minScore: confidenceThreshold, iouThreshold: IOU_THRESHOLD }),
+    [confidenceThreshold],
+  );
+  const evaluation = useMemo(
+    () =>
+      evaluating && frames && predictions.set
+        ? evaluateFrames(frames, predictions.set, evaluationRules)
+        : null,
+    [evaluating, frames, predictions.set, evaluationRules],
+  );
+  // Timeline badges in evaluate mode: how many labels the model missed in each
+  // frame. A frame the model was not run on says so instead of "0 missed".
+  const evaluationBadges = useMemo(() => {
+    if (!evaluation || !frames) return undefined;
+    const badges = new Map<string, TimelineBadge>();
+    for (const frame of frames) {
+      const result = evaluation.byFrame.get(frame.id);
+      if (!result) {
+        badges.set(frame.id, {
+          text: 'no preds',
+          tone: 'muted',
+          title: 'No predictions for this frame — not evaluated',
+        });
+        continue;
+      }
+      const { missed, found, falseAlarm } = result.counts;
+      badges.set(frame.id, {
+        text: `${missed} missed`,
+        tone: missed > 0 ? 'alert' : 'good',
+        title: `${missed} missed · ${found} found · ${falseAlarm} false alarm${falseAlarm === 1 ? '' : 's'}`,
+      });
+    }
+    return badges;
+  }, [evaluation, frames]);
+  // (F5) The current frame's results, as the list, the camera image and the
+  // J / K queue need them. `null` evaluation → empty list, no overlay.
+  const frameEvaluation = (currentFrame && evaluation?.byFrame.get(currentFrame.id)) ?? null;
+  const frameResults = useFrameResults({
+    frame: currentFrame,
+    predictions: currentFrame ? predictions.set?.byFrame.get(currentFrame.id) : undefined,
+    frameEvaluation,
+    selectedId: selectedObjectId,
+    classes: visibleClasses,
+    kinds: shownKinds,
+  });
+  const handleToggleKind = useCallback((kind: EvalKind) => {
+    setShownKinds((prev) => {
+      const next = new Set(prev);
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
+      return next;
+    });
+  }, []);
+  // (F5) A false alarm is selected by its PREDICTION id, through the same
+  // `selectedObjectId` as everything else (Rule #2). Such an id only means
+  // something while that prediction is a result on screen: drop it when the
+  // frame changes, when evaluate mode is left, or when the score slider moves
+  // past it — otherwise an invisible "selection" would linger.
+  useEffect(() => {
+    if (!selectedObjectId || !isPredictionId(selectedObjectId)) return;
+    if (!frameEvaluation || !findResult(frameEvaluation, selectedObjectId)) {
+      setSelectedObject(null);
+    }
+  }, [selectedObjectId, frameEvaluation, setSelectedObject]);
+
   const reviewProgress = useMemo(
     () => (reviewEnabled && frames ? summarizeProgress(frames, reviews) : null),
     [reviewEnabled, frames, reviews],
@@ -472,6 +599,10 @@ export default function Index() {
   // the buttons use, so mouse and keyboard cannot drift apart.
   const handleReviewAction = useCallback(
     (action: ReviewAction) => {
+      // (F5) Evaluate mode only looks: moving through the list (J / K) and the
+      // camera zoom (Z) work; the keys that WRITE a review do nothing, so a
+      // stray "A" cannot approve a box whose verdict is not even on screen.
+      if (evaluating && action.type !== 'step' && action.type !== 'toggle-zoom') return;
       switch (action.type) {
         case 'verdict':
           handleVerdict(action.verdict);
@@ -483,7 +614,13 @@ export default function Index() {
           handleToggleReason(action.reason);
           break;
         case 'step': {
-          const id = stepInQueue(queue, selectedObjectId, action.direction);
+          // Evaluate mode walks the result list; review mode the box queue.
+          const current = evaluating
+            ? frameResults.selectedResult
+              ? selectionIdOf(frameResults.selectedResult)
+              : null
+            : selectedObjectId;
+          const id = stepInQueue(evaluating ? frameResults.queue : queue, current, action.direction);
           if (id) setSelectedObject(id);
           break;
         }
@@ -496,6 +633,9 @@ export default function Index() {
       }
     },
     [
+      evaluating,
+      frameResults.queue,
+      frameResults.selectedResult,
       handleVerdict,
       handleClearReview,
       handleToggleReason,
@@ -574,9 +714,40 @@ export default function Index() {
       setCameraMode('fixed'); // (F2-D-1) reset to the default overview camera
       setQueueOrder('scene'); // (F4) back to the dataset order
       setPractice(false); // (F4-F) practice is a nuScenes-only mode
+      setMode('review'); // (F5) evaluate is a nuScenes-only mode
+      setShownKinds(new Set()); // (F5) show every outcome again
     },
     [datasetId, setSelectedObject, resetFilters],
   );
+
+  // (F5) Switch between reviewing and evaluating. The frame and the selected
+  // object are kept. The store's one threshold changes meaning with the mode:
+  // in evaluate mode it is the model's minimum score and starts at the
+  // detector's default; in review mode on nuScenes there is no score to filter
+  // by, so it goes back to 0 (= off).
+  const evaluateBlocked =
+    practice || plantedErrors !== null
+      ? 'Not available in practice mode: its labels are deliberately modified, so they cannot be used to score a model. Turn Practice off first.'
+      : undefined;
+  const handleSelectMode = useCallback(
+    (next: WorkMode) => {
+      if (next === mode) return;
+      if (next === 'evaluate' && evaluateBlocked) return;
+      setMode(next);
+      setConfidenceThreshold(next === 'evaluate' ? DEFAULT_MIN_SCORE : 0);
+    },
+    [mode, evaluateBlocked, setConfidenceThreshold],
+  );
+  // Reset in evaluate mode: classes back to "all", score back to its default
+  // (not to 0, which would count every low-score guess as a prediction).
+  // `resetFilters` also clears the distance filter, which evaluate mode neither
+  // shows nor applies — it belongs to review mode, so it is put back: a Reset
+  // here must not silently undo a filter of the other mode (Edge_F#5 Case 1).
+  const handleResetEvaluationFilters = useCallback(() => {
+    resetFilters();
+    setMaxDistance(maxDistance);
+    setConfidenceThreshold(DEFAULT_MIN_SCORE);
+  }, [resetFilters, setMaxDistance, maxDistance, setConfidenceThreshold]);
 
   // (F4-F) Enter / leave practice mode. The data reloads (the loader effect
   // depends on `practice`); the frame position is kept (same frame ids), the
@@ -617,9 +788,30 @@ export default function Index() {
       source={currentFrame?.source}
       practiceActive={plantedErrors !== null}
       practiceRequested={practice}
-      onTogglePractice={datasetId === 'nuscenes' ? handleTogglePractice : undefined}
+      // (F5) Practice and evaluate exclude each other: the toggle is hidden
+      // while evaluating, and Evaluate is blocked while practising.
+      onTogglePractice={
+        datasetId === 'nuscenes' && mode !== 'evaluate' ? handleTogglePractice : undefined
+      }
+      modeSwitch={
+        datasetId === 'nuscenes' ? (
+          <ModeSwitch mode={mode} onSelect={handleSelectMode} evaluateBlocked={evaluateBlocked} />
+        ) : undefined
+      }
     >
-      {reviewProgress && (
+      {evaluating ? (
+        <EvaluationHeadline
+          summary={evaluation?.summary ?? null}
+          status={predictions.status === 'none' ? 'failed' : predictions.status}
+          modelName={predictions.set?.model.name}
+          basis={
+            evaluation
+              ? `All ${evaluation.evaluatedFrames} evaluated frames · ${predictions.set?.camera ?? 'camera'} · score ≥ ${confidenceThreshold.toFixed(2)} · IoU ≥ ${IOU_THRESHOLD} · small sample`
+              : undefined
+          }
+        />
+      ) : (
+        reviewProgress && (
         <>
           <ReviewProgress counts={reviewProgress.overall} notSaved={reviewStorageFailed} />
           <ExportMenu
@@ -628,6 +820,7 @@ export default function Index() {
             onReset={handleResetReviews}
           />
         </>
+        )
       )}
     </Header>
   );
@@ -674,7 +867,10 @@ export default function Index() {
   }
 
   const totalCount = currentFrame.detections3D.length;
-  const filterMode = datasetId === 'nuscenes' ? 'distance' : 'confidence';
+  // nuScenes labels have measured metres and no score → the distance slider.
+  // (F5) In evaluate mode the model's predictions DO have a score → the
+  // confidence slider again, named "Min score".
+  const filterMode = datasetId === 'nuscenes' && !evaluating ? 'distance' : 'confidence';
   // (F3) Viewer name tags, keyed on the frame's provenance so the 3D tag never
   // claims measured depth for estimated data (Immutable Rule #6). The camera name
   // is fixed because scripts/prep_nuscenes.py exports CAM_FRONT only (until F6).
@@ -710,18 +906,52 @@ export default function Index() {
           classes={allClasses}
           confidenceThreshold={confidenceThreshold}
           visibleClasses={visibleClasses}
-          visibleCount={visibleIds3D.size}
-          totalCount={totalCount}
+          // (F5) Evaluate mode counts results (what the list shows), not boxes.
+          visibleCount={evaluating ? frameResults.queue.length : visibleIds3D.size}
+          totalCount={evaluating ? frameResults.ordered.length : totalCount}
           filterMode={filterMode}
+          {...(evaluating
+            ? {
+                countNoun: 'results',
+                thresholdLabel: 'Min score',
+                thresholdTitle:
+                  'Model boxes scoring below this are treated as if the model had not reported them. Higher → fewer false alarms, more misses.',
+                defaultThreshold: DEFAULT_MIN_SCORE,
+              }
+            : {})}
           maxDistance={maxDistance}
           onChangeThreshold={setConfidenceThreshold}
           onChangeDistance={setMaxDistance}
           onToggleClass={toggleClass}
-          onReset={resetFilters}
+          onReset={evaluating ? handleResetEvaluationFilters : resetFilters}
           onDeselect={() => setSelectedObject(null)}
         />
       }
       list={
+        evaluating ? (
+          // (F5) Evaluate mode lists the frame's RESULTS (misses first), not
+          // its boxes. A click still goes through the one `selectedObjectId`.
+          <ResultList
+            results={frameResults.ordered}
+            counts={frameEvaluation?.counts ?? null}
+            filter={frameResults.filter}
+            onToggleKind={handleToggleKind}
+            selectedId={
+              frameResults.selectedResult ? selectionIdOf(frameResults.selectedResult) : null
+            }
+            onSelect={setSelectedObject}
+            notEvaluated={frameEvaluation?.notEvaluated ?? 0}
+            unavailable={
+              frameEvaluation
+                ? undefined
+                : predictions.status === 'loading'
+                  ? 'Loading predictions…'
+                  : predictions.set
+                    ? 'No predictions for this frame — not evaluated.'
+                    : 'Predictions unavailable.'
+            }
+          />
+        ) : (
         <ObjectList
           frame={currentFrame}
           selectedId={selectedObjectId}
@@ -741,6 +971,7 @@ export default function Index() {
             ) : undefined
           }
         />
+        )
       }
       main={
         // (F2-C) DATASET-AWARE key.
@@ -763,6 +994,12 @@ export default function Index() {
           nextFrame={tracksAcrossFrames ? nextFrame : null}
           playing={tracksAcrossFrames ? isPlaying : false}
           label={label3D}
+          // (F5) Evaluate mode: boxes take the colour of their outcome, so the
+          // 3D view shows WHERE the model missed. Only colours change — the
+          // same Canvas, the same camera. No evaluation for this frame → class
+          // colours and no legend.
+          boxColors={evaluating ? (frameResults.boxColors ?? undefined) : undefined}
+          legend={evaluating && frameResults.boxColors ? <BoxColorLegend /> : undefined}
         />
       }
       camera={
@@ -777,9 +1014,49 @@ export default function Index() {
           zoom={reviewEnabled && cameraZoom}
           onToggleZoom={reviewEnabled ? () => setCameraZoom((z) => !z) : undefined}
           zoomShortcut={SHORTCUT_KEYS.zoom}
+          // (F5) Evaluate mode: labels (dashed) and model boxes (solid) in
+          // outcome colours, instead of the frame's own boxes. The viewer just
+          // draws the rectangles it is given. Without an evaluation for this
+          // frame there is nothing to compare, and the labels show as usual.
+          overlay={evaluating ? (frameResults.overlay ?? undefined) : undefined}
+          legend={evaluating ? <OverlayLegend /> : undefined}
         />
       }
       details={
+        evaluating ? (
+          // (F5) In evaluate mode the details panel is the evaluation panel.
+          <EvaluationPanel
+            status={predictions.status === 'none' ? 'failed' : predictions.status}
+            error={predictions.error}
+            evaluation={evaluation}
+            frameEvaluation={evaluation?.byFrame.get(currentFrame.id) ?? null}
+            frameIndex={frameIndex}
+            frameBoxCount={totalCount}
+            model={predictions.set?.model}
+            camera={predictions.set?.camera}
+            rules={evaluationRules}
+            pinned={
+              <SelectedResult
+                result={frameResults.selectedResult}
+                visibility={visibilityText(selectedBox?.annotation?.visibility)}
+                // A selected 3D box with no result: say why it is not scored.
+                notEvaluated={
+                  !frameResults.selectedResult && selectedBox && selectedEvidence
+                    ? {
+                        class: selectedBox.class,
+                        distance: detectionDistance(selectedBox),
+                        reason: selectedEvidence.inCamera
+                          ? 'class-not-evaluated'
+                          : 'outside-camera',
+                      }
+                    : null
+                }
+                rules={evaluationRules}
+                camera={predictions.set?.camera}
+              />
+            }
+          />
+        ) : (
         <AnalyticsPanel
           frame={currentFrame}
           selectedId={selectedObjectId}
@@ -833,6 +1110,7 @@ export default function Index() {
               }
             : {})}
         />
+        )
       }
       timeline={
         // (F2-C) Autoplay controls are passed only when the dataset tracks
@@ -856,7 +1134,9 @@ export default function Index() {
           // Reset-to-frame-1 is sequence-only → nuScenes; COCO frames are
           // independent so it's hidden there (callback omitted).
           onReset={tracksAcrossFrames ? handleResetSequence : undefined}
-          reviewCounts={reviewProgress?.byFrame}
+          // (F5) Evaluate mode: "N missed" per frame instead of review counts.
+          reviewCounts={evaluating ? undefined : reviewProgress?.byFrame}
+          badges={evaluationBadges}
         />
       }
     />

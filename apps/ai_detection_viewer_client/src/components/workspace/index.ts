@@ -6,3 +6,4 @@ export {
   PanelHeader,
   ViewerLabel,
 } from './Panel';
+export { useScrollSelectedIntoView } from './useScrollSelectedIntoView';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, type ReactNode } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Frame } from '@/lib/types';
 import { frameBoxesForCamera, selectFollowTarget } from '@/lib/geometry';
@@ -25,6 +25,14 @@ type Viewer3DProps = {
   playing?: boolean;
   // (F3) Name tag in the top-left corner (e.g. "3D · estimated from 2D").
   label?: string;
+  // (F5) Wire colour per box id, used INSTEAD of the class colour. The viewer
+  // does not know what the colours mean (evaluate mode passes found / missed /
+  // not evaluated). A box without an entry keeps its class colour. Changing or
+  // dropping the map only recolours the existing boxes: no remount, the camera
+  // stays where it is.
+  boxColors?: ReadonlyMap<string, string>;
+  // (F5) A legend for those colours, shown under the name tag.
+  legend?: ReactNode;
 };
 
 export function Viewer3D({
@@ -36,6 +44,8 @@ export function Viewer3D({
   nextFrame,
   playing = false,
   label,
+  boxColors,
+  legend,
 }: Viewer3DProps) {
   // nuScenes boxes sit at real measured positions (tens of metres ahead, Three
   // forward = −z) so the COCO camera (at −z looking +z) faces away from them.
@@ -113,9 +123,16 @@ export function Viewer3D({
           fog={isMeasured ? false : undefined}
           nextFrame={nextFrame}
           playing={playing}
+          boxColors={boxColors}
         />
       </Canvas>
       {label && <ViewerLabel>{label}</ViewerLabel>}
+      {legend && (
+        // Under the name tag. pointer-events-none: drags and clicks go to the scene.
+        <span className="absolute top-8 left-2 z-10 pointer-events-none select-none inline-flex items-center gap-2.5 rounded px-1.5 py-0.5 text-[10px] text-zinc-300 bg-zinc-950/70 ring-1 ring-zinc-700">
+          {legend}
+        </span>
+      )}
       <HintBox />
       <span className="sr-only">
         3D scene; drag to orbit, scroll to zoom.

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { Detection2D, Frame } from '@/lib/types';
-import { BOX_EDGES, BOX_FRONT_FACE, zoomRegion } from '@/lib/geometry';
+import { BOX_EDGES, BOX_FRONT_FACE, zoomRegion, type ImageRegion } from '@/lib/geometry';
 import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
+import type { ImageOverlay, ImageRect } from '@/lib/ui/image-overlay';
 import { frameHasConfidence } from '@/lib/selectors';
 import { PANEL_CLASS, ViewerLabel } from '@/components/workspace';
 
@@ -26,6 +27,15 @@ type Viewer2DProps = {
   onToggleZoom?: () => void;
   // (F4) Key shown next to the toggle (the page owns the shortcut).
   zoomShortcut?: string;
+  // (F5) Ready-made rectangles to draw INSTEAD of the frame's own 2D boxes.
+  // The viewer does not know what they mean (evaluate mode passes labels and
+  // model boxes, see lib/evaluation/overlay): it draws each one as described
+  // and, in zoom mode, crops to `overlay.focus`. Omitted → the viewer draws the
+  // frame's boxes exactly as before.
+  overlay?: ImageOverlay;
+  // (F5) Content of the legend pill in the bottom-left corner. Only used with
+  // `overlay`, and then always shown (zoomed or not).
+  legend?: ReactNode;
 };
 
 const SELECTED_STROKE_WIDTH = 4;
@@ -45,32 +55,39 @@ export function Viewer2D({
   zoom = false,
   onToggleZoom,
   zoomShortcut,
+  overlay,
+  legend,
 }: Viewer2DProps) {
   const [imageError, setImageError] = useState(false);
   useEffect(() => { setImageError(false); }, [frame.id]);
   // 화면에 그릴 2D detection 목록을 만드는 부분. SVG는 CSS z-index를 무시하고
   // paint order(배열 순서)대로 hit-test 하므로, 면적 오름차순으로 정렬해 큰
   // bbox가 마지막에 그려지게 → 겹친 영역에서 큰 객체가 클릭 우선순위를 가짐.
-  const detections = (
-    visibleIds
-      ? frame.detections2D.filter((d) => visibleIds.has(d.id))
-      : frame.detections2D
-  )
-    .slice()
-    .sort(
-      (a, b) =>
-        a.bbox.width * a.bbox.height - b.bbox.width * b.bbox.height,
-    );
+  // (F5) With an `overlay` the frame's own boxes are not drawn at all.
+  const detections = overlay
+    ? []
+    : (
+        visibleIds
+          ? frame.detections2D.filter((d) => visibleIds.has(d.id))
+          : frame.detections2D
+      )
+        .slice()
+        .sort(
+          (a, b) =>
+            a.bbox.width * a.bbox.height - b.bbox.width * b.bbox.height,
+        );
   const showConfidence = frameHasConfidence(frame);
 
   // (F4) What the zoom centres on: the selected box, if it is drawn here.
   const selected = selectedId
     ? detections.find((d) => d.id === selectedId) ?? null
     : null;
+  // (F5) …or, with an overlay, the area the overlay asks to keep in view.
+  const focus = overlay ? overlay.focus : (selected?.bbox ?? null);
+  const whole: ImageRegion = { x: 0, y: 0, width: frame.imageWidth, height: frame.imageHeight };
+  const region = zoom && focus ? zoomRegion(focus, frame.imageWidth, frame.imageHeight) : whole;
+  // The F4 presentation (projected 3D box, faint neighbours) — never with an overlay.
   const zoomed = zoom && selected !== null;
-  const region = zoomed
-    ? zoomRegion(selected.bbox, frame.imageWidth, frame.imageHeight)
-    : { x: 0, y: 0, width: frame.imageWidth, height: frame.imageHeight };
   // The selected object exists in 3D but has no projection in this image
   // (beside / behind the camera, Edge_F#2 Case 1). Say so, instead of leaving
   // the reviewer looking for a highlight that cannot be there. Only on viewers
@@ -228,7 +245,13 @@ export function Viewer2D({
         );
       })}
       {zoomed && <ProjectedBox detection={selected} />}
+      {overlay && <OverlayRects rects={overlay.rects} region={region} onSelect={onSelect} />}
     </svg>
+    {overlay && legend && (
+      <span className="absolute left-2 bottom-2 z-10 pointer-events-none select-none inline-flex items-center gap-2.5 rounded px-2 py-0.5 text-[10px] text-zinc-300 bg-zinc-950/75 ring-1 ring-zinc-700">
+        {legend}
+      </span>
+    )}
     {zoomed && selected.corners && (
       <span className="absolute left-2 bottom-2 z-10 pointer-events-none select-none inline-flex items-center gap-2 rounded px-2 py-0.5 text-[10px] text-zinc-300 bg-zinc-950/75 ring-1 ring-zinc-700">
         <span className="inline-flex items-center gap-1">
@@ -242,7 +265,10 @@ export function Viewer2D({
       </span>
     )}
     {outsideImage && (
-      <span className="absolute left-1/2 bottom-2.5 z-10 -translate-x-1/2 whitespace-nowrap pointer-events-none select-none rounded px-2.5 py-1 text-[11px] text-amber-200 bg-zinc-950/80 ring-1 ring-amber-500/45">
+      <span
+        // (F5) Sits above the legend pill when there is one.
+        className={`absolute left-1/2 ${overlay && legend ? 'bottom-9' : 'bottom-2.5'} z-10 -translate-x-1/2 whitespace-nowrap pointer-events-none select-none rounded px-2.5 py-1 text-[11px] text-amber-200 bg-zinc-950/80 ring-1 ring-amber-500/45`}
+      >
         Selected box is outside {label ?? 'this camera'} · check it in the 3D view
       </span>
     )}
@@ -301,6 +327,110 @@ function ProjectedBox({ detection }: { detection: Detection2D }) {
       {line(f0, f2, FRONT_COLOR, 1.2, 'd1')}
       {line(f1, f3, FRONT_COLOR, 1.2, 'd2')}
     </g>
+  );
+}
+
+// (F5) How an overlay rectangle is stroked, by emphasis. Widths and dashes are
+// in SCREEN pixels (`non-scaling-stroke`), so they look the same in the full
+// image and at any zoom.
+const OVERLAY_STYLE: Record<
+  ImageRect['emphasis'],
+  { width: number; opacity: number; dash: string }
+> = {
+  selected: { width: 2.6, opacity: 1, dash: '7 4' },
+  normal: { width: 1.5, opacity: 0.95, dash: '5 3' },
+  dim: { width: 1.1, opacity: 0.35, dash: '4 3' },
+};
+
+/**
+ * (F5) Draws an overlay: every rectangle as described, then the captions on
+ * top of all of them. A rectangle with a `selectId` is clickable (its whole
+ * area, like the regular boxes); one without is context and lets clicks through.
+ */
+function OverlayRects({
+  rects,
+  region,
+  onSelect,
+}: {
+  rects: ImageRect[];
+  region: ImageRegion;
+  onSelect?: (id: string | null) => void;
+}) {
+  // Caption size follows the visible region, so it is the same on screen in the
+  // full image and at any zoom (~3% of the cell width ≈ 11–12 px).
+  const fontSize = region.width * 0.03;
+  const right = region.x + region.width;
+  const bottom = region.y + region.height;
+  return (
+    <>
+      {rects.map((rect) => {
+        const style = OVERLAY_STYLE[rect.emphasis];
+        const { selectId } = rect;
+        return (
+          <rect
+            key={rect.key}
+            x={rect.bbox.x}
+            y={rect.bbox.y}
+            width={rect.bbox.width}
+            height={rect.bbox.height}
+            fill="transparent"
+            stroke={rect.color}
+            strokeWidth={style.width}
+            strokeOpacity={style.opacity}
+            strokeDasharray={rect.dashed ? style.dash : undefined}
+            vectorEffect="non-scaling-stroke"
+            pointerEvents={selectId ? undefined : 'none'}
+            className={selectId ? 'cursor-pointer' : undefined}
+            onClick={
+              selectId
+                ? (e) => {
+                    e.stopPropagation();
+                    onSelect?.(selectId);
+                  }
+                : undefined
+            }
+          />
+        );
+      })}
+      {rects.map((rect) => {
+        if (!rect.caption) return null;
+        const { bbox } = rect;
+        // Dashed boxes (labels) are captioned below, solid ones (model boxes)
+        // above, so the two captions of a matched pair do not collide. Each
+        // moves inside the box when it would leave the visible region.
+        const below = bbox.y + bbox.height + fontSize * 1.15;
+        const above = bbox.y - fontSize * 0.45;
+        const y = rect.dashed
+          ? below <= bottom - fontSize * 0.3
+            ? below
+            : bbox.y + bbox.height - fontSize * 0.45
+          : above >= region.y + fontSize
+            ? above
+            : bbox.y + fontSize * 1.15;
+        const estimatedWidth = rect.caption.length * fontSize * 0.56;
+        const fitsFromLeft = Math.max(bbox.x, region.x) + estimatedWidth <= right;
+        return (
+          <text
+            key={`caption:${rect.key}`}
+            x={fitsFromLeft ? Math.max(bbox.x, region.x + fontSize * 0.3) : Math.min(bbox.x + bbox.width, right - fontSize * 0.3)}
+            y={y}
+            textAnchor={fitsFromLeft ? 'start' : 'end'}
+            fill={rect.color}
+            fontSize={fontSize}
+            fontWeight={600}
+            fontFamily="ui-sans-serif, system-ui, sans-serif"
+            // Dark outline behind the letters: readable on any part of the photo.
+            stroke="#09090b"
+            strokeWidth={fontSize * 0.28}
+            strokeLinejoin="round"
+            paintOrder="stroke"
+            style={{ userSelect: 'none', pointerEvents: 'none' }}
+          >
+            {rect.caption}
+          </text>
+        );
+      })}
+    </>
   );
 }
 

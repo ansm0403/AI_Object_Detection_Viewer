@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import type { Detection3D, Frame } from '@/lib/types';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { displayId } from '@/lib/ui/display-id';
-import { PANEL_CLASS, PanelHeader } from '@/components/workspace';
+import { PANEL_CLASS, PanelHeader, useScrollSelectedIntoView } from '@/components/workspace';
 import { detectionDistance, frameHasConfidence } from '@/lib/selectors';
 import type { Verdict } from '@/lib/review';
 import { EvidenceBars, StatusIcon } from '@/components/review';
@@ -51,7 +51,11 @@ export function ObjectList({
   orderKey,
   toolbar,
 }: ObjectListProps) {
-  const selectedRef = useRef<HTMLLIElement | null>(null);
+  // Scroll the selected row into view when the selection changes from outside
+  // the list (3D / camera click, J / K, auto-advance after a verdict) or when
+  // the list is re-ordered. (F5) The logic moved, unchanged, into a hook shared
+  // with the evaluation result list.
+  const selectedRef = useScrollSelectedIntoView(selectedId, orderKey);
   // Measured (nuScenes) frames have no model score — the parser's 1.0 is a
   // placeholder, so the confidence gauge is not shown (Rule #6).
   const showConfidence = frameHasConfidence(frame);
@@ -66,33 +70,6 @@ export function ObjectList({
     [frame],
   );
   const boxes = orderedBoxes ?? frame.detections3D;
-
-  // Scroll selected row into view when selection changes from outside the list
-  // (3D / camera click, J / K, auto-advance after a verdict) or when the list
-  // is re-ordered. Adjusts the <ul>'s scrollTop directly instead of calling
-  // scrollIntoView — the latter chains up to every scrollable ancestor
-  // (including <body>) and can scroll the page on short viewports. See
-  // Edge_#9.5 Case C.
-  //
-  // The row's position is measured against the <ul>'s own box with
-  // getBoundingClientRect. The earlier version compared `li.offsetTop` with
-  // `ul.scrollTop`, but `offsetTop` is relative to the nearest POSITIONED
-  // ancestor — here <body>, not the <ul> — so it was off by the list's distance
-  // from the page top (~125px) and a row just above the visible area was never
-  // scrolled into view. See Edge_F#4 Case 1.
-  useEffect(() => {
-    if (!selectedId) return;
-    const li = selectedRef.current;
-    const ul = li?.parentElement;
-    if (!li || !ul) return;
-    const view = ul.getBoundingClientRect();
-    const row = li.getBoundingClientRect();
-    if (row.top < view.top) {
-      ul.scrollTop -= view.top - row.top;
-    } else if (row.bottom > view.bottom) {
-      ul.scrollTop += row.bottom - view.bottom;
-    }
-  }, [selectedId, orderKey]);
 
   return (
     <div

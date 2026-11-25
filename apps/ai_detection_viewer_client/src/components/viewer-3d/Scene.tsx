@@ -25,6 +25,8 @@ type Props = {
   // toward it while playing (paused → exact measured keyframe, Rule #6).
   nextFrame?: Frame | null;
   playing?: boolean;
+  // (F5) Wire colour per box id, replacing the class colour (see Viewer3D).
+  boxColors?: ReadonlyMap<string, string>;
 };
 
 // Roughly the midpoint of MIN_Z..MAX_Z in bbox-estimator.ts. Both the camera
@@ -45,6 +47,7 @@ export function Scene({
   fog = true,
   nextFrame,
   playing = false,
+  boxColors,
 }: Props) {
   const visibleDetections3D = visibleIds
     ? frame.detections3D.filter((d) => visibleIds.has(d.id))
@@ -116,6 +119,9 @@ export function Scene({
             // Measured frames have no model score → label omits the percent
             // (Rule #6). Same provenance flag as the Header badge.
             showConfidence={frameHasConfidence(frame)}
+            // (F5) Same component, same key — only its colour prop changes, so
+            // switching to outcome colours rebuilds nothing.
+            color={boxColors?.get(d.id)}
             // (F2-D-2) tween inputs. `frameId` resets each box's interpolation
             // clock on a keyframe switch; `playing` gates the tween (off → exact
             // measured pose). `next*` is the same object's next-keyframe pose, or
