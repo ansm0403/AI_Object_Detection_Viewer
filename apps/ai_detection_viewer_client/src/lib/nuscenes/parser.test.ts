@@ -126,7 +126,7 @@ describe('parseNuScenes', () => {
 
 describe('parseNuScenes defensive behavior', () => {
   it('returns [] and warns on an invalid root', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(parseNuScenes(null)).toEqual([]);
     expect(parseNuScenes({})).toEqual([]);
     expect(warn).toHaveBeenCalled();
@@ -134,7 +134,7 @@ describe('parseNuScenes defensive behavior', () => {
   });
 
   it('skips a malformed annotation but keeps the valid ones in the frame', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const bad = { instanceToken: 'x', category: 'vehicle.car', translation: [1, 2], size: [1, 1, 1], rotation: IDENTITY_WXYZ };
     const [frame] = parseNuScenes(
       preppedWith([FRONT, bad as unknown as NuScenesAnnotation]),
@@ -146,7 +146,7 @@ describe('parseNuScenes defensive behavior', () => {
   });
 
   it('skips a duplicate instance token within a frame', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const [frame] = parseNuScenes(preppedWith([FRONT, { ...FRONT }]));
     expect(frame.detections3D).toHaveLength(1);
     expect(warn).toHaveBeenCalled();
@@ -182,7 +182,7 @@ describe('parseNuScenes LiDAR point cloud (F2-B)', () => {
   });
 
   it('skips malformed lidar (non-triple-length points) without throwing', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const [frame] = parseNuScenes(preppedWith([FRONT], lidarWith([1, 2, 3, 4])));
     expect(frame.pointCloud).toEqual([]);
     expect(warn).toHaveBeenCalled();
@@ -210,5 +210,77 @@ describe('mapCategory', () => {
     expect(__testing.mapCategory('static_object.bicycle_rack')).toBe(
       'static_object.bicycle_rack',
     );
+  });
+});
+
+// F4 — review facts carried per box (prepped format 1.1). They are optional
+// extras: an older file without them, or a wrong-typed value, must never cost
+// the box itself.
+describe('parseNuScenes annotation info (F4)', () => {
+  const REVIEWABLE: NuScenesAnnotation = {
+    ...FRONT,
+    annotationToken: 'ann-front-1',
+    numLidarPts: 12,
+    visibility: 'v60-80',
+  };
+
+  it('carries the box token, LiDAR point count and visibility onto the 3D box', () => {
+    const [frame] = parseNuScenes(preppedWith([REVIEWABLE]));
+    expect(frame.detections3D[0].annotation).toEqual({
+      token: 'ann-front-1',
+      lidarPoints: 12,
+      visibility: 'v60-80',
+    });
+  });
+
+  it('keeps 0 LiDAR points as 0 (a real value, not "missing")', () => {
+    const [frame] = parseNuScenes(preppedWith([{ ...REVIEWABLE, numLidarPts: 0 }]));
+    expect(frame.detections3D[0].annotation?.lidarPoints).toBe(0);
+  });
+
+  it('leaves `annotation` off entirely for a format-1.0 box (no new fields)', () => {
+    const [frame] = parseNuScenes(preppedWith([FRONT]));
+    expect(frame.detections3D).toHaveLength(1);
+    expect('annotation' in frame.detections3D[0]).toBe(false);
+  });
+
+  it('drops only the wrong-typed fields and still keeps the box', () => {
+    const broken = {
+      ...FRONT,
+      annotationToken: 42,
+      numLidarPts: -3,
+      visibility: 'v10-20',
+    } as unknown as NuScenesAnnotation;
+    const partial = {
+      ...FRONT,
+      instanceToken: 'inst-partial',
+      annotationToken: 'ann-2',
+      numLidarPts: 1.5,
+      visibility: null,
+    } as unknown as NuScenesAnnotation;
+    const [frame] = parseNuScenes(preppedWith([broken, partial]));
+    expect(frame.detections3D).toHaveLength(2);
+    expect(frame.detections3D[0].annotation).toBeUndefined();
+    expect(frame.detections3D[1].annotation).toEqual({ token: 'ann-2' });
+  });
+
+  it('keeps the eight projected corners on the 2D box, bounded by its rectangle', () => {
+    // FRONT: centre (3,5,10), [w,l,h] = [2,4,1.5] → local [l,w,h] = [4,2,1.5].
+    // Corner 0 = (3−2, 5−1, 10−0.75) = (1, 4, 9.25) with identity poses.
+    const [frame] = parseNuScenes(preppedWith([FRONT, BEHIND]));
+    expect(frame.detections2D).toHaveLength(1);
+    const { corners, bbox } = frame.detections2D[0];
+    expect(corners).toHaveLength(8);
+    expect(corners![0][0]).toBeCloseTo(800 + 1000 / 9.25, 6);
+    expect(corners![0][1]).toBeCloseTo(450 + 4000 / 9.25, 6);
+    // Unclamped corners can only lie on or outside the (image-clamped) rectangle's far sides.
+    expect(Math.min(...corners!.map((c) => c[0]))).toBeCloseTo(bbox.x, 6);
+  });
+
+  it('does not copy the review facts onto the projected 2D box', () => {
+    // The verdict is about the 3D box; the 2D box is only its projection.
+    const [frame] = parseNuScenes(preppedWith([REVIEWABLE]));
+    expect(frame.detections2D).toHaveLength(1);
+    expect('annotation' in frame.detections2D[0]).toBe(false);
   });
 });

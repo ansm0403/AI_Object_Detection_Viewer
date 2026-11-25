@@ -76,7 +76,9 @@ IMAGE_SUBDIR = "cam_front"  # 이미지 복사 대상 하위 폴더
 PUBLIC_PATH_PREFIX = f"/sample-data/nuscenes/{IMAGE_SUBDIR}"
 
 # 우리 prepped 포맷(우리가 정의한 것)의 버전. nuScenes 버전과 무관.
-PREPPED_FORMAT_VERSION = "1.0"
+# 1.1 (F4): annotation에 annotationToken / numLidarPts / visibility 추가. 기존 필드는 그대로라
+#           1.0을 읽던 코드는 1.1도 읽는다(파서는 새 필드를 선택 값으로 다룬다).
+PREPPED_FORMAT_VERSION = "1.1"
 
 
 # --- 테이블 로딩 + 인덱싱 (관계형 JOIN을 위한 준비) -------------------------
@@ -151,6 +153,7 @@ def build_prepped_frame(sample: dict, ctx: dict) -> tuple[dict, str]:
               ├─ ego_pose            (라이다 촬영 시각의) 차 global 위치/자세
               └─ calibrated_sensor   라이다의 ego 기준 위치/자세 (intrinsic 없음)
         └─ sample_annotation[]  global 3D 박스 → instance → category (클래스명)
+                                           └→ visibility (가려짐 단계, F4)
 
     반환: (prepped frame dict, 복사할 원본 이미지 상대경로)
     """
@@ -164,6 +167,7 @@ def build_prepped_frame(sample: dict, ctx: dict) -> tuple[dict, str]:
     for ann in ctx["anns_by_sample"].get(sample["token"], []):
         instance = ctx["instances"][ann["instance_token"]]
         category = ctx["categories"][instance["category_token"]]
+        visibility = ctx["visibilities"].get(ann["visibility_token"])
         annotations.append(
             {
                 "instanceToken": ann["instance_token"],  # 같은 객체의 안정적 id (Rule #1 / track id)
@@ -171,6 +175,15 @@ def build_prepped_frame(sample: dict, ctx: dict) -> tuple[dict, str]:
                 "translation": ann["translation"],  # global center [x,y,z] (m)
                 "size": ann["size"],                 # [w, l, h] (m) — nuScenes 순서 그대로
                 "rotation": ann["rotation"],         # [w, x, y, z] — nuScenes 순서 그대로
+                # F4(3D 박스 검수)용. 전부 nuScenes 원본 값의 복사/JOIN이며 계산은 없다.
+                # annotationToken: 이 프레임의 이 박스 하나를 가리키는 고유 id. instanceToken은
+                #   같은 객체면 프레임이 달라도 같지만, 박스는 프레임마다 따로 그려진 것이다.
+                # numLidarPts: 이 박스 안에 들어온 LiDAR 점 개수(nuScenes가 원본 sweep 기준으로
+                #   센 값 — 우리가 솎아낸 lidar.points 기준이 아니다). 0이면 센서 근거가 없는 박스.
+                # visibility: 물체가 얼마나 보이는지의 4단계 ("v0-40" ~ "v80-100").
+                "annotationToken": ann["token"],
+                "numLidarPts": ann["num_lidar_pts"],
+                "visibility": visibility["level"] if visibility else None,
             }
         )
 
@@ -270,6 +283,7 @@ def main():
     sensors = index_by_token(load_table(meta_dir, "sensor"))
     instances = index_by_token(load_table(meta_dir, "instance"))
     categories = index_by_token(load_table(meta_dir, "category"))
+    visibilities = index_by_token(load_table(meta_dir, "visibility"))  # F4: 가려짐 단계 이름
     sample_data = load_table(meta_dir, "sample_data")
     sample_annotation = load_table(meta_dir, "sample_annotation")
 
@@ -299,6 +313,7 @@ def main():
         "calibs": calibs,
         "instances": instances,
         "categories": categories,
+        "visibilities": visibilities,
         "cam_sd_by_sample": cam_sd_by_sample,
         "lidar_sd_by_sample": lidar_sd_by_sample,
         "anns_by_sample": anns_by_sample,

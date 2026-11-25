@@ -125,4 +125,25 @@ export type NuScenesAnnotation = {
   size: NuVec3;
   /** Box orientation quaternion in the GLOBAL frame, nuScenes order [w, x, y, z]. */
   rotation: NuQuat;
+  /**
+   * (F4, format 1.1) `sample_annotation.token` — unique id of THIS box in THIS
+   * frame. `instanceToken` is shared by every box of the same object across
+   * frames; a review verdict is about one box, so exports carry this token.
+   * Optional: files prepped before F4 (format 1.0) do not have it.
+   */
+  annotationToken?: string;
+  /**
+   * (F4) `num_lidar_pts` — LiDAR points nuScenes counted inside this box on the
+   * ORIGINAL sweep (not on our decimated `lidar.points`). 0 = the box has no
+   * sensor evidence in this frame (annotators carry boxes across frames).
+   */
+  numLidarPts?: number;
+  /** (F4) nuScenes visibility level joined from the `visibility` table. */
+  visibility?: NuScenesVisibility | null;
 };
+
+/**
+ * nuScenes visibility bins: how much of the object is visible, in four levels.
+ * The names are nuScenes' own (`visibility.level`).
+ */
+export type NuScenesVisibility = 'v0-40' | 'v40-60' | 'v60-80' | 'v80-100';

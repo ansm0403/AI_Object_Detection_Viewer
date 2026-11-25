@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import type { Frame } from '@/lib/types';
 import { SelectedObjectInfo } from '@/components/inspector';
 import { ConfidenceHistogram, ClassCountBar } from '@/components/charts';
@@ -14,6 +15,16 @@ type Props = {
   counts: Map<string, number>;
   visibleClasses: Set<string>;
   onToggleClass: (className: string) => void;
+  // (F4) The panel doubles as the review panel on measured frames. It stays
+  // unaware of what a review is: the page passes a title, a right-hand header
+  // note and a block of controls. `controls` is rendered ABOVE the scroll area
+  // so it never scrolls out of reach. All three absent → the panel is exactly
+  // the pre-F4 "Analytics" panel (COCO).
+  title?: string;
+  headerRight?: ReactNode;
+  controls?: ReactNode;
+  // (F4-F) Extra content at the top of the SCROLLING area (the practice score).
+  bodyTop?: ReactNode;
 };
 
 export function AnalyticsPanel({
@@ -24,11 +35,17 @@ export function AnalyticsPanel({
   counts,
   visibleClasses,
   onToggleClass,
+  title = 'Analytics',
+  headerRight,
+  controls,
+  bodyTop,
 }: Props) {
   return (
     <aside className={`flex flex-col h-full ${PANEL_CLASS}`}>
-      <PanelHeader title="Analytics" />
-      <div className="flex-1 overflow-y-auto">
+      <PanelHeader title={title}>{headerRight}</PanelHeader>
+      {controls}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {bodyTop}
         <SelectedObjectInfo frame={frame} selectedId={selectedId} />
         {/* Measured (nuScenes) frames have no model scores — every box would
             land in the top bucket as a fake "100%" distribution (Rule #6). Swap

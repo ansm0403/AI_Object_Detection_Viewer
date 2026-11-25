@@ -18,6 +18,12 @@ export type Detection2D = {
   class: string;
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
+  // (F4) Pixel positions of the 3D box's eight corners in this image, in the
+  // corner order of `boxCornersEgo` (corners 4-7 = the front face). Present only
+  // when the 2D box is the PROJECTION of a 3D box (nuScenes); `bbox` is then the
+  // rectangle around these points. Lets the camera view draw the projected 3D
+  // box itself. Not clamped to the image.
+  corners?: [number, number][];
 };
 
 export type Detection3D = {
@@ -32,6 +38,22 @@ export type Detection3D = {
     // valid. nuScenes boxes carry a real measured orientation here.
     rotation?: [number, number, number, number];
   };
+  // (F4) Facts the dataset records about this box's ANNOTATION — what a
+  // reviewer needs besides the geometry. Present on nuScenes boxes only (COCO
+  // has no such record, Rule #7), and each field is optional because sample
+  // files prepped before F4 do not carry them.
+  annotation?: BoxAnnotationInfo;
+};
+
+export type BoxAnnotationInfo = {
+  // Unique id of this box in this frame (nuScenes `sample_annotation.token`).
+  // `Detection3D.id` is the OBJECT id and repeats across frames.
+  token?: string;
+  // LiDAR points the dataset counted inside the box on the original sweep.
+  // 0 = no sensor evidence in this frame.
+  lidarPoints?: number;
+  // How much of the object is visible, as nuScenes' four bins.
+  visibility?: 'v0-40' | 'v40-60' | 'v60-80' | 'v80-100';
 };
 
 export type Point3D = {

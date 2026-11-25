@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import type { Frame } from '@/lib/types';
 
 export type DatasetId = 'coco' | 'nuscenes';
@@ -16,6 +17,18 @@ type HeaderProps = {
   // Estimated/Measured badge so depth source is never misrepresented
   // (Immutable Rule #6). Optional/absent → no badge.
   source?: Frame['source'];
+  // (F4) Extra content at the right of the bar, after the frame meta (the page
+  // passes the review progress on nuScenes). The Header does not know what it
+  // is — it stays presentation-only and reads no store.
+  children?: ReactNode;
+  // (F4-F) Practice mode. `practiceActive` = the data on screen IS the practice
+  // set (some boxes deliberately modified): the provenance badge then says so
+  // and never reads "Measured" (Immutable Rule #6). `practiceRequested` drives
+  // the toggle's pressed state (it leads `practiceActive` by one data load).
+  // The toggle is rendered only when `onTogglePractice` is passed (nuScenes).
+  practiceActive?: boolean;
+  practiceRequested?: boolean;
+  onTogglePractice?: () => void;
 };
 
 const DATASETS: { id: DatasetId; label: string }[] = [
@@ -30,10 +43,24 @@ export function Header({
   datasetId,
   onSelectDataset,
   source,
+  children,
+  practiceActive = false,
+  practiceRequested = false,
+  onTogglePractice,
 }: HeaderProps) {
   const measured = source === 'nuscenes-measured';
   // Only render a badge when we know the provenance.
-  const badge = source
+  const badge = practiceActive
+    ? {
+        // The LiDAR and the photos are still measured, but the BOXES on screen
+        // are not the dataset's annotations any more — say that, in the amber
+        // used for "not the real thing".
+        text: 'Practice · labels modified',
+        className: 'bg-amber-500/15 text-amber-300 ring-amber-500/40',
+        title:
+          'Practice set — some boxes were deliberately changed. These are NOT the original nuScenes annotations.',
+      }
+    : source
     ? {
         text: measured ? 'Measured' : 'Estimated',
         // Measured = real sensor 3D (emerald); Estimated = inferred from 2D (amber).
@@ -89,14 +116,54 @@ export function Header({
             {badge.text}
           </span>
         )}
+
+        {onTogglePractice && (
+          <button
+            type="button"
+            aria-pressed={practiceRequested}
+            title="Practice set: the same scene with a few boxes deliberately made wrong, to practise catching errors. Reviews are kept separately."
+            onClick={(e) => {
+              onTogglePractice();
+              if (e.detail > 0) e.currentTarget.blur();
+            }}
+            className={[
+              'inline-flex items-center gap-1.5 h-6 px-2 rounded-md text-[11px] transition-colors',
+              practiceRequested
+                ? 'bg-amber-400 text-zinc-950 font-semibold hover:bg-amber-300'
+                : 'text-zinc-400 ring-1 ring-inset ring-zinc-700 hover:text-zinc-200 hover:ring-zinc-500',
+            ].join(' ')}
+          >
+            <span
+              aria-hidden="true"
+              className={`w-1.5 h-1.5 rounded-full ${practiceRequested ? 'bg-zinc-950' : 'bg-zinc-600'}`}
+            />
+            Practice
+          </button>
+        )}
       </div>
 
       {/* (F3) The header is also shown while loading / on error so the dataset
           switcher stays usable; there is no frame meta to show then. */}
       {frameCount > 0 && (
-        <span className="text-xs text-zinc-400 tabular-nums">
-          Frame {frameIndex}/{frameCount} · {detectionCount} detections
-        </span>
+        <div className="flex items-center flex-wrap gap-x-3.5 gap-y-1">
+          <span className="text-xs text-zinc-400 tabular-nums">
+            Frame {frameIndex}/{frameCount}
+            {/* (F4) With the review progress next to it, the bar does not fit
+                one line below 1280px: the box count yields (it is also the
+                "OBJECTS n" title of the list). Without review content it stays. */}
+            <span className={children ? 'hidden xl:inline' : undefined}>
+              {' '}
+              · {detectionCount} detections
+            </span>
+          </span>
+          {/* (F4) Review progress / actions for datasets that are reviewed. */}
+          {children && (
+            <>
+              <span aria-hidden="true" className="hidden lg:block w-px h-5 bg-zinc-800" />
+              {children}
+            </>
+          )}
+        </div>
       )}
     </header>
   );

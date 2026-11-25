@@ -20,7 +20,42 @@ import { Header, type DatasetId } from '@/components/header';
 import { Timeline } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
 import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
-import { useViewerStore } from '@/store';
+import {
+  ExportMenu,
+  PracticeScoreCard,
+  QueueBar,
+  ReviewControls,
+  ReviewProgress,
+  UTF8_BOM,
+  downloadTextFile,
+  useReviewShortcuts,
+} from '@/components/review';
+import {
+  SHORTCUT_KEYS,
+  buildQueue,
+  buildReviewExport,
+  getReview,
+  getReviewBlock,
+  makePracticeSet,
+  nextFrameWithUnreviewed,
+  nextUnreviewed,
+  orderBoxes,
+  reviewExportFilename,
+  reviewExportToCsv,
+  reviewExportToJson,
+  scorePractice,
+  stepInQueue,
+  summarizeProgress,
+  verdictsOfFrame,
+  type PlantedError,
+  type QueueOrder,
+  type RejectReason,
+  type ReviewAction,
+  type ReviewExportFileType,
+  type ReviewScope,
+  type Verdict,
+} from '@/lib/review';
+import { REVIEW_STORAGE_KEY, useReviewStore, useViewerStore } from '@/store';
 import type { Frame } from '@/lib/types';
 
 // Static sample sources, one per dataset. Both are served from /public; there
@@ -54,6 +89,25 @@ export default function Index() {
   // (single selection field) is untouched. nuScenes only (see the Timeline +
   // Viewer3D wiring below); reset to 'fixed' on a dataset switch.
   const [cameraMode, setCameraMode] = useState<'fixed' | 'follow'>('fixed');
+  // (F4) How the object list / review queue is ordered. A VIEW preference, like
+  // `cameraMode`: page-level, not saved, reset on a dataset switch.
+  const [queueOrder, setQueueOrder] = useState<QueueOrder>('scene');
+  // (F4-D) Camera image: zoom on the selected box (default) or the full frame.
+  // In the full frame a distant box is ~14×25 px — too small to judge — so
+  // review starts zoomed; Z or the corner toggle shows the whole photo. A VIEW
+  // flag, like `cameraMode`: no effect on selection (Rule #2).
+  const [cameraZoom, setCameraZoom] = useState(true);
+  // (F4-F) Practice mode: the same nuScenes scene with a few boxes deliberately
+  // made wrong (lib/review/practice), to practise — and score — catching errors.
+  //  - `practice` is what the user ASKED for (the toggle);
+  //  - `plantedErrors` is set together with `frames`, so it says what the data
+  //    on screen actually IS: null = the real annotations, an array = the
+  //    practice set and its answer key.
+  // Everything that must stay honest (badge, labels, review scope, export flag)
+  // keys on `plantedErrors`, never on the toggle — so nothing can claim
+  // "practice" or "measured" for one render while the other data is still shown.
+  const [practice, setPractice] = useState(false);
+  const [plantedErrors, setPlantedErrors] = useState<PlantedError[] | null>(null);
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -76,30 +130,86 @@ export default function Index() {
   const setMaxDistance = useViewerStore((s) => s.setMaxDistance);
   const resetFilters = useViewerStore((s) => s.resetFilters);
 
+  // (F4) Review records. They live in their own persisted store; WHICH box an
+  // action applies to is always derived here from `selectedFrameId` +
+  // `selectedObjectId` — there is no separate "box under review" state
+  // (Immutable Rule #2).
+  const reviewsByScope = useReviewStore((s) => s.reviews);
+  const setVerdict = useReviewStore((s) => s.setVerdict);
+  const toggleReason = useReviewStore((s) => s.toggleReason);
+  const setNote = useReviewStore((s) => s.setNote);
+  const clearReview = useReviewStore((s) => s.clearReview);
+  const resetReviewScope = useReviewStore((s) => s.resetScope);
+  const reviewStorageFailed = useReviewStore((s) => s.storageFailed);
+  // Practice verdicts are about modified boxes; they live in their own scope
+  // and never mix with verdicts on the real annotations.
+  const reviewScope: ReviewScope = plantedErrors ? 'nuscenes-practice' : 'nuscenes';
+  const reviews = reviewsByScope[reviewScope];
+
+  // (F4) Load saved reviews AFTER mount. The store starts empty on both the
+  // server render and the browser's first render, so the two match; this effect
+  // then fills it from localStorage (see `skipHydration` in review-store).
+  //
+  // The same storage is shared by every tab of this app. Each tab keeps its own
+  // in-memory copy and saves ALL records on every change, so without syncing, a
+  // tab that was opened earlier would overwrite what another tab saved since
+  // (verified: 3 approvals made in tab A vanished after one verdict in tab B).
+  // The browser fires `storage` in the OTHER tabs whenever one tab writes;
+  // re-reading then keeps every tab on the latest records.
+  useEffect(() => {
+    void useReviewStore.persist.rehydrate();
+    const onStorage = (event: StorageEvent) => {
+      // key === null means the whole storage was cleared.
+      if (event.key === REVIEW_STORAGE_KEY || event.key === null) {
+        void useReviewStore.persist.rehydrate();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   // Load the active dataset. Re-runs on dataset switch; clears stale frames so
   // the loading skeleton shows and the auto-select effect re-homes to the new
   // frames[0] (the old selectedFrameId won't exist in the new set).
   useEffect(() => {
     const ac = new AbortController();
     setFrames(null);
+    setPlantedErrors(null);
     setError(null);
     fetch(DATASET_SOURCES[datasetId], { signal: ac.signal })
       .then((r) => r.json())
       .then((raw) => {
         // COCO: parse → estimate 3D (enrichFrame). nuScenes: parseNuScenes
         // already returns measured, enriched frames — do not estimate again.
-        const parsed =
-          datasetId === 'coco'
-            ? parseCoco(raw).map((f) => enrichFrame(f))
-            : parseNuScenes(raw);
-        setFrames(parsed);
+        if (datasetId === 'coco') {
+          setFrames(parseCoco(raw).map((f) => enrichFrame(f)));
+          return;
+        }
+        // (F4-F) Practice set: modify a few boxes in the RAW data, then parse as
+        // usual — 3D boxes, camera projections and ids all follow from the same
+        // modified values. The file on disk is never changed.
+        if (practice) {
+          // Which boxes the camera sees decides where an error is FAIR (a wrong
+          // class can only be recognised in the photo). That needs one plain
+          // parse of the original data first; the practice set is parsed after.
+          const seen = new Set(
+            parseNuScenes(raw).flatMap((f) => f.detections2D.map((d) => `${f.id}/${d.id}`)),
+          );
+          const set = makePracticeSet(raw, {
+            inCamera: (frameToken, instanceToken) => seen.has(`${frameToken}/${instanceToken}`),
+          });
+          setFrames(parseNuScenes(set.prepped));
+          setPlantedErrors(set.planted);
+        } else {
+          setFrames(parseNuScenes(raw));
+        }
       })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(String(err));
       });
     return () => ac.abort();
-  }, [datasetId]);
+  }, [datasetId, practice]);
 
   // Auto-select frames[0] when no valid frame is selected. Edge_#3 Case 3 (a):
   // the timeline policy is "always exactly one frame selected" — there is no
@@ -182,15 +292,20 @@ export default function Index() {
         : new Set<string>(),
     [currentFrame, confidenceThreshold, visibleClasses, withinDistance],
   );
+  // The 3D rule as a function of the frame, so the SAME rule can be applied to
+  // a frame other than the current one (F4: the queue of the frame we are about
+  // to jump to).
+  const visibleIds3DOf = useCallback(
+    (frame: Frame) =>
+      intersectIds(
+        selectVisibleDetectionIds3D(frame, confidenceThreshold, visibleClasses),
+        selectIdsWithinDistance(frame.detections3D, maxDistance),
+      ),
+    [confidenceThreshold, visibleClasses, maxDistance],
+  );
   const visibleIds3D = useMemo(
-    () =>
-      currentFrame
-        ? intersectIds(
-            selectVisibleDetectionIds3D(currentFrame, confidenceThreshold, visibleClasses),
-            withinDistance,
-          )
-        : new Set<string>(),
-    [currentFrame, confidenceThreshold, visibleClasses, withinDistance],
+    () => (currentFrame ? visibleIds3DOf(currentFrame) : new Set<string>()),
+    [currentFrame, visibleIds3DOf],
   );
 
   // Phase 3 analytics aggregations. Selectors are intentionally unfiltered:
@@ -204,6 +319,191 @@ export default function Index() {
     () => (currentFrame ? selectClassCounts(currentFrame) : new Map<string, number>()),
     [currentFrame],
   );
+
+  // (F4) Review applies to MEASURED 3D boxes only. COCO's 3D is estimated from
+  // 2D — there is no annotated 3D box to approve or reject (Rule #6) — so on
+  // COCO none of the review UI is rendered and the page looks as it did in F3.
+  const reviewEnabled =
+    datasetId === 'nuscenes' && frames?.[0]?.source === 'nuscenes-measured';
+  const reviewProgress = useMemo(
+    () => (reviewEnabled && frames ? summarizeProgress(frames, reviews) : null),
+    [reviewEnabled, frames, reviews],
+  );
+  const frameVerdicts = useMemo(
+    () => (reviewEnabled && currentFrame ? verdictsOfFrame(currentFrame, reviews) : undefined),
+    [reviewEnabled, currentFrame, reviews],
+  );
+  // Why the selected box cannot get a verdict right now (null = it can).
+  const reviewBlock = useMemo(
+    () =>
+      currentFrame
+        ? getReviewBlock({
+            frame: currentFrame,
+            selectedId: selectedObjectId,
+            visibleIds: visibleIds3D,
+            playing: isPlaying,
+          })
+        : 'no-selection',
+    [currentFrame, selectedObjectId, visibleIds3D, isPlaying],
+  );
+  // Review actions target the selected box of the current frame. Each one
+  // re-checks `reviewBlock`, so a disabled button and a stray call agree.
+  const currentFrameId = currentFrame?.id ?? null;
+  // (F4-C) The list order and the review queue. The list shows every box in
+  // `orderedBoxes`; the queue is the part of it that passes the filters — the
+  // boxes J / K walk and the pool "next unreviewed" is drawn from.
+  const orderedBoxes = useMemo(
+    () => (currentFrame ? orderBoxes(currentFrame, reviewEnabled ? queueOrder : 'scene') : []),
+    [currentFrame, reviewEnabled, queueOrder],
+  );
+  const queue = useMemo(() => buildQueue(orderedBoxes, visibleIds3D), [orderedBoxes, visibleIds3D]);
+  const queueRemaining = useMemo(
+    () =>
+      currentFrameId === null
+        ? 0
+        : queue.filter((id) => !getReview(reviews, currentFrameId, id)).length,
+    [queue, reviews, currentFrameId],
+  );
+  // The next frame that still has unreviewed boxes the current filters let
+  // through (for the N shortcut) — the same rule as the queue, so N never lands
+  // on a frame whose remaining boxes are all hidden.
+  const nextReviewFrameId = useMemo(
+    () =>
+      reviewEnabled && frames
+        ? nextFrameWithUnreviewed(frames, reviews, currentFrameId, visibleIds3DOf)
+        : null,
+    [reviewEnabled, frames, reviews, currentFrameId, visibleIds3DOf],
+  );
+
+  // Approve and Unsure move on to the next unreviewed box of the queue, so a
+  // run of ordinary boxes is one key press each. Reject stays put: the reviewer
+  // still has to say why. At the end of the queue the selection stays where it
+  // is — the frame never changes behind the reviewer's back.
+  const handleVerdict = useCallback(
+    (verdict: Verdict) => {
+      if (reviewBlock || !currentFrameId || !selectedObjectId) return;
+      setVerdict(reviewScope, currentFrameId, selectedObjectId, verdict);
+      if (verdict === 'rejected') return;
+      // Read the records AFTER the update (the `reviews` in this closure is the
+      // pre-update snapshot and would still count this box as unreviewed).
+      const latest = useReviewStore.getState().reviews[reviewScope];
+      const next = nextUnreviewed(queue, latest, currentFrameId, selectedObjectId);
+      if (next) setSelectedObject(next);
+    },
+    [
+      reviewBlock,
+      currentFrameId,
+      selectedObjectId,
+      reviewScope,
+      setVerdict,
+      queue,
+      setSelectedObject,
+    ],
+  );
+  const handleToggleReason = useCallback(
+    (reason: RejectReason) => {
+      if (reviewBlock || !currentFrameId || !selectedObjectId) return;
+      toggleReason(reviewScope, currentFrameId, selectedObjectId, reason);
+    },
+    [reviewBlock, currentFrameId, selectedObjectId, reviewScope, toggleReason],
+  );
+  const handleNote = useCallback(
+    (note: string) => {
+      if (reviewBlock || !currentFrameId || !selectedObjectId) return;
+      setNote(reviewScope, currentFrameId, selectedObjectId, note);
+    },
+    [reviewBlock, currentFrameId, selectedObjectId, reviewScope, setNote],
+  );
+  const handleClearReview = useCallback(() => {
+    if (reviewBlock || !currentFrameId || !selectedObjectId) return;
+    clearReview(reviewScope, currentFrameId, selectedObjectId);
+  }, [reviewBlock, currentFrameId, selectedObjectId, reviewScope, clearReview]);
+
+  // (F4-E) Export. The document is built by the pure functions in
+  // `lib/review/export` from the frames + records; this only stamps the time and
+  // hands the text to the browser as a download. No backend is involved.
+  const handleExport = useCallback(
+    (type: ReviewExportFileType) => {
+      if (!frames) return;
+      const now = new Date();
+      const data = buildReviewExport(frames, reviews, {
+        scope: reviewScope,
+        exportedAt: now.toISOString(),
+      });
+      const filename = reviewExportFilename(reviewScope, now, type);
+      if (type === 'json') {
+        downloadTextFile(filename, reviewExportToJson(data), 'application/json');
+      } else {
+        downloadTextFile(filename, UTF8_BOM + reviewExportToCsv(data), 'text/csv');
+      }
+    },
+    [frames, reviews, reviewScope],
+  );
+  const handleResetReviews = useCallback(
+    () => resetReviewScope(reviewScope),
+    [resetReviewScope, reviewScope],
+  );
+
+  // (F4-C) Jump to the next frame that still has unreviewed boxes and land on
+  // its first unreviewed box. Playback stops: the reviewer asked for a frame to
+  // work on. The target frame's queue is built with the same order and the same
+  // filter rule as the current one.
+  const handleNextReviewFrame = useCallback(() => {
+    const target = frames?.find((f) => f.id === nextReviewFrameId);
+    if (!target) return;
+    setIsPlaying(false);
+    setSelectedFrame(target.id);
+    const targetQueue = buildQueue(orderBoxes(target, queueOrder), visibleIds3DOf(target));
+    setSelectedObject(nextUnreviewed(targetQueue, reviews, target.id, null));
+  }, [
+    frames,
+    nextReviewFrameId,
+    queueOrder,
+    visibleIds3DOf,
+    reviews,
+    setSelectedFrame,
+    setSelectedObject,
+  ]);
+
+  // (F4-C) Keyboard shortcuts. `resolveShortcut` (lib/review) decides what a key
+  // means; this decides what the action does — always through the same handlers
+  // the buttons use, so mouse and keyboard cannot drift apart.
+  const handleReviewAction = useCallback(
+    (action: ReviewAction) => {
+      switch (action.type) {
+        case 'verdict':
+          handleVerdict(action.verdict);
+          break;
+        case 'clear':
+          handleClearReview();
+          break;
+        case 'reason':
+          handleToggleReason(action.reason);
+          break;
+        case 'step': {
+          const id = stepInQueue(queue, selectedObjectId, action.direction);
+          if (id) setSelectedObject(id);
+          break;
+        }
+        case 'next-frame':
+          handleNextReviewFrame();
+          break;
+        case 'toggle-zoom':
+          setCameraZoom((z) => !z);
+          break;
+      }
+    },
+    [
+      handleVerdict,
+      handleClearReview,
+      handleToggleReason,
+      handleNextReviewFrame,
+      queue,
+      selectedObjectId,
+      setSelectedObject,
+    ],
+  );
+  useReviewShortcuts(handleReviewAction, reviewEnabled && currentFrame !== null);
 
   // Frame switch. The object-selection policy is DATASET-AWARE (F2-C):
   //  - COCO: clear the selection. COCO ids are `imageId-annId`, unstable across
@@ -270,8 +570,30 @@ export default function Index() {
       resetFilters();
       setIsPlaying(false); // (F2-C) stop autoplay when leaving the sequence
       setCameraMode('fixed'); // (F2-D-1) reset to the default overview camera
+      setQueueOrder('scene'); // (F4) back to the dataset order
+      setPractice(false); // (F4-F) practice is a nuScenes-only mode
     },
     [datasetId, setSelectedObject, resetFilters],
+  );
+
+  // (F4-F) Enter / leave practice mode. The data reloads (the loader effect
+  // depends on `practice`); the frame position is kept (same frame ids), the
+  // object selection and playback are not — the boxes themselves change.
+  const handleTogglePractice = useCallback(() => {
+    setPractice((p) => !p);
+    setSelectedObject(null);
+    setIsPlaying(false);
+  }, [setSelectedObject]);
+  const practiceScores = useMemo(
+    () =>
+      plantedErrors && currentFrameId
+        ? {
+            frame: scorePractice(plantedErrors, reviews, currentFrameId),
+            overall: scorePractice(plantedErrors, reviews),
+            plantedInFrame: plantedErrors.filter((p) => p.frameId === currentFrameId),
+          }
+        : null,
+    [plantedErrors, reviews, currentFrameId],
   );
 
   // (F3) Every state — loading, error, empty, loaded — renders inside the same
@@ -291,7 +613,21 @@ export default function Index() {
       datasetId={datasetId}
       onSelectDataset={handleSelectDataset}
       source={currentFrame?.source}
-    />
+      practiceActive={plantedErrors !== null}
+      practiceRequested={practice}
+      onTogglePractice={datasetId === 'nuscenes' ? handleTogglePractice : undefined}
+    >
+      {reviewProgress && (
+        <>
+          <ReviewProgress counts={reviewProgress.overall} notSaved={reviewStorageFailed} />
+          <ExportMenu
+            reviewedCount={reviewProgress.overall.reviewed}
+            onExport={handleExport}
+            onReset={handleResetReviews}
+          />
+        </>
+      )}
+    </Header>
   );
 
   if (error || !frames || frames.length === 0 || !currentFrame) {
@@ -341,8 +677,27 @@ export default function Index() {
   // claims measured depth for estimated data (Immutable Rule #6). The camera name
   // is fixed because scripts/prep_nuscenes.py exports CAM_FRONT only (until F6).
   const isMeasured = currentFrame.source === 'nuscenes-measured';
-  const label3D = isMeasured ? 'LiDAR · measured 3D' : '3D · estimated from 2D';
+  // Practice set: the points are still measured, the boxes are not the
+  // dataset's any more — the tag must not read "measured 3D".
+  const label3D = plantedErrors
+    ? 'LiDAR measured · boxes modified (practice)'
+    : isMeasured
+      ? 'LiDAR · measured 3D'
+      : '3D · estimated from 2D';
   const label2D = isMeasured ? 'CAM_FRONT' : 'Image';
+  const frameReviewCounts = reviewProgress?.byFrame.get(currentFrame.id);
+  // (F4-D) Dataset facts about the selected box, for the strip above the
+  // verdict buttons. Null when nothing (in this frame) is selected.
+  const selectedBox = selectedObjectId
+    ? currentFrame.detections3D.find((d) => d.id === selectedObjectId) ?? null
+    : null;
+  const selectedEvidence = selectedBox
+    ? {
+        lidarPoints: selectedBox.annotation?.lidarPoints,
+        visibility: selectedBox.annotation?.visibility,
+        inCamera: currentFrame.detections2D.some((d) => d.id === selectedBox.id),
+      }
+    : null;
 
   return (
     <WorkspaceShell
@@ -370,6 +725,19 @@ export default function Index() {
           selectedId={selectedObjectId}
           onSelect={setSelectedObject}
           visibleIds={visibleIds3D}
+          verdicts={frameVerdicts}
+          // (F4-C) The review queue order, plus the bar that changes it.
+          boxes={orderedBoxes}
+          orderKey={queueOrder}
+          toolbar={
+            reviewEnabled ? (
+              <QueueBar
+                order={queueOrder}
+                onChangeOrder={setQueueOrder}
+                remaining={queueRemaining}
+              />
+            ) : undefined
+          }
         />
       }
       main={
@@ -402,6 +770,11 @@ export default function Index() {
           onSelect={setSelectedObject}
           visibleIds={visibleIds}
           label={label2D}
+          // (F4-D) Zoom + projected 3D box, only where 2D boxes ARE projections
+          // of reviewed 3D boxes. COCO gets no toggle and stays as before.
+          zoom={reviewEnabled && cameraZoom}
+          onToggleZoom={reviewEnabled ? () => setCameraZoom((z) => !z) : undefined}
+          zoomShortcut={SHORTCUT_KEYS.zoom}
         />
       }
       details={
@@ -413,6 +786,50 @@ export default function Index() {
           counts={classCounts}
           visibleClasses={visibleClasses}
           onToggleClass={toggleClass}
+          // (F4) On reviewed datasets the details panel is the review panel:
+          // verdict controls pinned above the scrolling details.
+          {...(reviewEnabled && frameReviewCounts
+            ? {
+                title: 'Review',
+                headerRight: (
+                  <span className="text-[11px] text-zinc-500 tabular-nums">
+                    Frame {frameIndex} · {frameReviewCounts.reviewed}/{frameReviewCounts.total}
+                  </span>
+                ),
+                bodyTop: practiceScores ? (
+                  <PracticeScoreCard
+                    // Keyed on the frame: "Reveal answers" resets per frame.
+                    key={currentFrame.id}
+                    frameScore={practiceScores.frame}
+                    overallScore={practiceScores.overall}
+                    plantedInFrame={practiceScores.plantedInFrame}
+                    onSelect={setSelectedObject}
+                  />
+                ) : undefined,
+                controls: (
+                  <ReviewControls
+                    record={
+                      selectedObjectId
+                        ? getReview(reviews, currentFrame.id, selectedObjectId)
+                        : undefined
+                    }
+                    blocked={reviewBlock}
+                    evidence={selectedEvidence}
+                    onVerdict={handleVerdict}
+                    onToggleReason={handleToggleReason}
+                    onNote={handleNote}
+                    onClear={handleClearReview}
+                    queueDone={queue.length > 0 && queueRemaining === 0}
+                    onNextFrame={nextReviewFrameId ? handleNextReviewFrame : undefined}
+                    hiddenUnreviewed={
+                      reviewProgress
+                        ? reviewProgress.overall.total - reviewProgress.overall.reviewed
+                        : 0
+                    }
+                  />
+                ),
+              }
+            : {})}
         />
       }
       timeline={
@@ -437,6 +854,7 @@ export default function Index() {
           // Reset-to-frame-1 is sequence-only → nuScenes; COCO frames are
           // independent so it's hidden there (callback omitted).
           onReset={tracksAcrossFrames ? handleResetSequence : undefined}
+          reviewCounts={reviewProgress?.byFrame}
         />
       }
     />

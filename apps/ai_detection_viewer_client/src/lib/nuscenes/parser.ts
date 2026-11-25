@@ -1,4 +1,10 @@
-import type { Detection2D, Detection3D, Frame, Point3D } from '@/lib/types';
+import type {
+  BoxAnnotationInfo,
+  Detection2D,
+  Detection3D,
+  Frame,
+  Point3D,
+} from '@/lib/types';
 import {
   egoQuatToThree,
   egoToThree,
@@ -9,7 +15,11 @@ import {
   type Pose,
   type Vec3,
 } from '@/lib/geometry/transforms';
-import { boxCornersEgo, projectCornersToBbox } from '@/lib/geometry/projection';
+import {
+  boxCornersEgo,
+  projectBoxCorners,
+  projectCornersToBbox,
+} from '@/lib/geometry/projection';
 import type {
   NuScenesAnnotation,
   NuScenesLidar,
@@ -82,6 +92,7 @@ function buildFrame(pf: unknown): Frame | null {
     const quatEgo = globalQuatToEgo(ann.rotation, egoPose.rotation);
     const localSize = nuSizeToLocal(ann.size);
 
+    const annotation = readAnnotationInfo(ann);
     detections3D.push({
       id: ann.instanceToken,
       class: className,
@@ -91,23 +102,25 @@ function buildFrame(pf: unknown): Frame | null {
         size: localSize,
         rotation: egoQuatToThree(quatEgo),
       },
+      ...(annotation ? { annotation } : {}),
     });
 
     // 2D box = AABB of the 3D box projected into the camera image. Skipped (but
     // the 3D box is kept) when the box is behind the camera or fully off-screen.
-    const bbox = projectCornersToBbox(
-      boxCornersEgo(centerEgo, localSize, quatEgo),
-      sensor,
-      K,
-      pf.image.width,
-      pf.image.height,
-    );
+    const cornersEgo = boxCornersEgo(centerEgo, localSize, quatEgo);
+    const bbox = projectCornersToBbox(cornersEgo, sensor, K, pf.image.width, pf.image.height);
     if (bbox) {
+      // (F4) Also keep the eight projected corners, so the camera view can draw
+      // the 3D box itself (edges + front face), not only this rectangle. A
+      // non-null bbox means every corner is in front of the camera, so the
+      // corner projection cannot fail here; the fallback is purely defensive.
+      const corners = projectBoxCorners(cornersEgo, sensor, K);
       detections2D.push({
         id: ann.instanceToken,
         class: className,
         confidence: 1.0,
         bbox,
+        ...(corners ? { corners } : {}),
       });
     }
   }
@@ -186,6 +199,33 @@ const CATEGORY_MAP: Record<string, string> = {
 
 function mapCategory(category: string): string {
   return CATEGORY_MAP[category] ?? category;
+}
+
+const VISIBILITY_LEVELS: readonly string[] = ['v0-40', 'v40-60', 'v60-80', 'v80-100'];
+
+/**
+ * (F4) The review facts of one annotation: its own token, the LiDAR point
+ * count and the visibility level. All three are OPTIONAL extras — sample files
+ * prepped before F4 lack them, and a wrong-typed value drops only that field
+ * (the box itself is valid and still renders; Error Defaults). Returns
+ * `undefined` when none is usable, so such boxes carry no `annotation` key.
+ */
+function readAnnotationInfo(ann: NuScenesAnnotation): BoxAnnotationInfo | undefined {
+  const raw = ann as Record<string, unknown>;
+  const info: BoxAnnotationInfo = {};
+
+  if (typeof raw.annotationToken === 'string' && raw.annotationToken !== '') {
+    info.token = raw.annotationToken;
+  }
+  const pts = raw.numLidarPts;
+  if (typeof pts === 'number' && Number.isInteger(pts) && pts >= 0) {
+    info.lidarPoints = pts;
+  }
+  if (typeof raw.visibility === 'string' && VISIBILITY_LEVELS.includes(raw.visibility)) {
+    info.visibility = raw.visibility as BoxAnnotationInfo['visibility'];
+  }
+
+  return Object.keys(info).length > 0 ? info : undefined;
 }
 
 // --- validation -------------------------------------------------------------
