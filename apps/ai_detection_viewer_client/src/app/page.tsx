@@ -50,6 +50,7 @@ import {
   evaluateFrames,
   findResult,
   isPredictionId,
+  outcomeCountLabel,
   selectionIdOf,
   visibilityText,
   type EvalKind,
@@ -485,7 +486,7 @@ export default function Index() {
       badges.set(frame.id, {
         text: `${missed} missed`,
         tone: missed > 0 ? 'alert' : 'good',
-        title: `${missed} missed · ${found} found · ${falseAlarm} false alarm${falseAlarm === 1 ? '' : 's'}${photos > 1 ? ` · in ${photos} photos` : ''}`,
+        title: `${missed} missed · ${found} found · ${falseAlarm} ${outcomeCountLabel('false-alarm', falseAlarm)}${photos > 1 ? ` · in ${photos} photos` : ''}`,
       });
     }
     return badges;
@@ -1034,7 +1035,7 @@ export default function Index() {
           ? {
               text: String(photo.counts.missed),
               tone: photo.counts.missed > 0 ? 'alert' : 'muted',
-              title: `${photo.counts.missed} missed · ${photo.counts.found} found · ${photo.counts.falseAlarm} false alarm${photo.counts.falseAlarm === 1 ? '' : 's'} in this photo`,
+              title: `${photo.counts.missed} missed · ${photo.counts.found} found · ${photo.counts.falseAlarm} ${outcomeCountLabel('false-alarm', photo.counts.falseAlarm)} in this photo`,
             }
           : { text: '–', tone: 'muted', title: 'No predictions for this photo — not evaluated' };
     return {

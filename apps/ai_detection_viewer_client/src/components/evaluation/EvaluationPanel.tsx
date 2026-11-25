@@ -3,9 +3,9 @@
 import type { ReactNode } from 'react';
 import {
   EVAL_KINDS,
-  OUTCOME_LABEL,
   countOf,
   formatPercent,
+  outcomeCountLabel,
   ratio,
   type DatasetEvaluation,
   type EvaluationRules,
@@ -110,7 +110,7 @@ export function EvaluationPanel({
                 rows={cameras.map((c) => ({
                   key: c.camera,
                   label: cameraShortName(c.camera),
-                  title: `${c.camera} · ${c.photos} photo${c.photos === 1 ? '' : 's'} · ${c.summary.falseAlarm} false alarm${c.summary.falseAlarm === 1 ? '' : 's'}`,
+                  title: `${c.camera} · ${c.photos} photo${c.photos === 1 ? '' : 's'} · ${c.summary.falseAlarm} ${outcomeCountLabel('false-alarm', c.summary.falseAlarm)}`,
                   found: c.summary.found,
                   total: c.summary.found + c.summary.missed,
                 }))}
@@ -243,7 +243,7 @@ function FrameCounts({
                 out the row wraps, and in the 275px-tall panel at 1536×700 that
                 pushes the distance bars out of view. */}
             <span className={kind === 'not-scored' ? 'sr-only' : undefined}>
-              {OUTCOME_LABEL[kind].toLowerCase()}
+              {outcomeCountLabel(kind, countOf(frameEvaluation.counts, kind))}
             </span>
           </span>
         ))

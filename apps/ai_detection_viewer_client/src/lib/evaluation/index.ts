@@ -71,4 +71,5 @@ export {
   OUTCOME_LABEL,
   countOf,
   formatPercent,
+  outcomeCountLabel,
 } from './outcomes';
