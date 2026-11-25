@@ -126,7 +126,7 @@ describe('parseNuScenes', () => {
 
 describe('parseNuScenes defensive behavior', () => {
   it('returns [] and warns on an invalid root', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     expect(parseNuScenes(null)).toEqual([]);
     expect(parseNuScenes({})).toEqual([]);
     expect(warn).toHaveBeenCalled();
@@ -134,7 +134,7 @@ describe('parseNuScenes defensive behavior', () => {
   });
 
   it('skips a malformed annotation but keeps the valid ones in the frame', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const bad = { instanceToken: 'x', category: 'vehicle.car', translation: [1, 2], size: [1, 1, 1], rotation: IDENTITY_WXYZ };
     const [frame] = parseNuScenes(
       preppedWith([FRONT, bad as unknown as NuScenesAnnotation]),
@@ -146,7 +146,7 @@ describe('parseNuScenes defensive behavior', () => {
   });
 
   it('skips a duplicate instance token within a frame', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const [frame] = parseNuScenes(preppedWith([FRONT, { ...FRONT }]));
     expect(frame.detections3D).toHaveLength(1);
     expect(warn).toHaveBeenCalled();
@@ -182,7 +182,7 @@ describe('parseNuScenes LiDAR point cloud (F2-B)', () => {
   });
 
   it('skips malformed lidar (non-triple-length points) without throwing', () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const [frame] = parseNuScenes(preppedWith([FRONT], lidarWith([1, 2, 3, 4])));
     expect(frame.pointCloud).toEqual([]);
     expect(warn).toHaveBeenCalled();

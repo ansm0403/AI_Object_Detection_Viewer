@@ -431,7 +431,7 @@ F5의 평가 표본도 늘어난다.
 - 테스트는 `lib/`의 순수 로직과 `store/`만 쓴다. 화면 렌더링은 테스트하지 않고 캡처로 확인한다.
 
 ### 세션을 끝낼 때
-- [ ] 테스트 전체 통과, `tsc --noEmit` 오류 0개.
+- [ ] 테스트 전체 통과, `tsc --noEmit` 오류 0개, **린트 오류 0개**(CI와 같은 명령: 7장 참고).
 - [ ] `.claude/docs/post-mvp-checklist.md`: 이번 기능의 정식 항목과 완료 기록(영어 본문 + 한국어 주석).
       **계획과 달라진 점과 그 이유**를 반드시 적는다.
 - [ ] `.claude/docs/architecture.md`: 바뀐 구조 반영.
@@ -462,7 +462,11 @@ F5의 평가 표본도 늘어난다.
   `lib/review/shortcuts.ts`가 해석한다. F4 전에는 키보드 처리가 한 곳도 없었다.
 - (F4 이후) `Viewer2D`는 확대 상태에서 `viewBox`를 바꾼다. 전체 보기와 COCO에서는 이전과 같다.
 - 테스트는 386개다(F4 완료 시점. F3 완료 시점 213개, F2-E 완료 시점 206개).
-- 린트 오류 5개가 F4 이전부터 있다(`Scene.tsx` 1개, `lib/nuscenes/parser.test.ts` 4개, 모두 빈 화살표 함수). 손대지 않았다.
+- **CI는 린트 오류가 하나라도 있으면 실패한다**(`.github/workflows/ci.yml`: `nx run-many -t lint test build typecheck`).
+  F4 PR의 CI가 린트 오류 5개로 실패했는데, 모두 F4 이전부터 `main`에 있던 줄이었다(`Scene.tsx` 1개,
+  `lib/nuscenes/parser.test.ts` 4개, 모두 빈 화살표 함수 `() => {}`). `() => undefined`로 바꿔 고쳤다(동작 변화 없음).
+  경고 19개는 남아 있고 CI를 막지 않는다. **세션을 끝내기 전에 `npx nx run @ai-detection-viewer/ai_detection_viewer_client:lint`를
+  돌려 오류 0개인지 확인한다**(테스트와 `tsc`만으로는 CI 통과를 보장하지 못한다).
 
 **데이터**
 - nuScenes 사진은 1600×900(16:9)이다.

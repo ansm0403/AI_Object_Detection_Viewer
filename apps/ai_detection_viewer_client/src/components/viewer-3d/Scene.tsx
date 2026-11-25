@@ -68,7 +68,7 @@ export function Scene({
   // raycaster에 "보이지 않게" 만듦으로써 Step 5의 deselect 계약을 복구.
   const gridRef = useRef<THREE.Mesh>(null);
   useEffect(() => {
-    if (gridRef.current) gridRef.current.raycast = () => {};
+    if (gridRef.current) gridRef.current.raycast = () => undefined;
   }, []);
 
   return (
