@@ -2,7 +2,7 @@
 F2 — nuScenes-mini 오프라인 prep 스크립트 (의존성 0개, 표준 라이브러리만)
 
 목적: nuScenes-mini의 관계형 테이블(여러 JSON)을 JOIN/평탄화해서, 브라우저가
-COCO처럼 바로 fetch할 수 있는 작은 정적 JSON 한 덩이 + CAM_FRONT 이미지 몇 장으로
+COCO처럼 바로 fetch할 수 있는 작은 정적 JSON 한 덩이 + 카메라 6대의 이미지(F6)로
 구워낸다. Step 11의 generate_predictions.py와 같은 "오프라인 1회 도구"이며,
 배포되는 웹앱의 일부가 아니다(런타임 백엔드 X — Vercel 정적 배포 정체성 유지).
 
@@ -46,8 +46,21 @@ REPO_ROOT = Path(__file__).parent.parent
 DEFAULT_DATAROOT = r"C:\data\sets\nuscenes"
 DEFAULT_VERSION = "v1.0-mini"
 
-# F2-A는 CAM_FRONT 한 대만 사용 (3D 박스를 이 카메라 이미지에 투영해 2D를 만든다)
-CAMERA = "CAM_FRONT"
+# F6: 카메라 6대를 모두 내보낸다. 3D 박스를 각 카메라 이미지에 투영해 2D를 만드는 것은
+# 여전히 lib의 일이고(Rule #3), 여기서는 카메라마다 사진 + ego_pose + calibrated_sensor를
+# 원시 복사만 한다. 목록의 순서가 곧 출력의 순서다(무인자 재실행이 같은 파일을 내도록 고정).
+CAMERAS = [
+    "CAM_FRONT",
+    "CAM_FRONT_LEFT",
+    "CAM_FRONT_RIGHT",
+    "CAM_BACK",
+    "CAM_BACK_LEFT",
+    "CAM_BACK_RIGHT",
+]
+# 프레임의 "기준" 카메라. 프레임 최상위의 image / egoPose / calibratedSensor는 이 카메라의
+# 값이며(F2-A부터 그대로), 3D 장면의 기준 좌표(ego 프레임)도 이 카메라의 ego_pose다.
+# 바꾸면 3D 박스 위치와 거리 값이 전부 조금씩 달라지므로 그대로 둔다.
+CAMERA = CAMERAS[0]
 # F2-B는 LIDAR_TOP 점구름을 싣는다 (실측 환경 점). 박스는 CAM_FRONT-ego 프레임에
 # 있으므로, 점은 sensor→global→cam-ego로 lib에서 정렬한다(여기선 원시 복사만).
 LIDAR = "LIDAR_TOP"
@@ -71,14 +84,22 @@ DECIMATION_SEED = 42
 
 # 출력 위치: 앱의 public/ 아래 (여기 들어간 것만 배포/커밋된다)
 OUTPUT_DIR = REPO_ROOT / "apps" / "ai_detection_viewer_client" / "public" / "sample-data" / "nuscenes"
-IMAGE_SUBDIR = "cam_front"  # 이미지 복사 대상 하위 폴더
 # 브라우저가 보는 public 경로 접두사 (Frame.imageUrl과 같은 규약)
-PUBLIC_PATH_PREFIX = f"/sample-data/nuscenes/{IMAGE_SUBDIR}"
+PUBLIC_PATH_ROOT = "/sample-data/nuscenes"
+
+
+def image_subdir(channel: str) -> str:
+    """카메라 이름 → 이미지 하위 폴더 이름. 'CAM_FRONT_LEFT' → 'cam_front_left'."""
+    return channel.lower()
+
 
 # 우리 prepped 포맷(우리가 정의한 것)의 버전. nuScenes 버전과 무관.
 # 1.1 (F4): annotation에 annotationToken / numLidarPts / visibility 추가. 기존 필드는 그대로라
 #           1.0을 읽던 코드는 1.1도 읽는다(파서는 새 필드를 선택 값으로 다룬다).
-PREPPED_FORMAT_VERSION = "1.1"
+# 1.2 (F6): 프레임에 cameras[] 추가(카메라 6대의 사진 + ego_pose + calibrated_sensor).
+#           최상위 image / egoPose / calibratedSensor는 그대로(= CAM_FRONT)라 1.1을 읽던
+#           코드는 1.2도 읽는다. cameras가 없는 옛 파일은 파서가 카메라 한 대로 다룬다.
+PREPPED_FORMAT_VERSION = "1.2"
 
 
 # --- 테이블 로딩 + 인덱싱 (관계형 JOIN을 위한 준비) -------------------------
@@ -141,13 +162,42 @@ def voxel_decimate(
 
 # --- 한 키프레임 평탄화 -----------------------------------------------------
 
-def build_prepped_frame(sample: dict, ctx: dict) -> tuple[dict, str]:
+def build_camera(channel: str, sd: dict, ctx: dict) -> dict:
+    """카메라 한 대의 사진 + 그 사진을 찍은 순간의 ego_pose + calibrated_sensor (원시 복사).
+
+    카메라 6대는 같은 순간에 찍히지 않는다(이 씬에서 CAM_FRONT 기준 -8 ~ +35 ms). 그래서
+    nuScenes는 sample_data마다 ego_pose를 따로 둔다. 3D 박스를 이 카메라의 사진에 정확히
+    비추려면 "이 사진을 찍은 순간의 차 위치"가 필요하므로 카메라마다 함께 싣는다.
+    """
+    ego = ctx["ego_poses"][sd["ego_pose_token"]]
+    calib = ctx["calibs"][sd["calibrated_sensor_token"]]
+    image_filename = Path(sd["filename"]).name  # 'samples/CAM_FRONT/xxx.jpg' → 'xxx.jpg'
+    return {
+        "channel": channel,
+        "image": {
+            "path": f"{PUBLIC_PATH_ROOT}/{image_subdir(channel)}/{image_filename}",
+            "width": sd["width"],
+            "height": sd["height"],
+        },
+        "egoPose": {
+            "translation": ego["translation"],
+            "rotation": ego["rotation"],  # [w, x, y, z]
+        },
+        "calibratedSensor": {
+            "translation": calib["translation"],
+            "rotation": calib["rotation"],                 # [w, x, y, z]
+            "cameraIntrinsic": calib["camera_intrinsic"],  # 3x3
+        },
+    }
+
+
+def build_prepped_frame(sample: dict, ctx: dict) -> tuple[dict, list[tuple[str, str]]]:
     """한 sample(키프레임)을 평탄화된 prepped 프레임 dict로 변환한다.
 
     JOIN 경로(전부 토큰 → 레코드 조회):
       sample
-        └─ (CAM_FRONT sample_data)  이미지 파일/크기 + ego_pose/calibrated_sensor 토큰
-              ├─ ego_pose            차의 global 위치/자세
+        └─ (카메라 6대의 sample_data)  이미지 파일/크기 + ego_pose/calibrated_sensor 토큰
+              ├─ ego_pose            (그 사진을 찍은 순간의) 차의 global 위치/자세
               └─ calibrated_sensor   카메라의 ego 기준 위치/자세 + intrinsic
         └─ (LIDAR_TOP sample_data)  .pcd.bin 파일 + LiDAR ego_pose/calibrated_sensor 토큰
               ├─ ego_pose            (라이다 촬영 시각의) 차 global 위치/자세
@@ -155,13 +205,16 @@ def build_prepped_frame(sample: dict, ctx: dict) -> tuple[dict, str]:
         └─ sample_annotation[]  global 3D 박스 → instance → category (클래스명)
                                            └→ visibility (가려짐 단계, F4)
 
-    반환: (prepped frame dict, 복사할 원본 이미지 상대경로)
+    반환: (prepped frame dict, 복사할 사진 목록 [(원본 상대경로, 대상 하위 폴더), ...])
     """
-    sd = ctx["cam_sd_by_sample"][sample["token"]]
-    ego = ctx["ego_poses"][sd["ego_pose_token"]]
-    calib = ctx["calibs"][sd["calibrated_sensor_token"]]
-
-    image_filename = Path(sd["filename"]).name  # 'samples/CAM_FRONT/xxx.jpg' → 'xxx.jpg'
+    cam_sds = ctx["cam_sd_by_sample"][sample["token"]]
+    missing = [c for c in CAMERAS if c not in cam_sds]
+    if missing:
+        raise SystemExit(f"sample {sample['token']}에 키프레임 사진이 없는 카메라: {missing}")
+    cameras = [build_camera(channel, cam_sds[channel], ctx) for channel in CAMERAS]
+    copies = [(cam_sds[channel]["filename"], image_subdir(channel)) for channel in CAMERAS]
+    # 프레임의 기준 카메라(CAM_FRONT). 최상위 필드는 F2-A부터의 형식 그대로 둔다.
+    base = cameras[0]
 
     annotations = []
     for ann in ctx["anns_by_sample"].get(sample["token"], []):
@@ -217,25 +270,16 @@ def build_prepped_frame(sample: dict, ctx: dict) -> tuple[dict, str]:
     frame = {
         "token": sample["token"],
         "timestamp": sample["timestamp"],  # 마이크로초
-        "image": {
-            "path": f"{PUBLIC_PATH_PREFIX}/{image_filename}",
-            "width": sd["width"],
-            "height": sd["height"],
-        },
-        "egoPose": {
-            "translation": ego["translation"],
-            "rotation": ego["rotation"],  # [w, x, y, z]
-        },
-        "calibratedSensor": {
-            "translation": calib["translation"],
-            "rotation": calib["rotation"],                 # [w, x, y, z]
-            "cameraIntrinsic": calib["camera_intrinsic"],  # 3x3
-        },
+        "image": base["image"],
+        "egoPose": base["egoPose"],
+        "calibratedSensor": base["calibratedSensor"],
+        # F6: 카메라 6대. cameras[0]은 위의 최상위 필드와 같은 값(CAM_FRONT)이다.
+        "cameras": cameras,
         "annotations": annotations,
     }
     if lidar is not None:
         frame["lidar"] = lidar
-    return frame, sd["filename"]
+    return frame, copies
 
 
 def iter_scene_keyframes(scene: dict, samples_by_token: dict, limit: int):
@@ -292,15 +336,15 @@ def main():
     calib_channel = {
         c["token"]: sensors[c["sensor_token"]]["channel"] for c in calibs.values()
     }
-    #    (b) sample_token → 그 프레임의 CAM_FRONT / LIDAR_TOP 키프레임 sample_data
-    cam_sd_by_sample = {}
+    #    (b) sample_token → 그 프레임의 카메라 6대 / LIDAR_TOP 키프레임 sample_data
+    cam_sd_by_sample = {}  # {sample_token: {channel: sample_data}}
     lidar_sd_by_sample = {}
     for sd in sample_data:
         if not sd["is_key_frame"]:
             continue
         channel = calib_channel.get(sd["calibrated_sensor_token"])
-        if channel == CAMERA:
-            cam_sd_by_sample[sd["sample_token"]] = sd
+        if channel in CAMERAS:
+            cam_sd_by_sample.setdefault(sd["sample_token"], {})[channel] = sd
         elif channel == LIDAR:
             lidar_sd_by_sample[sd["sample_token"]] = sd
     #    (c) sample_token → 그 프레임의 3D 박스 어노테이션들
@@ -330,24 +374,31 @@ def main():
     scene = scenes[args.scene_index]
     print(f"[scene] index={args.scene_index} name={scene['name']} nbr_samples={scene['nbr_samples']}")
 
-    image_out_dir = OUTPUT_DIR / IMAGE_SUBDIR
-    image_out_dir.mkdir(parents=True, exist_ok=True)
-    # 재실행(특히 다른 씬으로 교체) 시 이전 씬 이미지가 남지 않도록 출력 폴더를 비운다.
-    for old in image_out_dir.glob("*.jpg"):
-        old.unlink()
+    # 재실행(특히 다른 씬으로 교체) 시 이전 씬 이미지가 남지 않도록 카메라별 출력 폴더를 비운다.
+    for channel in CAMERAS:
+        image_out_dir = OUTPUT_DIR / image_subdir(channel)
+        image_out_dir.mkdir(parents=True, exist_ok=True)
+        for old in image_out_dir.glob("*.jpg"):
+            old.unlink()
 
     frames = []
     total_annotations = 0
     total_lidar_points = 0
+    total_images = 0
+    total_image_bytes = 0
     for sample in iter_scene_keyframes(scene, samples_by_token, args.num_keyframes):
-        frame, src_relpath = build_prepped_frame(sample, ctx)
+        frame, copies = build_prepped_frame(sample, ctx)
         frames.append(frame)
         total_annotations += len(frame["annotations"])
         if "lidar" in frame:
             total_lidar_points += len(frame["lidar"]["points"]) // 3
 
-        # 이 키프레임의 CAM_FRONT 이미지를 public/으로 복사
-        shutil.copy2(Path(args.dataroot) / src_relpath, image_out_dir / Path(src_relpath).name)
+        # 이 키프레임의 카메라 6대 이미지를 public/으로 복사
+        for src_relpath, subdir in copies:
+            dest = OUTPUT_DIR / subdir / Path(src_relpath).name
+            shutil.copy2(Path(args.dataroot) / src_relpath, dest)
+            total_images += 1
+            total_image_bytes += dest.stat().st_size
 
     prepped = {"version": PREPPED_FORMAT_VERSION, "frames": frames}
     output_json = OUTPUT_DIR / "nuscenes.json"
@@ -362,7 +413,8 @@ def main():
     print(f"[done] lidar  → {total_lidar_points} points total (~{avg_pts}/frame, "
           f"voxel={args.voxel_size}m, cap={args.max_points})")
     print(f"[done] JSON   → {output_json}")
-    print(f"[done] images → {image_out_dir} ({len(frames)}장)")
+    print(f"[done] images → {OUTPUT_DIR} ({total_images}장, 카메라 {len(CAMERAS)}대, "
+          f"{total_image_bytes / 1024 / 1024:.2f} MB)")
 
 
 if __name__ == "__main__":

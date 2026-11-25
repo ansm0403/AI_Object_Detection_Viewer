@@ -1,10 +1,11 @@
 import type {
   BoxAnnotationInfo,
-  Detection2D,
+  CameraView,
   Detection3D,
   Frame,
   Point3D,
 } from '@/lib/types';
+import { DEFAULT_CAMERA } from '@/lib/cameras/names';
 import {
   egoQuatToThree,
   egoToThree,
@@ -22,6 +23,9 @@ import {
 } from '@/lib/geometry/projection';
 import type {
   NuScenesAnnotation,
+  NuScenesCalibratedSensor,
+  NuScenesCamera,
+  NuScenesImage,
   NuScenesLidar,
   NuScenesPrepped,
   NuScenesPreppedFrame,
@@ -61,11 +65,19 @@ function buildFrame(pf: unknown): Frame | null {
     return null;
   }
 
+  // The frame's ego pose (its base camera's): the frame every 3D box and LiDAR
+  // point is expressed in. Unchanged by F6 — the other cameras only add views.
   const egoPose: Pose = pf.egoPose;
-  const sensor: Pose = pf.calibratedSensor;
-  const K = pf.calibratedSensor.cameraIntrinsic;
+  // (F6) One 2D box list per camera, default camera first.
+  const sources = cameraSources(pf);
+  const views: CameraView[] = sources.map((source) => ({
+    name: source.name,
+    imageUrl: source.image.path,
+    imageWidth: source.image.width,
+    imageHeight: source.image.height,
+    detections2D: [],
+  }));
 
-  const detections2D: Detection2D[] = [];
   const detections3D: Detection3D[] = [];
   const seenIds = new Set<string>();
 
@@ -105,36 +117,112 @@ function buildFrame(pf: unknown): Frame | null {
       ...(annotation ? { annotation } : {}),
     });
 
-    // 2D box = AABB of the 3D box projected into the camera image. Skipped (but
-    // the 3D box is kept) when the box is behind the camera or fully off-screen.
-    const cornersEgo = boxCornersEgo(centerEgo, localSize, quatEgo);
-    const bbox = projectCornersToBbox(cornersEgo, sensor, K, pf.image.width, pf.image.height);
-    if (bbox) {
+    // 2D box = AABB of the 3D box projected into a camera image. Skipped (but
+    // the 3D box is kept) when the box is behind that camera or fully off its
+    // image. (F6) Done once per camera: the same object gets a 2D box in every
+    // photo it appears in, always under the same id (Rule #1).
+    sources.forEach((source, index) => {
+      // The box in the ego frame OF THIS PHOTO: the cameras fire at slightly
+      // different moments, and the car has moved in between (see
+      // `NuScenesCamera`). For the base camera this is the frame's own ego pose,
+      // so its 2D boxes are exactly what they were before F6.
+      const cornersEgo = boxCornersEgo(
+        globalToEgo(ann.translation, source.egoPose),
+        localSize,
+        globalQuatToEgo(ann.rotation, source.egoPose.rotation),
+      );
+      const bbox = projectCornersToBbox(
+        cornersEgo,
+        source.sensor,
+        source.K,
+        source.image.width,
+        source.image.height,
+      );
+      if (!bbox) return;
       // (F4) Also keep the eight projected corners, so the camera view can draw
       // the 3D box itself (edges + front face), not only this rectangle. A
       // non-null bbox means every corner is in front of the camera, so the
       // corner projection cannot fail here; the fallback is purely defensive.
-      const corners = projectBoxCorners(cornersEgo, sensor, K);
-      detections2D.push({
+      const corners = projectBoxCorners(cornersEgo, source.sensor, source.K);
+      views[index].detections2D.push({
         id: ann.instanceToken,
         class: className,
         confidence: 1.0,
         bbox,
         ...(corners ? { corners } : {}),
       });
-    }
+    });
   }
 
+  // The top-level image fields are the default camera's view (`views[0]`) —
+  // the same array, so the two can never disagree (see `Frame.cameras`).
+  const main = views[0];
   return {
     id: pf.token,
-    imageUrl: pf.image.path,
-    imageWidth: pf.image.width,
-    imageHeight: pf.image.height,
-    detections2D,
+    imageUrl: main.imageUrl,
+    imageWidth: main.imageWidth,
+    imageHeight: main.imageHeight,
+    detections2D: main.detections2D,
     detections3D,
     pointCloud: buildLidarPoints(pf.lidar, egoPose, pf.token),
     source: 'nuscenes-measured',
+    cameras: views,
   };
+}
+
+/** What the parser needs to project boxes into one camera's photo. */
+type CameraSource = {
+  name: string;
+  image: NuScenesImage;
+  /** The car's pose when THIS photo was taken. */
+  egoPose: Pose;
+  /** The camera's pose on the car. */
+  sensor: Pose;
+  K: NuScenesCalibratedSensor['cameraIntrinsic'];
+};
+
+/**
+ * (F6) The cameras of a prepped frame, default camera first.
+ *
+ * Format 1.2 lists them in `cameras`. A file prepped before F6 has only the
+ * top-level image + calibration, which is then the one camera (those files
+ * were always CAM_FRONT). A malformed entry or a repeated channel is skipped
+ * with a warning; if nothing usable is left the top-level camera is used, so a
+ * frame always has at least one view (Error Defaults: never throw, never lose
+ * the frame over one bad camera).
+ */
+function cameraSources(pf: NuScenesPreppedFrame): CameraSource[] {
+  const base: CameraSource = {
+    name: DEFAULT_CAMERA,
+    image: pf.image,
+    egoPose: pf.egoPose,
+    sensor: pf.calibratedSensor,
+    K: pf.calibratedSensor.cameraIntrinsic,
+  };
+  const listed: unknown = pf.cameras;
+  if (listed === undefined) return [base];
+  if (!Array.isArray(listed)) {
+    console.warn(`[parseNuScenes] Ignoring malformed cameras in frame ${pf.token}.`);
+    return [base];
+  }
+
+  const sources: CameraSource[] = [];
+  const seen = new Set<string>();
+  for (const camera of listed) {
+    if (!isCamera(camera) || seen.has(camera.channel)) {
+      console.warn(`[parseNuScenes] Skipping malformed or repeated camera in frame ${pf.token}.`);
+      continue;
+    }
+    seen.add(camera.channel);
+    sources.push({
+      name: camera.channel,
+      image: camera.image,
+      egoPose: camera.egoPose,
+      sensor: camera.calibratedSensor,
+      K: camera.calibratedSensor.cameraIntrinsic,
+    });
+  }
+  return sources.length > 0 ? sources : [base];
 }
 
 /**
@@ -281,6 +369,18 @@ function isCalibratedSensor(value: unknown): boolean {
     Array.isArray(s.cameraIntrinsic) &&
     s.cameraIntrinsic.length === 3 &&
     s.cameraIntrinsic.every((row) => isFiniteVec(row, 3))
+  );
+}
+
+function isCamera(value: unknown): value is NuScenesCamera {
+  if (value === null || typeof value !== 'object') return false;
+  const c = value as Record<string, unknown>;
+  return (
+    typeof c.channel === 'string' &&
+    c.channel !== '' &&
+    isImage(c.image) &&
+    isPose(c.egoPose) &&
+    isCalibratedSensor(c.calibratedSensor)
   );
 }
 

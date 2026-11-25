@@ -43,6 +43,13 @@ export type NuScenesPreppedFrame = {
   egoPose: NuScenesEgoPose;
   /** The camera's pose relative to the EGO frame + its lens intrinsics. */
   calibratedSensor: NuScenesCalibratedSensor;
+  /**
+   * (F6, format 1.2) All cameras of this keyframe, the frame's base camera
+   * (CAM_FRONT) first — `cameras[0]` repeats the top-level `image` / `egoPose` /
+   * `calibratedSensor`. Optional: files prepped before F6 (1.0, 1.1) do not have
+   * it, and the parser then treats the top-level fields as the one camera.
+   */
+  cameras?: NuScenesCamera[];
   /** 3D box annotations, in the GLOBAL frame. */
   annotations: NuScenesAnnotation[];
   /** (F2-B) Decimated LiDAR_TOP point cloud + the calibration needed to align it
@@ -58,6 +65,25 @@ export type NuScenesImage = {
   width: number;
   /** Pixel height. */
   height: number;
+};
+
+/**
+ * (F6) One camera's photo of a keyframe, with what is needed to project the
+ * frame's 3D boxes into it.
+ *
+ * `egoPose` is the car's pose AT THE MOMENT THIS PHOTO WAS TAKEN. The six
+ * cameras do not fire together (in the sample: up to 35 ms after CAM_FRONT,
+ * the car 3–17 cm further on), so each photo has its own. Projecting with the
+ * photo's own pose puts a box where that camera saw it; reusing the frame's
+ * (CAM_FRONT) pose shifted rectangles by a median of 2.8 px and up to 41 px
+ * (measured 2026-11-26).
+ */
+export type NuScenesCamera = {
+  /** nuScenes sensor channel, e.g. "CAM_BACK_LEFT". Becomes `CameraView.name`. */
+  channel: string;
+  image: NuScenesImage;
+  egoPose: NuScenesEgoPose;
+  calibratedSensor: NuScenesCalibratedSensor;
 };
 
 /** `ego_pose`: car pose in the GLOBAL frame. Differs every frame (the car moves). */
