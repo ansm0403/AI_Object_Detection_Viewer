@@ -560,3 +560,72 @@ still leave two overlapping boxes, one of which becomes a false alarm.
 How many things a percentage was computed from. "0 % of 40" and "0 % of 2" are different findings, so
 every percentage in the panel has its counts beside it. The whole evaluation is 10 frames of one
 scene from one camera: it shows that the analysis works, not how good the model is.
+
+## Multi-Camera Terms (F6 — six cameras)
+
+The running picture: **six cameras on the roof of the car, facing outward in a ring** — as if one
+person turned on the spot and took six photos. Terms added when the F6 design doc was written
+(2026-11-26); adjust when the feature lands.
+
+**Camera channel (카메라 이름)** *(F6)*
+Which way a camera faces. nuScenes names six: `CAM_FRONT`, `CAM_FRONT_LEFT`, `CAM_FRONT_RIGHT`,
+`CAM_BACK`, `CAM_BACK_LEFT`, `CAM_BACK_RIGHT`. The UI shortens them to F, FL, FR, B, BL, BR. Every
+camera takes a 1600×900 photo at each keyframe, so one frame has six photos.
+
+**Camera rig (카메라 묶음, 리그)** *(F6)*
+All the cameras fixed on one vehicle, taken together. "Seen by the rig" = seen by at least one of
+them.
+
+**Calibration (보정값)** *(F6)*
+The numbers that say where a camera sits on the car, which way it points ([[Extrinsics]]) and what
+its lens does ([[Camera Intrinsics (intrinsic matrix, K)]]). Each camera has its own; without them a
+3D box cannot be drawn in the right place on that camera's photo. In nuScenes they are the
+`calibrated_sensor` record, constant over a drive.
+
+**Field of view, FOV (시야)** *(F6)*
+The angle a camera takes in at once — the cone of a torch beam. Five of the nuScenes cameras are
+alike; **CAM_BACK has a wider lens** (smaller focal length: 809 vs about 1260 px), so it sees more
+to the sides and draws the same object about 1.56× smaller.
+
+**Field-of-view overlap (시야 겹침)** *(F6)*
+The strip of the world two neighbouring cameras both see. An object there appears in two photos. In
+the sample, 140 of 583 boxes are seen by two cameras and 443 by one; none is seen by no camera.
+Always neighbouring pairs (e.g. FRONT_RIGHT + BACK_RIGHT).
+
+**Seen by a camera (보는 카메라)** *(F6)*
+A camera "sees" a 3D box when the box, projected into that camera's photo, leaves a rectangle
+inside the image ([[Projected 2D box (AABB of corners)]]). The same rule as before F6, applied per
+camera. The 2D boxes of one object in different photos all share the object's id (Immutable Rule
+#1) — one object, several views.
+
+**Per-camera ego pose (카메라별 차 위치)** *(F6)*
+The six cameras do not fire at the same instant (up to 35 ms apart in the sample; the car moves
+3–17 cm in between), so nuScenes stores the car's position ([[ego_pose]]) separately for every
+photo. Projecting a box into a photo with *that photo's* ego pose puts it where the camera actually
+saw it; reusing the front camera's pose shifts the rectangle by a median of 2.8 px and up to 41 px.
+
+**Per-photo scoring (사진 단위 채점)** *(F6)*
+Scoring each photo on its own and adding the results. A 2D detector looks at one photo at a time
+and does not know what the next camera sees, so one photo is one exam sheet. An object seen by two
+cameras is therefore two questions — it can be found in one photo and missed in the other (usually
+the photo where it is cut off by the image edge).
+
+**Found by any camera (어느 카메라에서든 찾음)** *(F6)*
+The per-OBJECT summary of per-photo results: an object counts as found if at least one camera's
+photo found it. Used for the colour of a 3D box (one box, one colour), not for precision / recall.
+
+**Bicycle rack rule / group region (자전거 거치대 규칙, 묶음 정답)** *(F6)*
+nuScenes labels a bike rack as ONE box (`static_object.bicycle_rack`); the bikes parked in it get
+no boxes of their own. A detector that correctly finds those bikes would be charged a false alarm
+for each. The rule: a bicycle / motorcycle prediction whose centre lies inside a rack's rectangle is
+neither right nor wrong — the same idea as [[Not scored / ignore (채점 제외)]], for a region instead
+of an object. The official nuScenes detection evaluation filters such boxes too (by centre).
+
+**Image-edge truncation (사진 가장자리에 잘림)** *(F6)*
+An object only partly inside a photo because it sits at the border of the camera's view. Detectors
+find such objects much less often (in the sample: 38 % when under half of the box is inside the
+photo, 68 % when all of it is). With six cameras the neighbouring camera often sees the whole object.
+
+**Preloading (미리 받기)** *(F6)*
+Fetching photos before they are needed, so a frame switch or playback shows them at once. One frame
+is six photos (about 0.8 MB); playback advances every 0.5 s.

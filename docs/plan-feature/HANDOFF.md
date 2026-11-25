@@ -36,7 +36,9 @@
 | 방향 합의 | 끝남. 로드맵이 `post-mvp-checklist.md`에 있음 |
 | F4 | 구현 완료 (2026-11-25). **PR #11로 `main`에 합쳐졌다**(커밋 `26008ba`, F5 세션에서 `git log`로 확인) |
 | F5 | **구현 완료 (2026-11-26).** 결과와 계획 대비 달라진 점은 `post-mvp-checklist.md`의 F5 항목, 구조는 `architecture.md`의 "Evaluation (F5)", 경계 사례는 `docs/edgecases/Edge_F#5.md`, 시안과 단계별 캡처는 `docs/plan-feature/assets/F5/`(`compare.html`, `steps.html`). 설계 문서는 [F5_camera_detection_eval.md](F5_camera_detection_eval.md) |
-| F6~F8 설계 문서 | 없음. 각 기능을 시작하는 세션에서 쓴다 |
+| F5 병합 | **PR #12로 `main`에 합쳐졌다**(squash 커밋 `dfcf111`, F6 세션에서 `git log`로 확인) |
+| F6 | **임시 승인, 구현 중 (2026-11-26).** 설계 문서 [F6_six_cameras.md](F6_six_cameras.md), 시안 `docs/plan-feature/assets/F6/compare.html`, 단계별 캡처 `steps.html`. 브랜치 `feat/f6-six-cameras`에서 F6-A(데이터와 로직), B(카메라 칸과 검수), C(평가 6대)까지 사용자 확인을 받았다. 남은 것: D(마무리), 엣지 케이스 검증, 문서. three.js 상시 비용은 사용자가 **"F6 뒤, F7 전에 별도 세션"** 으로 정했다 |
+| F7~F8 설계 문서 | 없음. 각 기능을 시작하는 세션에서 쓴다 |
 | 테스트 | 530개 통과, `tsc --noEmit` 오류 0개, CI 린트 오류 0개(경고 19개), 배포용 빌드 성공 (F5 종료 시점) |
 
 **다음 세션에서 할 일 (F6 세션)**
