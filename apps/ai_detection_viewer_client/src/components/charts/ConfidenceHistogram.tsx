@@ -1,6 +1,7 @@
 'use client';
 
 import { BUCKET_COUNT } from '@/lib/selectors';
+import { SECTION_TITLE_CLASS } from '@/components/workspace';
 
 type Props = {
   // Must be length BUCKET_COUNT — guaranteed by `selectConfidenceBuckets`.
@@ -11,14 +12,17 @@ type Props = {
   threshold: number;
 };
 
-// SVG coordinate space. Width is logical (the <svg> stretches to its parent
-// via `w-full`); the px values just give bars and the threshold line a stable
-// proportion. Height stays fixed so the chart never reflows under the panel.
+// SVG coordinate space for the BARS only. The <svg> is stretched to the panel
+// width at a fixed pixel height (preserveAspectRatio="none"), so bars keep
+// their proportions while the chart never reflows. Text is NOT drawn inside the
+// SVG: a stretched viewBox scales text with the panel (a 200-unit-wide viewBox
+// in a 700px panel turned 8-unit labels into ~28px text). Tick labels are HTML
+// below the chart instead, so they stay at the surrounding text size. (F3)
 const W = 200;
-const H = 60;
-const PAD_X = 4;
-const PAD_TOP = 6;
-const PAD_BOTTOM = 12; // leaves room for the 0 / 0.5 / 1 tick labels
+const H = 48;
+const PAD_X = 0;
+const PAD_TOP = 4;
+const PAD_BOTTOM = 1; // room for the baseline
 const PLOT_W = W - PAD_X * 2;
 const PLOT_H = H - PAD_TOP - PAD_BOTTOM;
 const BAR_GAP = 2;
@@ -31,12 +35,11 @@ export function ConfidenceHistogram({ buckets, threshold }: Props) {
 
   return (
     <section className="px-3 py-3 border-t border-zinc-800">
-      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">
-        Confidence
-      </h3>
+      <h3 className={`${SECTION_TITLE_CLASS} mb-2`}>Confidence</h3>
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-auto"
+        preserveAspectRatio="none"
+        className="w-full h-12 overflow-visible"
         role="img"
         aria-label="Confidence distribution histogram"
       >
@@ -48,6 +51,7 @@ export function ConfidenceHistogram({ buckets, threshold }: Props) {
           y2={H - PAD_BOTTOM}
           stroke="#27272a"
           strokeWidth={1}
+          vectorEffect="non-scaling-stroke"
         />
         {/* Bars. Below-threshold buckets fade to make the threshold line meaningful. */}
         {buckets.map((count, i) => {
@@ -79,30 +83,16 @@ export function ConfidenceHistogram({ buckets, threshold }: Props) {
           stroke="#f4f4f5"
           strokeWidth={1}
           strokeDasharray="2 2"
+          // Keep a crisp 1px dashed line even though the x axis is stretched.
+          vectorEffect="non-scaling-stroke"
         />
-        {/* Tick labels */}
-        <text
-          x={PAD_X}
-          y={H - 2}
-          fill="#71717a"
-          fontSize={8}
-          textAnchor="start"
-        >
-          0
-        </text>
-        <text x={W / 2} y={H - 2} fill="#71717a" fontSize={8} textAnchor="middle">
-          0.5
-        </text>
-        <text
-          x={W - PAD_X}
-          y={H - 2}
-          fill="#71717a"
-          fontSize={8}
-          textAnchor="end"
-        >
-          1
-        </text>
       </svg>
+      {/* Tick labels as HTML so they stay 10px at any panel width. */}
+      <div className="mt-1 flex justify-between text-[10px] text-zinc-500 tabular-nums">
+        <span>0</span>
+        <span>0.5</span>
+        <span>1</span>
+      </div>
       <p className="mt-1 text-[10px] text-zinc-500 tabular-nums">
         threshold {threshold.toFixed(2)}
       </p>

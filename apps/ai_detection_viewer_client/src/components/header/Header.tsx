@@ -47,7 +47,8 @@ export function Header({
     : null;
 
   return (
-    <header className="flex items-center justify-between flex-wrap gap-x-4 gap-y-2 bg-zinc-900 rounded-lg px-4 py-3">
+    // (F3) A flush app bar across the top of the workspace (not a floating card).
+    <header className="flex items-center justify-between flex-wrap gap-x-4 gap-y-2 h-full bg-zinc-900 border-b border-zinc-800 px-4 py-2">
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold text-zinc-100 tracking-tight">
           AI Detection Viewer
@@ -90,9 +91,13 @@ export function Header({
         )}
       </div>
 
-      <span className="text-xs text-zinc-400 tabular-nums">
-        Frame {frameIndex}/{frameCount} · {detectionCount} detections
-      </span>
+      {/* (F3) The header is also shown while loading / on error so the dataset
+          switcher stays usable; there is no frame meta to show then. */}
+      {frameCount > 0 && (
+        <span className="text-xs text-zinc-400 tabular-nums">
+          Frame {frameIndex}/{frameCount} · {detectionCount} detections
+        </span>
+      )}
     </header>
   );
 }

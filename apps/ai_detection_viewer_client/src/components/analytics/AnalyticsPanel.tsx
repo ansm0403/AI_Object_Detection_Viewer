@@ -4,6 +4,7 @@ import type { Frame } from '@/lib/types';
 import { SelectedObjectInfo } from '@/components/inspector';
 import { ConfidenceHistogram, ClassCountBar } from '@/components/charts';
 import { frameHasConfidence } from '@/lib/selectors';
+import { PANEL_CLASS, PanelHeader, SECTION_TITLE_CLASS } from '@/components/workspace';
 
 type Props = {
   frame: Frame;
@@ -25,12 +26,8 @@ export function AnalyticsPanel({
   onToggleClass,
 }: Props) {
   return (
-    <aside className="flex flex-col bg-zinc-900 rounded-lg overflow-hidden">
-      <div className="px-3 py-2 border-b border-zinc-800 shrink-0">
-        <h2 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">
-          Analytics
-        </h2>
-      </div>
+    <aside className={`flex flex-col h-full ${PANEL_CLASS}`}>
+      <PanelHeader title="Analytics" />
       <div className="flex-1 overflow-y-auto">
         <SelectedObjectInfo frame={frame} selectedId={selectedId} />
         {/* Measured (nuScenes) frames have no model scores — every box would
@@ -58,9 +55,7 @@ export function AnalyticsPanel({
 function NoConfidenceNote() {
   return (
     <section className="px-3 py-3 border-t border-zinc-800">
-      <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-2">
-        Confidence
-      </h3>
+      <h3 className={`${SECTION_TITLE_CLASS} mb-2`}>Confidence</h3>
       <p className="text-xs text-zinc-500">
         Measured annotations · no confidence scores
       </p>

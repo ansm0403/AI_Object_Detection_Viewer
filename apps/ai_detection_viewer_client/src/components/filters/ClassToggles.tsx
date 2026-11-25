@@ -1,6 +1,7 @@
 'use client';
 
 import { getClassColor } from '@/lib/ui/class-colors';
+import { SECTION_TITLE_CLASS } from '@/components/workspace';
 
 type Props = {
   // The full set of class names that can be toggled (derived from the current
@@ -19,8 +20,8 @@ export function ClassToggles({ classes, visibleClasses, onToggle }: Props) {
   if (classes.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <span className="font-semibold uppercase tracking-wide text-xs text-zinc-400">
+    <div className="flex items-center gap-1.5 flex-wrap lg:flex-nowrap">
+      <span className={`${SECTION_TITLE_CLASS} mr-1`}>
         Classes
       </span>
       {classes.map((name) => {
@@ -33,7 +34,7 @@ export function ClassToggles({ classes, visibleClasses, onToggle }: Props) {
             onClick={() => onToggle(name)}
             aria-pressed={active}
             className={[
-              'inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs select-none',
+              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs select-none whitespace-nowrap',
               'border transition-colors',
               active
                 ? 'border-sky-400/50 bg-sky-400/10 text-zinc-100'
