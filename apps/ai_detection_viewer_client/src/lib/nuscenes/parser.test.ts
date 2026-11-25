@@ -212,3 +212,62 @@ describe('mapCategory', () => {
     );
   });
 });
+
+// F4 — review facts carried per box (prepped format 1.1). They are optional
+// extras: an older file without them, or a wrong-typed value, must never cost
+// the box itself.
+describe('parseNuScenes annotation info (F4)', () => {
+  const REVIEWABLE: NuScenesAnnotation = {
+    ...FRONT,
+    annotationToken: 'ann-front-1',
+    numLidarPts: 12,
+    visibility: 'v60-80',
+  };
+
+  it('carries the box token, LiDAR point count and visibility onto the 3D box', () => {
+    const [frame] = parseNuScenes(preppedWith([REVIEWABLE]));
+    expect(frame.detections3D[0].annotation).toEqual({
+      token: 'ann-front-1',
+      lidarPoints: 12,
+      visibility: 'v60-80',
+    });
+  });
+
+  it('keeps 0 LiDAR points as 0 (a real value, not "missing")', () => {
+    const [frame] = parseNuScenes(preppedWith([{ ...REVIEWABLE, numLidarPts: 0 }]));
+    expect(frame.detections3D[0].annotation?.lidarPoints).toBe(0);
+  });
+
+  it('leaves `annotation` off entirely for a format-1.0 box (no new fields)', () => {
+    const [frame] = parseNuScenes(preppedWith([FRONT]));
+    expect(frame.detections3D).toHaveLength(1);
+    expect('annotation' in frame.detections3D[0]).toBe(false);
+  });
+
+  it('drops only the wrong-typed fields and still keeps the box', () => {
+    const broken = {
+      ...FRONT,
+      annotationToken: 42,
+      numLidarPts: -3,
+      visibility: 'v10-20',
+    } as unknown as NuScenesAnnotation;
+    const partial = {
+      ...FRONT,
+      instanceToken: 'inst-partial',
+      annotationToken: 'ann-2',
+      numLidarPts: 1.5,
+      visibility: null,
+    } as unknown as NuScenesAnnotation;
+    const [frame] = parseNuScenes(preppedWith([broken, partial]));
+    expect(frame.detections3D).toHaveLength(2);
+    expect(frame.detections3D[0].annotation).toBeUndefined();
+    expect(frame.detections3D[1].annotation).toEqual({ token: 'ann-2' });
+  });
+
+  it('does not copy the review facts onto the projected 2D box', () => {
+    // The verdict is about the 3D box; the 2D box is only its projection.
+    const [frame] = parseNuScenes(preppedWith([REVIEWABLE]));
+    expect(frame.detections2D).toHaveLength(1);
+    expect('annotation' in frame.detections2D[0]).toBe(false);
+  });
+});

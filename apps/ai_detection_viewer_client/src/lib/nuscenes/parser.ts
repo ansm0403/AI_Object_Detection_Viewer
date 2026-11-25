@@ -1,4 +1,10 @@
-import type { Detection2D, Detection3D, Frame, Point3D } from '@/lib/types';
+import type {
+  BoxAnnotationInfo,
+  Detection2D,
+  Detection3D,
+  Frame,
+  Point3D,
+} from '@/lib/types';
 import {
   egoQuatToThree,
   egoToThree,
@@ -82,6 +88,7 @@ function buildFrame(pf: unknown): Frame | null {
     const quatEgo = globalQuatToEgo(ann.rotation, egoPose.rotation);
     const localSize = nuSizeToLocal(ann.size);
 
+    const annotation = readAnnotationInfo(ann);
     detections3D.push({
       id: ann.instanceToken,
       class: className,
@@ -91,6 +98,7 @@ function buildFrame(pf: unknown): Frame | null {
         size: localSize,
         rotation: egoQuatToThree(quatEgo),
       },
+      ...(annotation ? { annotation } : {}),
     });
 
     // 2D box = AABB of the 3D box projected into the camera image. Skipped (but
@@ -186,6 +194,33 @@ const CATEGORY_MAP: Record<string, string> = {
 
 function mapCategory(category: string): string {
   return CATEGORY_MAP[category] ?? category;
+}
+
+const VISIBILITY_LEVELS: readonly string[] = ['v0-40', 'v40-60', 'v60-80', 'v80-100'];
+
+/**
+ * (F4) The review facts of one annotation: its own token, the LiDAR point
+ * count and the visibility level. All three are OPTIONAL extras — sample files
+ * prepped before F4 lack them, and a wrong-typed value drops only that field
+ * (the box itself is valid and still renders; Error Defaults). Returns
+ * `undefined` when none is usable, so such boxes carry no `annotation` key.
+ */
+function readAnnotationInfo(ann: NuScenesAnnotation): BoxAnnotationInfo | undefined {
+  const raw = ann as Record<string, unknown>;
+  const info: BoxAnnotationInfo = {};
+
+  if (typeof raw.annotationToken === 'string' && raw.annotationToken !== '') {
+    info.token = raw.annotationToken;
+  }
+  const pts = raw.numLidarPts;
+  if (typeof pts === 'number' && Number.isInteger(pts) && pts >= 0) {
+    info.lidarPoints = pts;
+  }
+  if (typeof raw.visibility === 'string' && VISIBILITY_LEVELS.includes(raw.visibility)) {
+    info.visibility = raw.visibility as BoxAnnotationInfo['visibility'];
+  }
+
+  return Object.keys(info).length > 0 ? info : undefined;
 }
 
 // --- validation -------------------------------------------------------------
