@@ -35,12 +35,12 @@ type ObjectListProps = {
 };
 
 /**
- * (F3, decision 4) Lists every 3D box of the frame, not only the ones the
+ * (F3, decision 4) Lists every 3D box of the frame, not only the ones one
  * camera sees. The 3D view is the main view (Rule #5), and on nuScenes most
- * boxes are beside / behind the front camera and have no 2D projection — they
- * were reachable only by clicking in the 3D view before. Rows on measured
- * frames show whether the box is in the camera image and its distance from the
- * ego vehicle. COCO is 1:1 (2D and 3D share ids), so it lists the same objects.
+ * boxes are beside / behind the front camera — they were reachable only by
+ * clicking in the 3D view before. Rows on measured frames show (F6) which
+ * camera's photo shows the box and its distance from the ego vehicle. COCO is
+ * 1:1 (2D and 3D share ids), so it lists the same objects.
  */
 export function ObjectList({
   frame,
@@ -56,7 +56,15 @@ export function ObjectList({
   // the list (3D / camera click, J / K, auto-advance after a verdict) or when
   // the list is re-ordered. (F5) The logic moved, unchanged, into a hook shared
   // with the evaluation result list.
-  const selectedRef = useScrollSelectedIntoView(selectedId, orderKey);
+  //
+  // (F6) The row's POSITION is part of the key, not only the ordering's name:
+  // under "Unsure first" a verdict moves the selected row to another group while
+  // the selection and the ordering stay the same (rejecting the top unsure box
+  // sent its row about 900px below the visible list — Edge_F#6 Case 1). The result
+  // list had the same need in F5 (Edge_F#5 Case 3).
+  const listed = orderedBoxes ?? frame.detections3D;
+  const selectedIndex = selectedId ? listed.findIndex((box) => box.id === selectedId) : -1;
+  const selectedRef = useScrollSelectedIntoView(selectedId, `${orderKey ?? ''}:${selectedIndex}`);
   // Measured (nuScenes) frames have no model score — the parser's 1.0 is a
   // placeholder, so the confidence gauge is not shown (Rule #6).
   const showConfidence = frameHasConfidence(frame);

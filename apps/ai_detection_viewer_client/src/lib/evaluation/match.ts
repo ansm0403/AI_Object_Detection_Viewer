@@ -43,8 +43,12 @@ export const DEFAULT_MIN_SCORE = 0.25;
  * the object is visible. Measured recall there was 3 of 26 — a miss on such an
  * object says more about the occlusion than about the model.
  *
- * Caveat stated in the UI: nuScenes records visibility over ALL SIX cameras,
- * not for the front camera alone.
+ * Caveat stated in the UI: nuScenes rates visibility for the OBJECT, over all
+ * six cameras together — not for one photo. An object that is well visible
+ * overall can still be cut off by the edge of the photo being scored (measured
+ * on the sample: 38% recall when less than half of the box is inside the photo,
+ * 68% when all of it is). Such labels are scored like any other; the panel
+ * says what the other camera made of the same object.
  */
 export const UNSCORED_VISIBILITY = 'v0-40';
 

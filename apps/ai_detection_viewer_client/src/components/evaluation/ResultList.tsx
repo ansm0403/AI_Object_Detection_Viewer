@@ -50,7 +50,8 @@ type Props = {
  * is dimmed but stays clickable. The outcome chips are this list's own filter
  * and REMOVE rows.
  *
- * Boxes outside the camera image are not listed — there is nothing to compare
+ * (F6) The rows are ONE photo's results: the camera on screen. Boxes that are
+ * not in that photo are not listed — there is nothing to compare
  * them with — and are accounted for in the footer line.
  */
 export function ResultList({
@@ -133,7 +134,11 @@ export function ResultList({
       ) : rows.length === 0 ? (
         <div className="flex-1 flex items-center justify-center px-4 text-center">
           <p className="text-sm text-zinc-500">
-            {results.length === 0 ? 'Nothing to evaluate in this frame.' : 'No result of the chosen kind.'}
+            {results.length === 0
+              ? scope
+                ? 'Nothing to evaluate in this photo.'
+                : 'Nothing to evaluate in this frame.'
+              : 'No result of the chosen kind.'}
           </p>
         </div>
       ) : (

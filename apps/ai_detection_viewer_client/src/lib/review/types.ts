@@ -15,10 +15,12 @@
  * The decision on a box.
  *  - `approved`: the box is right.
  *  - `rejected`: the box is wrong (see `RejectReason`).
- *  - `unsure`:   looked at it, but this view cannot settle it — e.g. the box is
- *                outside the one camera we have and holds almost no LiDAR
- *                points. Counted as reviewed, and kept apart so it can be
- *                revisited when more cameras exist (F6).
+ *  - `unsure`:   looked at it, but what is on screen cannot settle it — e.g.
+ *                the photo shows too little of it and the box holds almost no
+ *                LiDAR points. Counted as reviewed, and kept apart so it can
+ *                be revisited: before F6 only the front camera existed, and
+ *                the "Unsure first" order brings those boxes back now that
+ *                every camera's photo can be checked.
  * A box with no record is simply "not reviewed" — that is not a verdict.
  */
 export type Verdict = 'approved' | 'rejected' | 'unsure';

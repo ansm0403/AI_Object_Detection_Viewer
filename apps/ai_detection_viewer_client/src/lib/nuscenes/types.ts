@@ -37,7 +37,7 @@ export type NuScenesPreppedFrame = {
   token: string;
   /** Capture time in microseconds (nuScenes-native); used for ordering (F2-C). */
   timestamp: number;
-  /** The chosen camera image (CAM_FRONT for F2-A). */
+  /** The image of the frame's base camera (CAM_FRONT). (F6) All six are in `cameras`. */
   image: NuScenesImage;
   /** Car (ego) position + orientation in the GLOBAL frame at this timestamp. */
   egoPose: NuScenesEgoPose;

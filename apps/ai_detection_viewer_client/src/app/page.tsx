@@ -372,6 +372,14 @@ export default function Index() {
     () => (currentFrame ? inDisplayOrder(cameraViews(currentFrame), (view) => view.name) : []),
     [currentFrame],
   );
+  // (F6) The most cameras any frame of the dataset has. The thumbnail row is
+  // laid out for this many, and is shown whenever it is more than one — also on
+  // a frame that happens to have fewer — so the panes do not move from frame to
+  // frame when the data is uneven (Edge_F#6 Case 2). COCO: 1 → no row.
+  const cameraSlots = useMemo(
+    () => (frames ? frames.reduce((max, frame) => Math.max(max, cameraViews(frame).length), 0) : 0),
+    [frames],
+  );
   // Fetch the coming frames' photos in the background (nuScenes only: the
   // frames that have several cameras).
   const preloadUrls = useMemo(() => {
@@ -1013,7 +1021,7 @@ export default function Index() {
   // (F6) The thumbnail row: each camera's photo, and where the selected box is
   // in it. Only for frames with several cameras. In evaluate mode each
   // thumbnail also says how many labels the model missed in that photo.
-  const showCameraStrip = cameraRow.length > 1;
+  const showCameraStrip = cameraSlots > 1;
   const cameraThumbs: CameraThumb[] = cameraRow.map((view) => {
     const box = selectedObjectId
       ? view.detections2D.find((d) => d.id === selectedObjectId)
@@ -1216,6 +1224,7 @@ export default function Index() {
             cameras={cameraThumbs}
             activeName={activeCamera}
             onSelect={setCamera}
+            slots={cameraSlots}
             shortcutHint={`${SHORTCUT_KEYS.previousCamera} ${SHORTCUT_KEYS.nextCamera}`}
           />
         ) : undefined

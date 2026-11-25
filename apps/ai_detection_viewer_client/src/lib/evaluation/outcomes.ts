@@ -36,8 +36,8 @@ export const OUTCOME_COLOR: Record<EvalKind, string> = {
 };
 
 /**
- * A box that takes no part in the evaluation (outside the camera image, or of
- * a class the model cannot name). Same grey as "not scored": neither counts.
+ * A box that takes no part in the evaluation (no camera's photo shows it, or it
+ * is of a class the model cannot name). Same grey as "not scored": neither counts.
  */
 export const NOT_EVALUATED_COLOR = '#71717a';
 

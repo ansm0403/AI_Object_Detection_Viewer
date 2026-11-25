@@ -26,7 +26,18 @@ type Props = {
   onSelect: (name: string) => void;
   /** Keys that step through the cameras, for the tooltip (the page owns them). */
   shortcutHint?: string;
+  /**
+   * How many thumbnail cells the row is divided into — the largest camera count
+   * of any frame of the dataset. A frame with fewer cameras leaves cells empty
+   * instead of stretching its thumbnails, so the row (whose height follows the
+   * cell width) and everything below it stay where they are from frame to frame
+   * (Edge_F#6 Case 2). Defaults to the number of cameras given.
+   */
+  slots?: number;
 };
+
+/** `count` equal columns (at least one). */
+const columns = (count: number): string => `repeat(${Math.max(1, count)}, minmax(0, 1fr))`;
 
 const BADGE_TONE = {
   alert: 'bg-rose-400/90 text-zinc-950',
@@ -45,10 +56,15 @@ const BADGE_TONE = {
  * handed in. Its height follows its width (each thumbnail keeps the photos'
  * 16:9), so the `WorkspaceShell` only has to give it the column.
  */
-export function CameraStrip({ cameras, activeName, onSelect, shortcutHint }: Props) {
+export function CameraStrip({ cameras, activeName, onSelect, shortcutHint, slots }: Props) {
   return (
     // px-0.5: room for the active thumbnail's 2px ring at both ends of the row.
-    <div role="group" aria-label="Cameras" className="flex gap-1 px-0.5">
+    <div
+      role="group"
+      aria-label="Cameras"
+      className="grid gap-1 px-0.5"
+      style={{ gridTemplateColumns: columns(Math.max(slots ?? 0, cameras.length)) }}
+    >
       {cameras.map((camera) => (
         <Thumb
           key={camera.name}
@@ -102,7 +118,7 @@ function Thumb({
         if (e.detail > 0) e.currentTarget.blur();
       }}
       className={[
-        'group relative flex-1 min-w-0 aspect-video rounded overflow-hidden bg-zinc-800 transition-shadow',
+        'group relative min-w-0 aspect-video rounded overflow-hidden bg-zinc-800 transition-shadow',
         active ? 'ring-2 ring-sky-400' : 'ring-1 ring-zinc-700 hover:ring-zinc-500',
       ].join(' ')}
     >
@@ -157,11 +173,15 @@ function Thumb({
  */
 export function CameraStripPlaceholder({ pulse, count = 6 }: { pulse: boolean; count?: number }) {
   return (
-    <div aria-hidden="true" className="flex gap-1 px-0.5">
+    <div
+      aria-hidden="true"
+      className="grid gap-1 px-0.5"
+      style={{ gridTemplateColumns: columns(count) }}
+    >
       {Array.from({ length: count }, (_, i) => (
         <span
           key={i}
-          className={`flex-1 min-w-0 aspect-video rounded bg-zinc-900 ring-1 ring-zinc-800 ${pulse ? 'animate-pulse' : ''}`}
+          className={`min-w-0 aspect-video rounded bg-zinc-900 ring-1 ring-zinc-800 ${pulse ? 'animate-pulse' : ''}`}
         />
       ))}
     </div>
