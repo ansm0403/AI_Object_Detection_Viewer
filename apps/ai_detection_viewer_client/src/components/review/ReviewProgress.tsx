@@ -2,12 +2,22 @@
 
 import type { ReviewCounts } from '@/lib/review';
 
+type Props = {
+  counts: ReviewCounts;
+  /**
+   * True when the browser refused to store the reviews (storage blocked or
+   * full). They still work for this visit but will be gone after a reload, so
+   * the bar says so instead of letting the reviewer find out later.
+   */
+  notSaved?: boolean;
+};
+
 /**
  * Overall review progress for the top bar (F4): reviewed / total across every
  * frame, a thin bar split by verdict, and the counts that need attention.
  * Pure presentation — the numbers come from `summarizeProgress`.
  */
-export function ReviewProgress({ counts }: { counts: ReviewCounts }) {
+export function ReviewProgress({ counts, notSaved = false }: Props) {
   const pct = (n: number) => (counts.total > 0 ? (n / counts.total) * 100 : 0);
   // A sliver stays visible even at 1 of 583.
   const width = (n: number) => (n > 0 ? `${Math.max(pct(n), 1.5)}%` : '0%');
@@ -39,6 +49,15 @@ export function ReviewProgress({ counts }: { counts: ReviewCounts }) {
       <span className={counts.unsure > 0 ? 'text-zinc-300' : 'text-zinc-600'}>
         {counts.unsure} unsure
       </span>
+      {notSaved && (
+        <span
+          role="status"
+          title="This browser is not storing the reviews (storage is blocked or full). They will be lost when the page is reloaded — export them to keep a copy."
+          className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-300 ring-1 ring-inset ring-amber-500/40"
+        >
+          Not saved
+        </span>
+      )}
     </div>
   );
 }

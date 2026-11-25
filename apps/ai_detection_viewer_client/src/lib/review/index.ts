@@ -39,9 +39,11 @@ export type { QueueOrder } from './queue';
 export {
   REVIEW_EXPORT_FORMAT,
   buildReviewExport,
+  reviewExportFilename,
   reviewExportToCsv,
+  reviewExportToJson,
 } from './export';
-export type { ReviewExport, ReviewExportRow } from './export';
+export type { ReviewExport, ReviewExportFileType, ReviewExportRow } from './export';
 export { sanitizeReviews } from './persisted';
 export { SHORTCUT_KEYS, isTypingTarget, resolveShortcut } from './shortcuts';
 export type { ReviewAction, ShortcutEvent } from './shortcuts';

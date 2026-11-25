@@ -21,25 +21,33 @@ import { Timeline } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
 import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
 import {
+  ExportMenu,
   QueueBar,
   ReviewControls,
   ReviewProgress,
+  UTF8_BOM,
+  downloadTextFile,
   useReviewShortcuts,
 } from '@/components/review';
 import {
   SHORTCUT_KEYS,
   buildQueue,
+  buildReviewExport,
   getReview,
   getReviewBlock,
   nextFrameWithUnreviewed,
   nextUnreviewed,
   orderBoxes,
+  reviewExportFilename,
+  reviewExportToCsv,
+  reviewExportToJson,
   stepInQueue,
   summarizeProgress,
   verdictsOfFrame,
   type QueueOrder,
   type RejectReason,
   type ReviewAction,
+  type ReviewExportFileType,
   type ReviewScope,
   type Verdict,
 } from '@/lib/review';
@@ -116,6 +124,8 @@ export default function Index() {
   const toggleReason = useReviewStore((s) => s.toggleReason);
   const setNote = useReviewStore((s) => s.setNote);
   const clearReview = useReviewStore((s) => s.clearReview);
+  const resetReviewScope = useReviewStore((s) => s.resetScope);
+  const reviewStorageFailed = useReviewStore((s) => s.storageFailed);
   // Practice mode (modified boxes, its own records) arrives in F4-F.
   const reviewScope: ReviewScope = 'nuscenes';
   const reviews = reviewsByScope[reviewScope];
@@ -356,6 +366,31 @@ export default function Index() {
     clearReview(reviewScope, currentFrameId, selectedObjectId);
   }, [reviewBlock, currentFrameId, selectedObjectId, reviewScope, clearReview]);
 
+  // (F4-E) Export. The document is built by the pure functions in
+  // `lib/review/export` from the frames + records; this only stamps the time and
+  // hands the text to the browser as a download. No backend is involved.
+  const handleExport = useCallback(
+    (type: ReviewExportFileType) => {
+      if (!frames) return;
+      const now = new Date();
+      const data = buildReviewExport(frames, reviews, {
+        scope: reviewScope,
+        exportedAt: now.toISOString(),
+      });
+      const filename = reviewExportFilename(reviewScope, now, type);
+      if (type === 'json') {
+        downloadTextFile(filename, reviewExportToJson(data), 'application/json');
+      } else {
+        downloadTextFile(filename, UTF8_BOM + reviewExportToCsv(data), 'text/csv');
+      }
+    },
+    [frames, reviews, reviewScope],
+  );
+  const handleResetReviews = useCallback(
+    () => resetReviewScope(reviewScope),
+    [resetReviewScope, reviewScope],
+  );
+
   // (F4-C) Jump to the next frame that still has unreviewed boxes and land on
   // its first unreviewed box. Playback stops: the reviewer asked for a frame to
   // work on. The target frame's queue is built with the same order and the same
@@ -505,7 +540,16 @@ export default function Index() {
       onSelectDataset={handleSelectDataset}
       source={currentFrame?.source}
     >
-      {reviewProgress && <ReviewProgress counts={reviewProgress.overall} />}
+      {reviewProgress && (
+        <>
+          <ReviewProgress counts={reviewProgress.overall} notSaved={reviewStorageFailed} />
+          <ExportMenu
+            reviewedCount={reviewProgress.overall.reviewed}
+            onExport={handleExport}
+            onReset={handleResetReviews}
+          />
+        </>
+      )}
     </Header>
   );
 

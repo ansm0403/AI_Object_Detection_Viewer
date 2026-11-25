@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { REVIEW_EXPORT_FORMAT, buildReviewExport, reviewExportToCsv } from './export';
+import {
+  REVIEW_EXPORT_FORMAT,
+  buildReviewExport,
+  reviewExportFilename,
+  reviewExportToCsv,
+  reviewExportToJson,
+} from './export';
 import { withNote, withReasonToggled, withVerdict } from './records';
 import { makeBox, makeFrame } from './test-helpers';
 import type { ReviewMap } from './types';
@@ -101,6 +107,31 @@ describe('buildReviewExport', () => {
     const data = buildReviewExport(frames, reviews, { scope: 'nuscenes', exportedAt: NOW });
     data.reviews[1].reasons.push('other');
     expect(reviews['f1/b'].reasons).toEqual(['wrong_size', 'wrong_position']);
+  });
+});
+
+describe('reviewExportFilename', () => {
+  // Local-time constructor, so the expectation holds in any time zone.
+  const at = new Date(2026, 10, 25, 9, 5); // 2026-11-25 09:05 local
+
+  it('names the file by scope, local date-time and type', () => {
+    expect(reviewExportFilename('nuscenes', at, 'json')).toBe('review_nuscenes_20261125-0905.json');
+    expect(reviewExportFilename('nuscenes', at, 'csv')).toBe('review_nuscenes_20261125-0905.csv');
+  });
+
+  it('makes a practice-set export recognisable from its name', () => {
+    expect(reviewExportFilename('nuscenes-practice', at, 'json')).toBe(
+      'review_nuscenes-practice_20261125-0905.json',
+    );
+  });
+});
+
+describe('reviewExportToJson', () => {
+  it('round-trips through JSON.parse and ends with a newline', () => {
+    const data = buildReviewExport(frames, sampleReviews(), { scope: 'nuscenes', exportedAt: NOW });
+    const text = reviewExportToJson(data);
+    expect(text.endsWith('\n')).toBe(true);
+    expect(JSON.parse(text)).toEqual(data);
   });
 });
 

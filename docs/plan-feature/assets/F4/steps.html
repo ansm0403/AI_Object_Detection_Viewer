@@ -75,6 +75,12 @@ const SHOTS = [
   { step: 'D', name: 'D5 카메라 확대 (차량)', file: 'stepD5_zoom_car_frame9', sizes: ['1536x700'],
     mock: { '1536x700': 'F_car_frame9_zoom' },
     note: '<b>프레임 9의 차(28m).</b> 투영한 3D 박스가 차를 감싸는지, 하늘색 앞면이 차의 방향과 맞는지 볼 수 있습니다. 재생하거나 프레임을 넘기면 확대 영역이 같은 객체를 따라갑니다.' },
+  { step: 'E', name: 'E1 내보내기 메뉴', file: 'stepE1_export_menu', sizes: ['1536x700'],
+    note: '<b>F4-E 실제 앱.</b> 상단 오른쪽 <b>Export</b>를 누르면 메뉴가 열립니다. "Download JSON"은 다른 도구가 읽기 좋은 형식, "Download CSV"는 엑셀로 바로 열리는 표 형식입니다. 파일 이름은 <code>review_nuscenes_20261125-2049.json</code>처럼 날짜와 시각이 붙습니다. 검수한 박스만 들어가고 맨 위에 요약(전체 583, 검수 N, 승인/반려/판단 불가)이 있습니다. 메뉴가 열려 있는 동안에는 단축키가 동작하지 않습니다.' },
+  { step: 'E', name: 'E2 초기화 확인', file: 'stepE2_reset_confirm', sizes: ['1536x700'],
+    note: '<b>검수 기록 초기화.</b> "Reset reviews…"를 누르면 바로 지워지지 않고 <b>"Click again to delete N"</b>으로 바뀝니다. 한 번 더 눌러야 지워집니다. 서버에 사본이 없어 되돌릴 수 없기 때문입니다. 메뉴를 닫으면 다시 처음 상태로 돌아갑니다.' },
+  { step: 'E', name: 'E3 저장이 안 될 때', file: 'stepE3_not_saved', sizes: ['1536x700'],
+    note: '<b>브라우저 저장소가 가득 찼거나 차단된 상황을 일부러 만든 화면.</b> 판정은 그대로 동작하고, 상단에 주황색 <b>NOT SAVED</b>가 뜹니다(마우스를 올리면 이유와 "내보내기로 보관하라"는 설명). 이 상태에서도 Export는 됩니다. 평소에는 보이지 않는 표시입니다.' },
 ];
 // 처음 열면 가장 최근 단계의 첫 화면을 보여준다.
 let shot = SHOTS.find((s) => s.step === SHOTS[SHOTS.length - 1].step), size = shot.sizes[0], showMock = false;

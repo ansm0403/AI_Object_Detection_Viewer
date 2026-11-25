@@ -88,6 +88,32 @@ export function buildReviewExport(
   };
 }
 
+export type ReviewExportFileType = 'json' | 'csv';
+
+/**
+ * File name for a download, e.g. `review_nuscenes_20261125-2045.json`
+ * (`review_nuscenes-practice_…` for the practice set, so the two can never be
+ * mistaken for each other in a folder). The time is the LOCAL wall-clock time —
+ * a file name is read by a person; the exact instant is inside the file as
+ * `exportedAt`.
+ */
+export function reviewExportFilename(
+  scope: ReviewScope,
+  at: Date,
+  type: ReviewExportFileType,
+): string {
+  const two = (n: number) => String(n).padStart(2, '0');
+  const stamp =
+    `${at.getFullYear()}${two(at.getMonth() + 1)}${two(at.getDate())}` +
+    `-${two(at.getHours())}${two(at.getMinutes())}`;
+  return `review_${scope}_${stamp}.${type}`;
+}
+
+/** The export document as the text of a `.json` file (indented, newline-ended). */
+export function reviewExportToJson(data: ReviewExport): string {
+  return `${JSON.stringify(data, null, 2)}\n`;
+}
+
 const CSV_COLUMNS = [
   'frameIndex',
   'frameId',
