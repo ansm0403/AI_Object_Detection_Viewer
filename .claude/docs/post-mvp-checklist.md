@@ -825,6 +825,107 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 
 ---
 
+## F3 — No-scroll Workspace Layout ✅ Done (2026-11-25; F3-A + F3-B + F3-C + F3-D)
+- **Design doc:** `docs/plan-feature/F3_workspace_layout.md` (provisionally approved: build the
+  recommended options for all 9 decisions, adjust after seeing them). Captures + mockup:
+  `docs/plan-feature/assets/F3/` (before / mockup / after, timestamped KST).
+- **Goal:** work on one screen without page scrolling — object list, 3D view, camera image, details
+  and timeline visible together — and fix the 7 defects found in the 2026-11-25 render (design doc §2).
+- **Scope:**
+  - **Mockup first (decision 9).** Static HTML at real colours and sizes (Tailwind 3.4.3, same as the
+    app), 1440×900 and 1280×720, beside captures of the current app. The 3D pane was the real 3D view
+    re-rendered at the mockup's cell size; the camera pane was the app's own 2D SVG. The user approved
+    the direction and 4 extra proposals (below).
+  - **F3-A — frame.** New `components/workspace/WorkspaceShell.tsx` (zones only, no state); `page.tsx`
+    renders loading / error / empty / loaded inside it; `Viewer2D` / `Viewer3D` fill their cell
+    (`aspect-[4/3]` removed); camera cell ratio per dataset (`cameraAspect`: nuScenes 16:9, COCO 4:3);
+    `ObjectList` / `AnalyticsPanel` fill their cell; Header and Filters became flush bars; Timeline
+    became one 84px row (Play / Reset / Follow on the left).
+  - **F3-B — one counting basis (decision 4).** `selectClassCounts` counts `detections3D`;
+    `ObjectList` lists every 3D box (visible set = 3D set) with an in-camera icon and the distance from
+    the ego vehicle on measured frames; Timeline badges count 3D boxes.
+  - **F3-C — small fixes.** `lib/ui/display-id.ts` (6-char display id, decision 7); histogram tick
+    labels moved out of the stretched SVG (fixed 10px); HintBox text in English (decision 8).
+  - **F3-D — one panel look.** New `components/workspace/Panel.tsx` (`PANEL_CLASS`,
+    `SECTION_TITLE_CLASS`, `PanelTitle`, `PanelHeader`, `ViewerLabel`) used by every pane; real border
+    instead of `ring-inset`; 32px title rows on data panels, corner tags on viewers (text from
+    `Frame.source`, Rule #6); 32px list rows; class-name column widened in `ClassCountBar`.
+- **Done when (design doc §8) — all met, render-verified with Playwright:**
+  - No page scroll at 1440×900 and 1280×720 (also 1536×700 / 1536×730 / 1280×700) for nuScenes and
+    COCO, with a selection and during autoplay. 390×844 stacks and scrolls.
+  - Selecting in the list never moves the page (list `scrollTop` 606, page `scrollY` 0).
+  - 7 zones visible; 3D is the largest (736×708 at 1440×900).
+  - Loading skeleton and loaded page: all five pane rectangles identical.
+  - 2D ↔ 3D ↔ list sync; deselect on 3D empty space, 2D background, COCO pillar-box band; nuScenes
+    camera holds across frame switch + autoplay; COCO camera resets on frame switch; the 3D canvas
+    follows window resizes and is the same element after 5 resizes (not remounted).
+  - Header = list = class-count sum = timeline badge (frame 1: 40, frame 7: 66).
+  - Tests **206 → 213** (`selectClassCounts` +2, `displayId` +5). `tsc --noEmit` 0 errors.
+- **Changes from the plan, and why:**
+  1. **Flush top bars and the one-row timeline moved from F3-D into F3-A.** Their heights decide the
+     grid rows; fixing them in A was needed for the loading skeleton and the loaded page to share the
+     same pane positions.
+  2. **List shows distance (m) instead of "—" on measured frames.** Not in the design doc; proposed in
+     the mockup and approved by the user. Uses `detectionDistance`, the distance filter's own function,
+     so the two can never disagree. Added in F3-B (the step that rewrote the list).
+  3. **Viewers got corner tags instead of title rows; top bars are flush bars, not cards; the timeline
+     is one row (84px instead of the ~112px estimate).** Mockup proposals, approved by the user.
+  4. **F3-B gave the list's id cell a temporary truncate** so class names stayed visible until F3-C
+     shortened the ids (the full 32-char id had pushed the class name out of the 272px column in A).
+  5. **Bug found and fixed in F3-A:** the COCO camera cell grew to 400×600 on a portrait photo
+     (`aspect-ratio` box sized by its content). Fixed with `min-h-0 overflow-hidden` (Edge_F#3 Case 1).
+  6. **3D empty space above the scene at 1440×900 — left as is (user decision).** The design doc's
+     risk §11 allowed adjusting the camera init. The user's laptop viewport (~1536×700) gives a wide,
+     short 3D cell where the gap does not appear (Edge_F#3 Case 3).
+  7. **Next.js dev indicator over the Play button — left as is (user decision; dev server only)**
+     (Edge_F#3 Case 2).
+- **Decisions kept from the design doc:** camera image top-right (cost: 510×287 → 400×225 at
+  1440×900 and 360×203 at 1280×720 — half the area at 1280); filters in a bar under the header;
+  narrow screens stack (< 1024px); no resizable panels; no Server Component data loading (decision
+  6 — still unmeasured; measure load time first, as a separate item); English UI.
+- **Not done / open:**
+  - **COCO mode — keep or retire: on hold.** F3 left it functionally unchanged inside the new layout
+    (estimated 3D, confidence slider, 4:3 camera cell). Asked after F3; the user kept it on hold
+    (2026-11-25).
+  - Camera image size for review work is judged in F4 (decision 5).
+  - GPU memory during resize was not measured (canvas identity was).
+- **Edge refs:** Edge_F#3 Cases 1–3.
+
+<!-- KO (move to a localized file)
+## F3 — 스크롤 없는 작업 화면 ✅ 완료 (2026-11-25; F3-A + B + C + D)
+- 설계 문서: `docs/plan-feature/F3_workspace_layout.md`(임시 승인: 결정 9개 모두 추천안으로 만들고 보면서 조정).
+  시안과 캡처: `docs/plan-feature/assets/F3/`(전 / 시안 / 후, 한국 시간 표시).
+- 목표: 페이지 스크롤 없이 목록, 3D 뷰, 카메라 이미지, 정보 패널, 타임라인을 한 화면에서 보며 작업. 2026-11-25
+  캡처에서 찾은 문제 7가지 해결.
+- 범위:
+  - 시안 먼저(결정 9): 실제 색·크기의 정적 HTML, 1440×900·1280×720, 지금 화면 캡처와 비교. 3D 칸은 실제 3D 화면을
+    시안 칸 크기로 다시 그린 캡처, 카메라 칸은 앱의 2D SVG 그대로. 사용자가 방향과 추가 제안 4개를 승인.
+  - F3-A 화면 틀: `WorkspaceShell`(자리만 정의, 상태 없음). 로딩·오류·빈 데이터도 틀 안에. 두 뷰어는 칸을 채움.
+    카메라 칸 비율은 데이터셋별(nuScenes 16:9, COCO 4:3). 상단 바·필터 바는 붙은 막대, 타임라인은 84px 한 줄.
+  - F3-B 개수 기준 통일(결정 4): 클래스 집계·목록·타임라인 배지 모두 3D 박스 기준. 목록에 카메라 아이콘과 거리.
+  - F3-C: ID 6자리(`lib/ui/display-id.ts`), 차트 축 글자 10px 고정, 3D 조작 안내 영어.
+  - F3-D: `Panel.tsx`로 패널 모양 한 규칙(배경, 1px 테두리, 모서리, 32px 제목 줄, 뷰어 이름표).
+- 완료 기준(설계 문서 8장): 모두 충족, Playwright 캡처로 확인. 1440×900·1280×720(그리고 1536×700 등)에서 스크롤
+  없음, 목록 선택 시 페이지 고정, 로딩 전후 칸 위치 같음, 선택 동기화·해제, 카메라 유지(nuScenes)·초기화(COCO),
+  창 크기 변경 5번에도 같은 3D 캔버스, 개수 일치(프레임 1: 40, 프레임 7: 66). 테스트 206 → 213, tsc 오류 0.
+- 계획과 달라진 점과 이유:
+  1. 붙은 상단 바와 한 줄 타임라인을 F3-D에서 F3-A로 당김. 이 높이들이 칸 높이를 정해서, 로딩 전후 위치를 맞추려면
+     A에서 확정해야 했다.
+  2. 목록 숫자 칸을 "—" 대신 거리(m)로. 설계 문서에 없던 시안 제안, 사용자 승인. 거리 필터와 같은 함수 사용.
+  3. 뷰어는 제목 줄 대신 모서리 이름표, 상단은 카드 대신 붙은 막대, 타임라인 한 줄(예상 112px → 84px). 시안 제안, 승인.
+  4. F3-B에서 ID 칸에 임시 말줄임. A에서 32자 ID가 클래스 이름을 밀어낸 문제를 C 전까지 막기 위해.
+  5. F3-A에서 버그 발견·수정: 세로 COCO 사진에서 카메라 칸이 400×600으로 커짐. `min-h-0 overflow-hidden`(Edge_F#3 Case 1).
+  6. 1440×900에서 3D 위쪽 빈 공간은 그대로 둠(사용자 결정). 사용자 노트북 창(~1536×700)에서는 생기지 않음(Case 3).
+  7. Next.js 개발 표시 "N"이 Play 버튼을 가림. 개발 서버에서만 보여 그대로 둠(사용자 결정, Case 2).
+- 설계대로 유지: 카메라 오른쪽 위(대가: 510×287 → 400×225, 1280에서는 360×203으로 넓이 절반), 필터는 헤더 아래,
+  1024px 미만은 세로 쌓기, 패널 크기 조절 없음, 서버 컴포넌트 전환 안 함(결정 6, 로딩 시간을 먼저 재야 함), 영어 UI.
+- 남은 것: **COCO 모드를 남길지는 보류**(F3에서 기능 변화 없이 새 화면 안에 둠. F3 종료 후 다시 물었고 보류 유지). 카메라 이미지가 검수에
+  충분한지는 F4에서 판단. 창 크기 변경 시 GPU 메모리는 재지 않음(캔버스가 같은 요소인지만 확인).
+- Edge refs: Edge_F#3 Case 1~3.
+-->
+
+---
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -835,8 +936,8 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 >
 > **Design docs:** the pre-implementation design for each feature is written in
 > `docs/plan-feature/F#_*.md` (index: `docs/plan-feature/README.md`), one doc per feature, written
-> just before that feature starts. F3's doc exists (`F3_workspace_layout.md`, provisionally approved
-> 2026-11-25: build the recommended options, adjust after seeing them; not implemented yet).
+> just before that feature starts. **F3 is done** (2026-11-25, see the F3 entry above; design doc
+> `F3_workspace_layout.md`). Next: F4 — its design doc is written at the start of the F4 session.
 > Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
 
 ### Why change direction (the gap this closes)
@@ -879,8 +980,8 @@ evaluation (F5) are the two pillars; F6/F7 widen the data both pillars run on; e
 hardest interaction and goes last.
 
 **Tech upgrades are trigger-based, not features of their own** — measure first, change only when the
-measurement justifies it, and record before/after numbers: Server Component data loading (consider
-during F3, when `app/page.tsx` is split anyway); `useTransition` / `useDeferredValue` (only if
+measurement justifies it, and record before/after numbers: Server Component data loading (F3
+considered and deferred it — design doc decision 6: measure load time first, as a separate item); `useTransition` / `useDeferredValue` (only if
 filtering measurably janks after F5); binary point clouds + lazy per-frame loading + Web Worker
 parsing (becomes necessary in F7 when the frame count grows).
 
@@ -934,6 +1035,8 @@ parsing (becomes necessary in F7 when the frame count grows).
 ### Open / deferred
 - **COCO mode: left as it is for now.** Whether it stays as a secondary tab or is retired is decided
   after the F3 redesign shows what that tab looks like in the new layout (user decision, 2026-11-25).
+  **F3 is done and COCO sits unchanged in the new layout; the user has not decided yet** (captures:
+  `docs/plan-feature/assets/F3/2026-11-25_after/coco_*.jpg`).
 - **Relation to earlier records:** F2's "out of scope" items *multi-camera* and *additional scenes*
   are now roadmap items (F6, F7). The COCO ground-truth-vs-prediction comparison (the data exists in
   `sample.gt_backup.json`) is superseded by F5 and remains optional.
@@ -948,7 +1051,7 @@ parsing (becomes necessary in F7 when the frame count grows).
 >
 > **설계 문서:** 각 기능의 구현 전 설계는 `docs/plan-feature/F#_*.md`에 쓴다(목록:
 > `docs/plan-feature/README.md`). 기능 하나에 문서 하나이며, 그 기능을 시작하기 직전에 쓴다. F3 문서가
-> 있다(`F3_workspace_layout.md`, 2026-11-25 임시 승인: 추천안으로 만들고 보면서 조정. 아직 구현 전).
+> 있고 **F3은 구현 완료**(2026-11-25, 위 F3 항목 참고). 다음은 F4이며, 설계 문서는 F4 세션을 시작할 때 쓴다.
 > 큰 기능 하나를 세션 하나에서 진행한다. **`docs/plan-feature/HANDOFF.md`부터 읽는다.**
 
 ### 방향을 바꾸는 이유
@@ -987,7 +1090,7 @@ nuScenes 중심의 **인지 데이터 품질 도구**. 3D 뷰가 메인이고 �
 F6·F7은 두 기둥이 쓰는 데이터를 넓힌다. 수정(F8)은 인터랙션이 가장 어려워 마지막이다.
 
 **기술 고도화는 독립 기능이 아니라 필요할 때 한다.** 먼저 측정하고, 측정 결과가 뒷받침할 때만 바꾸며,
-전후 수치를 기록한다. 대상: 서버 컴포넌트 데이터 로딩(F3에서 `app/page.tsx`를 나눌 때 검토),
+전후 수치를 기록한다. 대상: 서버 컴포넌트 데이터 로딩(F3에서 검토 후 미룸. 설계 문서 결정 6: 로딩 시간을 먼저 재고 별도 항목으로 판단),
 `useTransition` / `useDeferredValue`(F5 이후 필터링이 실제로 버벅일 때만), 포인트클라우드 바이너리 전환 +
 프레임별 지연 로딩 + Web Worker 파싱(F7에서 프레임 수가 늘면 필요해짐).
 
@@ -1032,7 +1135,8 @@ F6·F7은 두 기둥이 쓰는 데이터를 넓힌다. 수정(F8)은 인터랙�
 
 ### 미정 / 보류
 - **COCO 모드는 일단 그대로 둔다.** 보조 탭으로 남길지 정리할지는 F3 재설계 후 새 배치에서 그 탭이 어떻게
-  보이는지 확인한 뒤 정한다(2026-11-25 사용자 결정).
+  보이는지 확인한 뒤 정한다(2026-11-25 사용자 결정). **F3이 끝났고 COCO는 새 화면 안에 그대로 있다. 아직
+  결정하지 않았다**(캡처: `docs/plan-feature/assets/F3/2026-11-25_after/coco_*.jpg`).
 - **이전 기록과의 관계:** F2의 "범위 밖" 항목이던 *멀티 카메라*와 *추가 장면*은 이제 로드맵 항목이다(F6,
   F7). COCO 정답 vs 예측 비교(데이터는 `sample.gt_backup.json`에 있음)는 F5로 대체됐고 선택 사항으로 남는다.
 -->

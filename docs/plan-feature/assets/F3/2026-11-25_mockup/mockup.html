@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>F3 Workspace Mockup</title>
+<!-- Same Tailwind version as the app (3.4.3) so the palette is identical. -->
+<script src="https://cdn.tailwindcss.com/3.4.3"></script>
+<script src="data.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; background: #09090b; color: #f9fafb;
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; line-height: 1.5; }
+  /* Workspace grid. Sizes from F3 design doc §3.2. */
+  .ws { display: grid; gap: 8px; padding: 8px; min-height: 0; flex: 1;
+        grid-template-columns: 240px minmax(0, 1fr) 360px;
+        grid-template-rows: minmax(0, 1fr) 84px;
+        grid-template-areas: "list main side" "time time time"; }
+  @media (min-width: 1400px) { .ws { grid-template-columns: 272px minmax(0, 1fr) 400px; } }
+  .a-list { grid-area: list; } .a-main { grid-area: main; } .a-side { grid-area: side; } .a-time { grid-area: time; }
+  .panel { background: #18181b; border-radius: 8px; box-shadow: inset 0 0 0 1px #27272a; overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+  .ph { height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 12px;
+        border-bottom: 1px solid #27272a; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #a1a1aa; }
+  .ph .n { color: #71717a; font-weight: 400; letter-spacing: 0; margin-left: 6px; }
+  .scroll { overflow-y: auto; min-height: 0; flex: 1; scrollbar-width: thin; scrollbar-color: #3f3f46 transparent; }
+  .chip-viewer { position: absolute; top: 8px; left: 8px; font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+        color: #d4d4d8; background: rgba(9,9,11,.7); padding: 2px 6px; border-radius: 4px; box-shadow: inset 0 0 0 1px #3f3f46; pointer-events: none; }
+  input[type=range] { accent-color: #38bdf8; }
+</style>
+</head>
+<body>
+<div id="app" style="height:100vh; display:flex; flex-direction:column; overflow:hidden"></div>
+<script>
+const qs = new URLSearchParams(location.search);
+const ds = qs.get('ds') || 'nuscenes';
+const shot = qs.get('shot');           // static capture of the real 3D view at this pane size
+const D = window.DATA[ds];
+const nu = ds === 'nuscenes';
+const COLORS = { person:'#86efac', bicycle:'#fde047', car:'#fca5a5', truck:'#fdba74', bus:'#c4b5fd', motorcycle:'#f9a8d4' };
+const color = (c) => COLORS[c] ?? '#38bdf8';
+const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+// Rows: nuScenes = every 3D box (decision 4); COCO = 1:1 2D/3D, unchanged content.
+const rows = nu
+  ? D.boxes.map((b) => ({ id: b.id, cls: b.cls, inCam: b.inCam, dist: b.dist }))
+  : D.rows.map((r) => ({ id: r.id, cls: r.cls, inCam: true, conf: parseFloat(r.conf) }));
+const classOrder = []; const counts = new Map();
+for (const r of rows) { if (!counts.has(r.cls)) classOrder.push(r.cls); counts.set(r.cls, (counts.get(r.cls) || 0) + 1); }
+const allClasses = nu ? ['car','person','bicycle','static_object.bicycle_rack','truck','bus','motorcycle'] : ['person','car','bicycle'];
+const shortId = (id) => nu ? id.slice(0, 6) : id;   // decision 7
+
+const camIcon = (on) => on
+  ? `<svg title="In camera" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#a1a1aa" stroke-width="1.4"><rect x="1.5" y="4.5" width="9" height="7" rx="1.5"/><path d="M10.5 7l4-2v6l-4-2"/></svg>`
+  : `<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#3f3f46" stroke-width="1.4"><rect x="1.5" y="4.5" width="9" height="7" rx="1.5"/><path d="M10.5 7l4-2v6l-4-2"/><path d="M2 2l12 12"/></svg>`;
+
+const topbar = `
+<header class="flex-none h-11 flex items-center justify-between px-4 border-b border-zinc-800 bg-zinc-900">
+  <div class="flex items-center gap-3">
+    <span class="text-sm font-semibold text-zinc-100 tracking-tight">AI Detection Viewer</span>
+    <div class="flex items-center rounded-md bg-zinc-800 p-0.5">
+      <button class="px-2.5 py-0.5 text-xs rounded ${!nu ? 'bg-sky-500/20 text-sky-200 ring-1 ring-inset ring-sky-400/40' : 'text-zinc-400'}">COCO</button>
+      <button class="px-2.5 py-0.5 text-xs rounded ${nu ? 'bg-sky-500/20 text-sky-200 ring-1 ring-inset ring-sky-400/40' : 'text-zinc-400'}">nuScenes</button>
+    </div>
+    ${nu
+      ? '<span class="text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ring-1 ring-inset bg-emerald-500/15 text-emerald-300 ring-emerald-500/30">Measured</span>'
+      : '<span class="text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded ring-1 ring-inset bg-amber-500/15 text-amber-300 ring-amber-500/30">Estimated</span>'}
+  </div>
+  <span class="text-xs text-zinc-400 tabular-nums">Frame 1/10 · ${rows.length} detections</span>
+</header>`;
+
+const metric = nu
+  ? `<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Distance</span>
+     <input type="range" min="0" max="90" value="90" class="w-32">
+     <span class="text-xs tabular-nums text-zinc-100 w-8">All</span>`
+  : `<span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Confidence</span>
+     <input type="range" min="0" max="1" step="0.05" value="0" class="w-32">
+     <span class="text-xs tabular-nums text-zinc-100 w-8">0.00</span>`;
+const chips = allClasses.map((c) => `
+  <button class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border border-sky-400/50 bg-sky-400/10 text-zinc-100 whitespace-nowrap">
+    <span class="w-2 h-2 rounded-full" style="background:${color(c)}"></span>${c}</button>`).join('');
+const filterbar = `
+<div class="flex-none h-10 flex items-center gap-4 px-4 border-b border-zinc-800 bg-zinc-900/60">
+  <label class="flex items-center gap-2 select-none">${metric}</label>
+  <span class="w-px h-5 bg-zinc-800"></span>
+  <div class="flex items-center gap-1.5 min-w-0 overflow-x-auto">
+    <span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mr-1">Classes</span>${chips}
+  </div>
+  <div class="ml-auto flex items-center gap-3 shrink-0">
+    <span class="text-xs text-zinc-400 tabular-nums">${rows.length}/${rows.length} visible</span>
+    <button disabled class="text-xs px-2 py-0.5 rounded border border-zinc-800 text-zinc-400 opacity-40">Reset</button>
+  </div>
+</div>`;
+
+const listRows = rows.map((r) => {
+  const sel = r.id === D.selectedId;
+  const metricCell = nu
+    ? `<span class="text-[11px] text-zinc-500 tabular-nums w-10 text-right shrink-0">${r.dist.toFixed(0)} m</span>`
+    : `<span class="flex items-center gap-1.5 shrink-0"><span class="w-10 h-1 rounded bg-zinc-800 overflow-hidden"><span class="block h-full bg-sky-400/70 rounded" style="width:${r.conf*100}%"></span></span><span class="text-[11px] text-zinc-400 tabular-nums w-7 text-right">${r.conf.toFixed(2)}</span></span>`;
+  return `<li class="flex items-center gap-2 px-3 h-8 text-sm cursor-pointer ${sel ? 'bg-sky-400/10 ring-1 ring-inset ring-sky-400/60' : 'hover:bg-zinc-800/60'}">
+    <span class="w-2 h-2 rounded-full shrink-0" style="background:${color(r.cls)}"></span>
+    <span class="flex-1 min-w-0 truncate ${r.inCam || sel ? 'text-zinc-100' : 'text-zinc-300'}">${esc(r.cls)}</span>
+    ${nu ? camIcon(r.inCam) : ''}
+    ${metricCell}
+    <span class="font-mono text-[11px] text-zinc-500 w-12 text-right shrink-0" title="${r.id}">${shortId(r.id)}</span>
+  </li>`;
+}).join('');
+const inCamCount = rows.filter((r) => r.inCam).length;
+const list = `
+<section class="panel a-list">
+  <div class="ph"><span>Objects<span class="n">${rows.length}</span></span>
+    ${nu ? `<span class="normal-case tracking-normal font-normal text-zinc-500 flex items-center gap-1">${camIcon(true)}${inCamCount} in camera</span>` : ''}</div>
+  <ul class="scroll divide-y divide-zinc-800/70">${listRows}</ul>
+</section>`;
+
+const hint = `<div class="absolute bottom-2 right-2 pointer-events-none rounded-md border border-zinc-700 bg-zinc-900/80 px-2 py-1.5 text-[10px] text-zinc-300 leading-4">
+  <div>Drag · rotate</div><div>Scroll · zoom</div><div>Click · select</div></div>`;
+const main = `
+<section id="pane3d" class="panel a-main relative" style="background:#0a0a0a">
+  ${shot ? `<img src="${shot}" style="position:absolute; inset:0; width:100%; height:100%; object-fit:none">` : ''}
+  <span class="chip-viewer">3D · ${nu ? 'LiDAR + measured boxes' : 'estimated from 2D'}</span>
+  ${hint}
+</section>`;
+
+// Camera cell: ratio per dataset (design doc §11): nuScenes 16:9, COCO 4:3.
+const cam = `
+<section id="pane2d" class="panel relative" style="aspect-ratio:${nu ? '16/9' : '4/3'}; flex:none">
+  <div style="position:absolute; inset:0">${D.svg.replace('<svg', '<svg preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%;display:block"')}</div>
+  <span class="chip-viewer">${nu ? 'CAM_FRONT' : 'Image'}</span>
+</section>`;
+
+const selRow = (label, val) => `<div class="flex items-baseline gap-3"><span class="w-20 shrink-0 text-xs text-zinc-500">${label}</span><span class="min-w-0 text-xs ${val === '—' ? 'text-zinc-500' : (label === 'Class' ? 'text-sm text-zinc-100' : 'font-mono text-zinc-300')} break-all">${label === 'Class' ? `<span class="inline-block w-2 h-2 rounded-full mr-2 align-middle" style="background:${color(val)}"></span>` : ''}${esc(label === 'Id' || label === 'Frame' ? val : val)}</span></div>`;
+const selected = `<section class="px-3 py-3 space-y-1.5">
+  <h3 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Selected</h3>
+  ${D.selRows.map(([l, v]) => selRow(l, v)).join('')}</section>`;
+
+// Histogram with FIXED pixel text (decision/problem 6): drawn at its real pixel width.
+function histogram() {
+  const b = new Array(10).fill(0); for (const r of rows) b[Math.min(9, Math.floor(r.conf * 10))]++;
+  const max = Math.max(1, ...b), W = 320, H = 56;
+  const bars = b.map((v, i) => `<rect x="${i * W / 10 + 2}" y="${H - (v / max) * (H - 4)}" width="${W / 10 - 4}" height="${(v / max) * (H - 4)}" rx="2" fill="#38bdf8" opacity=".8"/>`).join('');
+  return `<svg width="100%" height="${H + 16}" viewBox="0 0 ${W} ${H + 16}" preserveAspectRatio="none" style="display:block">${bars}</svg>
+  <div class="flex justify-between text-[10px] text-zinc-500 tabular-nums -mt-3"><span>0</span><span>0.5</span><span>1.0</span></div>`;
+}
+const confSection = nu
+  ? `<section class="px-3 py-3 border-t border-zinc-800"><h3 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Confidence</h3><p class="text-xs text-zinc-500">Measured annotations · no confidence scores</p></section>`
+  : `<section class="px-3 py-3 border-t border-zinc-800"><h3 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Confidence</h3>${histogram()}</section>`;
+const maxCount = Math.max(...counts.values());
+const classSection = `<section class="px-3 py-3 border-t border-zinc-800"><h3 class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">Classes</h3>
+  <ul class="space-y-1">${classOrder.map((c) => `<li class="flex items-center gap-2 px-2 py-1 rounded bg-sky-400/10">
+    <span class="w-2 h-2 rounded-full shrink-0" style="background:${color(c)}"></span>
+    <span class="text-xs text-zinc-100 w-28 shrink-0 truncate">${esc(c)}</span>
+    <span class="flex-1 h-1.5 rounded bg-zinc-800 overflow-hidden"><span class="block h-full rounded" style="width:${counts.get(c) / maxCount * 100}%; background:${color(c)}"></span></span>
+    <span class="text-xs text-zinc-300 tabular-nums w-6 text-right">${counts.get(c)}</span></li>`).join('')}</ul></section>`;
+const side = `
+<div class="a-side flex flex-col gap-2 min-h-0">
+  ${cam}
+  <section class="panel flex-1"><div class="ph"><span>Analytics</span></div>
+    <div class="scroll">${selected}${confSection}${classSection}</div></section>
+</div>`;
+
+const btn = (glyph, label) => `<button class="inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium bg-zinc-800 text-zinc-200 ring-1 ring-zinc-700"><span>${glyph}</span>${label}</button>`;
+const thumbs = D.frames.map((f, i) => `
+  <li class="shrink-0"><button class="relative block w-24 h-14 rounded overflow-hidden bg-zinc-800 ${i === 0 ? 'ring-2 ring-sky-400' : 'ring-1 ring-zinc-800'}">
+    <img src="${f.img}" class="w-full h-full object-cover">
+    <span class="absolute top-1 right-1 px-1 text-[10px] tabular-nums rounded bg-zinc-950/80 text-zinc-300 ring-1 ring-zinc-800">${f.n3d}</span>
+    <span class="absolute bottom-0 left-0 right-0 text-[10px] tabular-nums text-center ${i === 0 ? 'bg-sky-400 text-zinc-950 font-semibold' : 'bg-zinc-950/70 text-zinc-300'}">#${i + 1}</span>
+  </button></li>`).join('');
+const timeline = `
+<section class="panel a-time" style="flex-direction:row; align-items:center">
+  <div class="flex flex-col justify-center gap-2 px-3 h-full border-r border-zinc-800 shrink-0">
+    <span class="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">Frames<span class="text-zinc-500 font-normal tracking-normal ml-1.5">${D.frames.length}</span></span>
+    ${nu ? `<div class="flex gap-1.5">${btn('▶', 'Play')}${btn('↺', 'Reset')}${btn('◎', 'Follow')}</div>` : ''}
+  </div>
+  <ul class="flex gap-2 overflow-x-auto px-3 items-center">${thumbs}</ul>
+</section>`;
+
+document.getElementById('app').innerHTML = topbar + filterbar + `<main class="ws">${list}${main}${side}${timeline}</main>`;
+</script>
+</body>
+</html>

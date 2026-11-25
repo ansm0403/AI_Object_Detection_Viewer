@@ -116,6 +116,11 @@ COCO 프레임은 2D bbox에서 *추정한* 3D를, nuScenes 프레임은 실제 
   프레임마다 깊이의 출처를 정직하게 표기
 - **필터링** — confidence 슬라이더(COCO) ↔ 거리(미터) 슬라이더(nuScenes)를 데이터셋별로 스왑 +
   클래스 토글. 모두 셀렉터 레이어에서 일괄 처리
+- **스크롤 없는 작업 화면** — 객체 목록 · 3D 뷰 · 카메라 이미지 · 분석 패널 · 타임라인을 한 화면에 고정
+  배치. 1440×900과 1280×720에서 페이지 스크롤이 없고, 내용이 넘치는 목록과 분석 패널만 패널 안에서
+  스크롤됩니다. 화면 폭 1024px 미만에서는 세로로 쌓입니다
+- **객체 목록** — 3D 박스 전체를 나열. nuScenes에서는 카메라 이미지에 보이는 박스인지(아이콘)와
+  자차로부터의 거리(m)를 함께 보여주고, 32자 ID는 앞 6자리로 줄여 표시
 - **프레임 타임라인** — 썸네일 가로 스트립으로 프레임 전환
 - **분석 패널** — 선택된 객체 정보 카드, confidence 히스토그램(슬라이더 임계값 오버레이),
   클래스 카운트 바(클릭 시 클래스 필터 토글)
@@ -201,7 +206,7 @@ COCO를 대체하지 않고 **데이터셋 스위처로 공존**시켜, "추정 
 | 2D 오버레이 | SVG (`viewBox` + `<rect>`) | bbox 좌표를 산술 없이 매핑, 브라우저가 스케일링 처리 |
 | 3D 데이터 | nuScenes-mini, COCO val2017 | 실측 3D(nuScenes)와 추정 3D(COCO)를 데이터셋 스위처로 공존·비교 |
 | 데이터 파이프라인 | Python 3.13 (stdlib만) | 오프라인 prep 스크립트가 nuScenes 관계형 테이블 → 정적 JSON으로 평탄화, `.pcd.bin` LiDAR를 `struct`로 디코드 (devkit 미설치) |
-| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 단위 + 통합 테스트 **206개** |
+| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 단위 + 통합 테스트 **213개** |
 | 모노레포 | Nx 22.7 | 단일 워크스페이스에서 client/server 분리 (server는 현재 범위 외) |
 | 배포 | Vercel | Next.js 공식, GitHub 연동 자동 배포. 런타임 백엔드 없이 정적 서빙 유지 |
 
@@ -233,7 +238,7 @@ threshold 오버레이도 자유롭게 그릴 수 있었습니다.
 
 COCO/nuScenes 파싱, 2D→3D·3D→2D 좌표 변환, 셀렉터는 모두 `lib/` 아래의 순수 함수입니다.
 React 컴포넌트와 Zustand store는 이 함수들의 호출자일 뿐, 도메인 로직을 직접 들고 있지 않습니다.
-이 경계 덕분에 206개 테스트의 대부분이 React 환경 없이도 빠르게 돌아갑니다.
+이 경계 덕분에 213개 테스트의 대부분이 React 환경 없이도 빠르게 돌아갑니다.
 
 ### 5. nuScenes 선택 (KITTI / Waymo 대신)
 
@@ -277,7 +282,7 @@ npm install
 npx nx dev ai_detection_viewer_client
 # → http://localhost:3000
 
-# 3. 테스트 (Vitest, 206개)
+# 3. 테스트 (Vitest, 213개)
 npx nx test ai_detection_viewer_client
 # 또는 앱 디렉토리에서
 cd apps/ai_detection_viewer_client && npm test
@@ -307,6 +312,7 @@ apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js App Router
 │   ├── components/
+│   │   ├── workspace/      # 스크롤 없는 화면 틀 (영역 배치만) + 공통 패널 모양
 │   │   ├── viewer-2d/      # SVG 오버레이 이미지 뷰어
 │   │   ├── viewer-3d/      # R3F 캔버스, 포인트 클라우드, 3D bbox, Html 라벨
 │   │   ├── object-list/    # 비공간 선택 경로
@@ -323,7 +329,7 @@ apps/ai_detection_viewer_client/
 │   │   │                   #   카메라 framing, 깊이 색상, 프레임 보간(lerp/slerp)
 │   │   ├── sequence/       # 자동재생 프레임 진행 (순수 nextFrameIndex)
 │   │   ├── selectors/      # 가시 detection / 거리 필터 / 히스토그램 / 클래스 카운트
-│   │   ├── ui/             # 클래스별 색상 / 거리 상수 매핑
+│   │   ├── ui/             # 클래스별 색상 / 거리 상수 / 짧은 ID 표시
 │   │   └── types/          # Frame, Detection2D/3D, Point3D, source 플래그
 │   ├── store/              # Zustand store (UI 상태만)
 │   └── ...
@@ -364,9 +370,16 @@ COCO에는 깊이(depth) 정보가 없으므로, COCO 프레임의 3D 좌표는 
 
 ### 4. COCO 프레임마다 letterbox / pillarbox 크기가 다릅니다
 
-COCO val2017은 다양한 aspect ratio를 포함합니다. Viewer2D는 `aspect-[4/3]` 컨테이너에 이미지를
-contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여백 크기가 달라 보입니다.
-이미지와 bbox는 동일한 viewBox 좌표계로 정렬되므로 **bbox 정확도는 무손실**입니다.
+COCO val2017은 다양한 aspect ratio를 포함합니다. COCO의 카메라 칸은 4:3 고정이고 이미지를
+contain 방식으로 맞추므로 프레임마다 위/아래 또는 좌/우 여백 크기가 달라 보입니다(세로 사진은
+칸의 절반 폭만 채웁니다). 이미지와 bbox는 동일한 viewBox 좌표계로 정렬되므로 **bbox 정확도는
+무손실**입니다.
+
+### 5. 작업 화면에서 카메라 이미지는 작게 보입니다
+
+한 화면에 모든 영역을 넣으면서 3D 뷰를 가장 크게 두었기 때문에, 카메라 이미지는 1440×900에서
+400×225, 1280×720에서 360×203 크기입니다(이전 배치의 510×287보다 작음). 먼 객체의 2D 박스는
+사진 위에서 십여 픽셀 크기라 사진만으로 확인하기 어렵습니다.
 
 ---
 

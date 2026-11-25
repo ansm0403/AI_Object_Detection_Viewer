@@ -23,7 +23,11 @@ fixed), and during autoplay every box tweens between keyframes (position `lerpVe
 keyframe (Rule #6); the LiDAR cloud stays per-keyframe snap. **F2-E** (2026-10-25): measured
 frames no longer render the parser's placeholder `confidence: 1.0` as a score — `frameHasConfidence`
 (pure, keyed on `Frame.source`) swaps every confidence surface to "—" / a note (Rule #6). 206 tests.
-**F2 complete.**
+**F2 complete.** **F3 ✅ Done** (2026-11-25, no-scroll workspace): a full-viewport `WorkspaceShell`
+grid (top bar · filter bar · list | 3D | camera / details · timeline) replaces the stacked 12-column
+page; the shell sizes every pane and the viewers only fill their cell; the object list, class counts
+and timeline badges all count `detections3D` (the 3D view's basis); shared panel styling lives in
+`components/workspace/Panel.tsx`. 213 tests. See "Layout (F3 workspace)".
 For step-by-step history and per-Step decisions, see `mvp-checklist.md` (🔒 frozen).
 Post-MVP feature work (in progress) is tracked in `post-mvp-checklist.md`.
 For the original vision behind these decisions, see `docs/PROJECT_DESIGN.md` (read-only).
@@ -38,21 +42,25 @@ The project is an **nx monorepo**. All Step 1–10 work happens inside the
 apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
-│   │   └── page.tsx        # per-dataset load (COCO: parseCoco→enrich / nuScenes: parseNuScenes, F2-A) → auto-select frame → Header(switcher+badge) + Filters + Viewer2D + <Viewer3D/> + ObjectList + AnalyticsPanel + Timeline. Derives 2D + 3D visible-id sets (∩ distance filter). F2-C: `tracksAcrossFrames` (nuScenes) drives dataset-aware frame-switch selection (keep vs clear) + dataset-aware `Viewer3D` key (stable vs `frame.id`) + an `isPlaying` autoplay timer (nextFrameIndex @ ~2 Hz). F2-D: a page-level `cameraMode` (`'fixed'|'follow'`, nuScenes-only view flag, reset to fixed on dataset switch) + a `nextFrame` memo (the upcoming keyframe) are threaded to Viewer3D for camera-follow + box-tween.
+│   │   └── page.tsx        # per-dataset load (COCO: parseCoco→enrich / nuScenes: parseNuScenes, F2-A) → auto-select frame → Header(switcher+badge) + Filters + Viewer2D + <Viewer3D/> + ObjectList + AnalyticsPanel + Timeline. Derives 2D + 3D visible-id sets (∩ distance filter). F2-C: `tracksAcrossFrames` (nuScenes) drives dataset-aware frame-switch selection (keep vs clear) + dataset-aware `Viewer3D` key (stable vs `frame.id`) + an `isPlaying` autoplay timer (nextFrameIndex @ ~2 Hz). F2-D: a page-level `cameraMode` (`'fixed'|'follow'`, nuScenes-only view flag, reset to fixed on dataset switch) + a `nextFrame` memo (the upcoming keyframe) are threaded to Viewer3D for camera-follow + box-tween. **F3:** renders every state (loading / error / empty / loaded) inside `WorkspaceShell` (one slot per pane; the Header stays live so the dataset switcher works while loading or after an error); `ObjectList` gets the 3D visible set; viewer name tags (`label3D` / `label2D`) are chosen from `Frame.source` (Rule #6).
 │   ├── components/
+│   │   ├── workspace/      # ✅ F3 — the workspace frame + shared panel look
+│   │   │   ├── WorkspaceShell.tsx  # zone layout only (no state): topBar, filterBar, list, main, camera, details, timeline slots + cameraAspect; exports TIMELINE_ROW_HEIGHT_CLASS
+│   │   │   ├── Panel.tsx           # PANEL_CLASS, SECTION_TITLE_CLASS, PanelTitle, PanelHeader (32px title row), ViewerLabel (viewer corner tag)
+│   │   │   └── index.ts            # barrel
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
-│   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?, visibleIds? (F2-E: bbox label = class only on measured frames)
+│   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?, visibleIds?, label? (F2-E: bbox label = class only on measured frames; F3: fills its cell, corner tag)
 │   │   │   └── index.ts        # barrel
 │   │   ├── viewer-3d/      # ✅ Step 4, 5 — R3F canvas, point cloud, 3D bboxes, selection sync
-│   │   │   ├── Viewer3D.tsx    # props: frame, selectedId?, onSelect?; hosts Canvas
+│   │   │   ├── Viewer3D.tsx    # props: frame, selectedId?, onSelect?, label?; hosts Canvas (F3: fills its cell, resized not remounted)
 │   │   │   ├── Scene.tsx       # lights + PointCloud + BBox3D + OrbitControls; passes selection
 │   │   │   ├── PointCloud.tsx  # THREE.BufferGeometry via useMemo + dispose; per-vertex depth color (F1-A)
 │   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight + hover tint (F1-B); mounts BBoxLabel (F1-C)
 │   │   │   ├── BBoxLabel.tsx   # ✅ F1-C — drei <Html> info pill (class + confidence) anchored above the box; pointer-events-none
-│   │   │   ├── HintBox.tsx     # ✅ Step 9.5 — corner mouse-controls overlay (plain HTML sibling of Canvas)
+│   │   │   ├── HintBox.tsx     # ✅ Step 9.5 — corner mouse-controls overlay (plain HTML sibling of Canvas; English since F3)
 │   │   │   └── index.ts        # barrel
 │   │   ├── object-list/    # ✅ Step 6 — detection list panel; selection sync with 2D/3D
-│   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds?
+│   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds? (F3: lists every 3D box; measured rows show in-camera icon + distance; 6-char display id)
 │   │   │   └── index.ts        # barrel
 │   │   ├── filters/        # ✅ Step 7 — confidence slider + class toggles
 │   │   │   ├── Filters.tsx           # props: classes, threshold, visibleClasses, filterMode, maxDistance, callbacks
@@ -61,10 +69,10 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
 │   │   ├── timeline/       # ✅ Step 8 — horizontal thumbnail strip
-│   │   │   ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only)
+│   │   │   ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only). F3: one 84px row (title + Play/Reset/Follow left, 96×56 thumbnails right); badge = detections3D count
 │   │   │   └── index.ts         # barrel
 │   │   ├── header/         # ✅ Step 9.5 Phase 2 — app title + frame meta line
-│   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount
+│   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount, datasetId, onSelectDataset, source?. F3: flush 44px app bar; meta hidden when frameCount is 0 (loading/error)
 │   │   │   └── index.ts
 │   │   ├── analytics/      # ✅ Step 9.5 Phase 3 — right-rail analytics container
 │   │   │   ├── AnalyticsPanel.tsx  # composes Inspector + charts
@@ -111,14 +119,16 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── distance-filter.test.ts      # 10 tests — magnitude, inclusive boundary, NaN→empty
 │   │   │   ├── confidence-buckets.ts        # ✅ Step 9.5 Phase 3 — histogram buckets (BUCKET_COUNT=10)
 │   │   │   ├── confidence-buckets.test.ts   # 7 tests; locks bucket count + boundary rules
-│   │   │   ├── class-counts.ts              # ✅ Step 9.5 Phase 3 — class → count map (first-appearance order)
-│   │   │   ├── class-counts.test.ts         # 5 tests; locks key-by-class + iteration order
+│   │   │   ├── class-counts.ts              # ✅ Step 9.5 Phase 3 — class → count map (first-appearance order). F3: counts detections3D (was detections2D)
+│   │   │   ├── class-counts.test.ts         # 7 tests; locks key-by-class + iteration order + 3D basis (3D-only boxes counted, 2D ignored)
 │   │   │   ├── frame-has-confidence.ts      # ✅ F2-E — frameHasConfidence(frame): is `confidence` a real score? (false on measured frames, Rule #6)
 │   │   │   ├── frame-has-confidence.test.ts # 3 tests; coco / absent source → true, nuscenes-measured → false
 │   │   │   └── index.ts                     # barrel
 │   │   ├── ui/             # ✅ Step 9 — shared UI-layer constants (no React/Zustand/Three.js)
 │   │   │   ├── class-colors.ts              # CLASS_COLORS map (+truck/bus/motorcycle F2-A), getClassColor(), DEFAULT_COLOR, SELECTED_COLOR
-│   │   │   └── distance.ts                  # ✅ F2-A — DISTANCE_MAX / DISTANCE_STEP (distance-filter slider + store default)
+│   │   │   ├── distance.ts                  # ✅ F2-A — DISTANCE_MAX / DISTANCE_STEP (distance-filter slider + store default)
+│   │   │   ├── display-id.ts                # ✅ F3 — displayId(id): first 6 chars of a long id (nuScenes token), short ids (COCO) unchanged. Display only (Rule #1)
+│   │   │   └── display-id.test.ts           # 5 tests — 32-char → 6, COCO unchanged, ≤8 kept, >8 shortened, empty
 │   │   ├── sequence/       # ✅ F2-C — keyframe-sequence playback logic (pure; no React/Three.js)
 │   │   │   ├── autoplay.ts                   # nextFrameIndex(index, count, {loop}) + AUTOPLAY_INTERVAL_MS (~2 Hz)
 │   │   │   ├── autoplay.test.ts              # 8 tests — advance, loop-wrap, stop-at-end, not-found→0, single/empty/stale
@@ -312,8 +322,15 @@ type Viewer3DProps = {
   selectedId?: string | null;              // highlights the matching bbox (Step 5)
   onSelect?: (id: string | null) => void;  // wire to store.setSelectedObject in Step 5
   visibleIds?: Set<string>;                // Step 7 — filters out hidden bboxes + points
+  label?: string;                          // F3 — corner name tag (page passes it from Frame.source)
 };
 ```
+
+**F3:** the `Viewer3D` wrapper is `w-full h-full` (was `aspect-[4/3]`) — the `WorkspaceShell` cell
+decides its size. A cell resize resizes the existing `<Canvas>` through R3F's ResizeObserver; it does
+NOT remount it (no `key` change), so the GPU-resource concern of Edge_#4 Case 4 does not reopen.
+Render-verified 2026-11-25: the same `<canvas>` element survived five window resizes, including a
+switch to the narrow stacked layout.
 
 | Component | Responsibility |
 |---|---|
@@ -322,7 +339,7 @@ type Viewer3DProps = {
 | `PointCloud` | `THREE.BufferGeometry` + `THREE.Points`. Memoizes geometry; disposes on change/unmount. **F1-A:** each point carries a per-vertex `color` attribute from `depthToColor(z, zMin, zMax)` (`lib/geometry/depth-color.ts`); `<pointsMaterial vertexColors>` with a white base (multiplicative identity) shades each point by depth. The `[zMin, zMax]` domain is `depthRange(points)` fit to the **full frame** point-z range (computed pre-filter, so class toggles do NOT recolor — only frame switches do). The visible set comes from `selectVisiblePoints(points, visibleIds)`, and the color attribute rides the same geometry the dispose `useEffect` already cleans up. Base point `size` is `0.2` (with `sizeAttenuation`) and palette is **cyan→violet**; both were finalized by render verification (smaller points / dark-far-end / ACES tone mapping all made the gradient invisible). See Edge_F#1 Case 3. **F2-B:** the cloud is now real LiDAR for nuScenes frames (COCO stays estimated). `selectVisiblePoints` (in `lib/selectors`, pure) keeps points whose `detectionId` is in `visibleIds` (COCO's owned points) AND **always keeps points with no `detectionId`** (LiDAR environment points), so the box filters (distance slider / class toggles) never thin the measured cloud. Real `z` drives the depth color; `size`/decimation density were render-verified legible at the nuScenes scale (Edge_F#2 Case 4). |
 | `BBox3D` | `THREE.EdgesGeometry` wireframe + invisible click mesh. White color + scale pulse when selected. **F1-B:** `onPointerOver`/`onPointerOut` on the same invisible mesh drive a local `hovered` state; a non-selected hovered box renders a lightened class tint (`THREE.Color(classColor).lerp(white, 0.6)`) + a static `1.06` scale (no pulse — kept distinct from the selected white+pulse look, whose scale stays in `0.96–1.04`; selection wins when both apply). Tint/scale strengths were render-verified (the initial `0.45`/`1.02` barely read on the near-black bg with 1px wires). Cursor → `pointer` while hovered via an effect whose cleanup also fires on unmount, so a hovered box that disappears (frame switch / filtered out) before `onPointerOut` still resets the cursor. Hover is 3D-local only — no store field, no 2D/ObjectList sync (Immutable Rule #2). See Edge_F#1 Case 4. **F1-C:** split into an outer (position-only) group and an inner (pulse/hover-scaled) group; when `isSelected || hovered`, mounts `<BBoxLabel>` on the OUTER group at the box top (`size.y/2 + pad`) so the selected-box pulse doesn't jitter the label anchor. **F2-A:** the inner group also carries `quaternion={bbox3D.rotation ?? [0,0,0,1]}` — measured nuScenes boxes render at their real heading; absent (COCO) → identity, so estimated boxes / F1 are unchanged. Rotation and the uniform pulse/hover scale compose independently; the label stays on the unrotated outer group so it hangs upright. **F2-D-2 (box tween):** the outer-group position and inner-group quaternion are now driven imperatively in `useFrame` (the JSX `position`/`quaternion` are kept only as first-render seeds). While `playing` AND a `nextCenter` exists, the box GLIDES from its current measured pose toward the next keyframe's pose — `lerpVec3` on position, `slerpQuat` on rotation — with `t = (elapsed − keyframeStart) / AUTOPLAY_INTERVAL_MS` clamped to `[0,1]`; the per-box clock resets on each `frameId` change (and on a play restart), so a tween always begins exactly on a measured pose. When NOT playing (paused / scrubbed) or with no next match, it shows the EXACT measured pose (Rule #6 — interpolated in-between poses are never shown as a static state). |
 | `BBoxLabel` | **F1-C:** drei `<Html>` info pill anchored to a 3D point, re-projected each frame so it tracks the box as the camera orbits/zooms. Constant on-screen size (no `distanceFactor`). Shows class-color dot + class + `confidence` as a percent (**F2-E:** `confidence` is optional; `BBox3D` passes `undefined` when `Scene`'s `frameHasConfidence(frame)` is false — measured frames — so the pill shows the class alone instead of a placeholder "100%", Rule #6). `pointer-events-none` on both the `<Html>` container and the inner node so empty-space clicks still reach `<Canvas onPointerMissed>` (deselect). `occlude` OFF for F1. Shown only for selected/hovered boxes (≤2 at once) to avoid clutter; it's an in-scene complement to `SelectedObjectInfo`, not a replacement. See Edge_F#1 Case 5. |
-| `ObjectList` | Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. **Phase 2:** confidence rendered as a sky-tinted gauge bar (**F2-E:** gauge + number replaced by "—" when `frameHasConfidence(frame)` is false — the measured 1.0 is a placeholder, Rule #6); on `selectedId` change the selected row is scrolled into view by manually adjusting the `<ul>` `scrollTop` (NOT `Element.scrollIntoView` — that propagates to outer scroll containers and can move the page; see Edge_#9.5 Case C). |
+| `ObjectList` | **F3 (supersedes "raw detections" below):** lists every `detections3D` box, not `detections2D` — on nuScenes most boxes have no camera projection (Edge_F#2 Case 1) and were otherwise reachable only by clicking in 3D; `visibleIds` is the 3D visible set. Measured rows (`frame.source==='nuscenes-measured'`) show a camera icon (box has a 2D projection with the same id, Rule #1) and the distance from the ego vehicle (`detectionDistance`, the distance filter's own function) in place of the old "—"; COCO rows keep the confidence gauge. The id cell shows `displayId(id)` (6 chars) with the full id as a tooltip. Header row = `PanelHeader` ("OBJECTS 40" + "13 in camera"); rows are 32px. Original contract: Non-spatial selection panel. Shows all raw detections (class, confidence, id). Clicking a row sets `selectedObjectId`. Selected row highlighted with bg + ring. **Phase 2:** confidence rendered as a sky-tinted gauge bar (**F2-E:** gauge + number replaced by "—" when `frameHasConfidence(frame)` is false — the measured 1.0 is a placeholder, Rule #6); on `selectedId` change the selected row is scrolled into view by manually adjusting the `<ul>` `scrollTop` (NOT `Element.scrollIntoView` — that propagates to outer scroll containers and can move the page; see Edge_#9.5 Case C). |
 
 `Viewer3D` receives an enriched `Frame` (output of `enrichFrame`). It does NOT call `enrichFrame` —
 coordinate math is `lib/geometry/`'s responsibility.
@@ -395,12 +412,12 @@ Adopt/exclude rationale lives in `docs/etc/NEW_UI.md` (private notes, not in the
 
 | Component | Phase | Responsibility |
 |---|---|---|
-| `Header` | 2 ✅ | App title + frame meta (`Frame N/M · X detections`, X = `detections3D.length` — the 3D main view's count, F2-A). Pure presentation; reads no store directly. **F2-A:** also hosts the dataset switcher (segmented `COCO \| nuScenes`, props `datasetId`/`onSelectDataset`) and the Estimated/Measured badge driven by `Frame.source` (amber = estimated, emerald = measured) — provenance is surfaced here, app-level, not in the per-frame Filters. |
-| `HintBox` (inside `Viewer3D`) | 1 ✅ | Small overlay in the 3D viewer corner showing mouse controls. Static text; no state. Mounted as a sibling of `<Canvas>` inside `Viewer3D`'s `relative` wrapper; `pointer-events-none` so OrbitControls still receives drag events over the hint area. |
-| `AnalyticsPanel` | 3 ✅ | Right-rail container that composes `SelectedObjectInfo`, `ConfidenceHistogram`, `ClassCountBar`. Holds no state of its own. **F2-E:** when `frameHasConfidence(frame)` is false (measured frames) the histogram is swapped for a local `NoConfidenceNote` ("Measured annotations · no confidence scores") that keeps the same heading/spacing so the panel doesn't reflow on dataset switch — mirrors `Filters` swapping the confidence slider for the distance slider. Has no background-deselect handler — deselection stays scoped to Filters / ObjectList / Viewer empty-space (information panels deselecting on background click feels accidental). |
+| `Header` | 2 ✅ | **F3:** a flush 44px app bar (border-bottom, no card); the meta line is hidden while `frameCount` is 0 (loading / error), because the Header is rendered in every state. App title + frame meta (`Frame N/M · X detections`, X = `detections3D.length` — the 3D main view's count, F2-A). Pure presentation; reads no store directly. **F2-A:** also hosts the dataset switcher (segmented `COCO \| nuScenes`, props `datasetId`/`onSelectDataset`) and the Estimated/Measured badge driven by `Frame.source` (amber = estimated, emerald = measured) — provenance is surfaced here, app-level, not in the per-frame Filters. |
+| `HintBox` (inside `Viewer3D`) | 1 ✅ | **F3:** text in English ("Drag · rotate / Scroll · zoom / Click · select") — it was the only Korean UI string. Small overlay in the 3D viewer corner showing mouse controls. Static text; no state. Mounted as a sibling of `<Canvas>` inside `Viewer3D`'s `relative` wrapper; `pointer-events-none` so OrbitControls still receives drag events over the hint area. |
+| `AnalyticsPanel` | 3 ✅ | **F3:** the `details` zone of the workspace (right column, under the camera); `h-full` with a 32px `PanelHeader`, body scrolls inside. Right-rail container that composes `SelectedObjectInfo`, `ConfidenceHistogram`, `ClassCountBar`. Holds no state of its own. **F2-E:** when `frameHasConfidence(frame)` is false (measured frames) the histogram is swapped for a local `NoConfidenceNote` ("Measured annotations · no confidence scores") that keeps the same heading/spacing so the panel doesn't reflow on dataset switch — mirrors `Filters` swapping the confidence slider for the distance slider. Has no background-deselect handler — deselection stays scoped to Filters / ObjectList / Viewer empty-space (information panels deselecting on background click feels accidental). |
 | `SelectedObjectInfo` | 3 ✅ | Renders class / confidence / 2D bbox / 3D bbox / frame id / detection id of the selected detection. **F2-E:** the Confidence row shows "—" when `frameHasConfidence(frame)` is false, the same affordance as the missing-modality bbox rows. Shows a placeholder card when `selectedObjectId` is null OR when the id is not found in the current frame (defensive — `handleSelectFrame` already clears on frame switch). |
-| `ConfidenceHistogram` | 3 ✅ | Pure SVG bars over `BUCKET_COUNT=10` buckets of `[0..1]`. Bars above the current `confidenceThreshold` render in sky; below-threshold bars in zinc. Threshold itself drawn as a dashed vertical line. Bucket data comes from `selectConfidenceBuckets(frame)`. Not mounted on measured frames (F2-E, see `AnalyticsPanel`). |
-| `ClassCountBar` | 3 ✅ | CSS-only horizontal bars (one row per class), iteration order = `selectClassCounts` Map order (first-appearance). Clicking a row dispatches `toggleClass`, the same action `ClassToggles` uses — the chart is a second entry point to the same store slice. Permissive-empty visual matches `ClassToggles`. |
+| `ConfidenceHistogram` | 3 ✅ | **F3:** the SVG is stretched to the panel width at a fixed 48px height (`preserveAspectRatio="none"`, lines use `vector-effect: non-scaling-stroke`) and the 0 / 0.5 / 1 tick labels are HTML below it — text inside a width-scaled viewBox grew with the panel (8 units → ~28px in a 700px panel). Ticks are now 10px at any width. Pure SVG bars over `BUCKET_COUNT=10` buckets of `[0..1]`. Bars above the current `confidenceThreshold` render in sky; below-threshold bars in zinc. Threshold itself drawn as a dashed vertical line. Bucket data comes from `selectConfidenceBuckets(frame)`. Not mounted on measured frames (F2-E, see `AnalyticsPanel`). |
+| `ClassCountBar` | 3 ✅ | **F3:** counts come from `detections3D` (same basis as the header, list and timeline badge); class-name column widened to `w-28` with the full name as a tooltip. CSS-only horizontal bars (one row per class), iteration order = `selectClassCounts` Map order (first-appearance). Clicking a row dispatches `toggleClass`, the same action `ClassToggles` uses — the chart is a second entry point to the same store slice. Permissive-empty visual matches `ClassToggles`. |
 
 ### Charting Policy (Step 9.5)
 
@@ -416,9 +433,82 @@ Adopt/exclude rationale lives in `docs/etc/NEW_UI.md` (private notes, not in the
   arcs hard to compare, and arc math adds SVG complexity for no readability
   win.
 
-### Layout (after Step 9.5)
+### Layout (F3 workspace) — current
 
-Proposal B is the adopted layout, in place since Phase 3. `page.tsx`
+Since F3 (2026-11-25) `page.tsx` renders everything inside `components/workspace/WorkspaceShell.tsx`.
+The shell defines **where each zone sits and how big it is**; it holds no state and computes nothing.
+Viewers no longer size themselves — they fill the cell they are given.
+
+```
+Wide (lg, ≥1024px): full viewport, the page never scrolls (lg:h-screen, min-h 640px)
+[ topBar     (Header, 44px, flush bar)                                     ]
+[ filterBar  (Filters, 40px, flush bar)                                    ]
+[ list       | main = Viewer3D                 | camera = Viewer2D (aspect) ]
+[ ObjectList |                                 | details = AnalyticsPanel   ]
+[ timeline   (Timeline, 84px)                                              ]
+  columns: 240px | 1fr | 360px   (≥1400px: 272px | 1fr | 400px), gap/padding 8px
+```
+
+| Zone | 1440×900 | 1280×720 |
+|---|---|---|
+| 3D view (main) | 736×708 | 648×528 |
+| camera cell, nuScenes (16:9) | 400×225 | 360×203 |
+| camera cell, COCO (4:3) | 400×300 | 360×270 |
+| object list | 272×708 | 240×528 |
+
+- **Only panels scroll inside.** The object list and the details panel scroll in place; the page does
+  not (`document.documentElement.scrollHeight === clientHeight`, verified at 1440×900, 1280×720,
+  1536×700 for both datasets, with a selection and during autoplay).
+- **Camera cell ratio** comes from `cameraAspect` (page: nuScenes 16/9, COCO 4/3). The cell carries
+  `min-h-0 overflow-hidden`: without them a box with `aspect-ratio` grows to fit its content, and a
+  portrait COCO photo stretched the cell to 400×600 (Edge_F#3 Case 1).
+- **Fixed bar heights on wide screens** (`lg:h-11`, `lg:h-10`, `TIMELINE_ROW_HEIGHT_CLASS`) so the
+  loading skeleton and the loaded page have identical pane rectangles — the page does not jump when
+  data arrives (verified: all five pane rects equal before/after load).
+- **Narrow (< lg):** zones stack in one column and the page scrolls. Order via `order-*`:
+  3D → camera → timeline → list → details (3D first, Rule #5). The right column uses
+  `contents lg:flex` so camera and details can be ordered independently on narrow screens.
+- **Loading / error / empty** render in the same shell: pane placeholders (pulsing while loading), the
+  error message + Retry or "No frames." in the main slot. The Header stays live, so the dataset
+  switcher works during loading and after a failed load.
+- **Panel look** (`Panel.tsx`): `PANEL_CLASS` = zinc-900 background, 1px zinc-800 **border**,
+  `rounded-lg`. A border, not `ring-inset`: an inset ring is painted under the content, so a photo or
+  the 3D canvas filling the pane hid it. Data panels (list, details) have a 32px `PanelHeader`; viewers
+  (3D, camera) get a corner `ViewerLabel` instead so the image keeps the full pane height. Section /
+  filter labels share `SECTION_TITLE_CLASS` (11px, uppercase, semibold). Counts read "OBJECTS 40"
+  (no parentheses).
+- **Viewer labels follow provenance** (Rule #6): `Frame.source === 'nuscenes-measured'` →
+  "LiDAR · measured 3D" / "CAM_FRONT"; otherwise "3D · estimated from 2D" / "Image". "CAM_FRONT" is
+  fixed because `scripts/prep_nuscenes.py` exports that camera only (until F6).
+- **Reserved spots for later features** (F3 design doc §12): F4 review buttons at the top of the
+  details panel and progress in the top bar, review status at the right of each list row; F5 summary
+  in the details panel and a confidence slider in the filter bar; F6 cameras in the camera cell.
+
+<!-- KO (move to a localized file)
+### 배치 (F3 작업 화면) — 현재
+
+F3(2026-11-25)부터 `page.tsx`는 모든 것을 `components/workspace/WorkspaceShell.tsx` 안에 그린다. 화면 틀은
+각 영역의 **위치와 크기만** 정하고, 상태나 계산은 갖지 않는다. 뷰어는 더 이상 자기 크기를 정하지 않고 받은 칸을 채운다.
+
+- 넓은 화면(lg, 1024px 이상): 화면 전체를 쓰고 페이지는 스크롤되지 않는다. 열 폭 240 | 나머지 | 360
+  (1400px 이상은 272 | 나머지 | 400). 1440×900에서 3D 736×708, 카메라 400×225(nuScenes) / 400×300(COCO).
+- 목록과 정보 패널만 패널 안에서 스크롤된다.
+- 카메라 칸 비율은 `cameraAspect`(nuScenes 16:9, COCO 4:3). `min-h-0 overflow-hidden`이 없으면 `aspect-ratio`
+  칸이 내용 크기만큼 늘어난다(세로 COCO 사진에서 400×600, Edge_F#3 Case 1).
+- 넓은 화면에서 상단 바·필터 바·타임라인 높이를 고정해, 로딩 화면과 로딩 후 화면의 칸 위치가 같다.
+- 좁은 화면: 세로로 쌓이고 페이지가 스크롤된다. 순서는 3D → 카메라 → 타임라인 → 목록 → 정보.
+- 로딩·오류·빈 데이터도 같은 틀 안에 그린다. 헤더는 항상 살아 있어 로딩 중이나 오류 뒤에도 데이터셋을 바꿀 수 있다.
+- 패널 모양(`Panel.tsx`): 배경 zinc-900, 1px zinc-800 테두리(border), rounded-lg. `ring-inset`은 내용 아래에
+  그려져 사진·3D가 덮으면 가려지므로 쓰지 않는다. 데이터 패널은 32px 제목 줄, 뷰어는 모서리 이름표.
+- 뷰어 이름표는 `Frame.source`로 정한다(규칙 #6). 실측이면 "LiDAR · measured 3D" / "CAM_FRONT",
+  아니면 "3D · estimated from 2D" / "Image".
+- 뒤 기능 자리: F4 검수 버튼은 정보 패널 맨 위, 진행률은 상단 바, 검수 상태는 목록 행 오른쪽. F5 요약은 정보 패널,
+  confidence 슬라이더는 필터 바. F6 카메라는 카메라 칸.
+-->
+
+### Layout (after Step 9.5) — superseded by F3
+
+Kept as history. Proposal B was the adopted layout from Phase 3 until F3. `page.tsx`
 switched from the Step 6 three-column grid to a 12-column grid with two
 content rows:
 
@@ -617,11 +707,22 @@ so that the same input JSON always produces the same ids — critical for the
 COCO bbox coordinates (`x, y, width, height`) map directly to SVG `<rect>` attributes
 with no arithmetic — the browser scales the vector to fit the container automatically.
 
-**Fixed aspect wrapper (Step 9.5 Phase 1 ✅).** `Viewer2D` is wrapped in an
-`aspect-[4/3]` container (mirroring `Viewer3D`), and the SVG uses
-`w-full h-full` with `preserveAspectRatio="xMidYMid meet"` so the image is
-letter- or pillar-boxed inside a stable cell. The grid row height is
-deterministic and the Timeline no longer jitters when frames are switched.
+**Cell-filling wrapper (F3, replaces the Step 9.5 fixed-aspect wrapper).** The
+`Viewer2D` wrapper is `w-full h-full`: the `WorkspaceShell` camera cell decides
+the size (16:9 on nuScenes, 4:3 on COCO via `cameraAspect`). The SVG still uses
+`w-full h-full` with `preserveAspectRatio="xMidYMid meet"`, so a photo whose
+ratio differs from the cell (COCO portrait / square) is letter- or pillar-boxed
+inside it. Timeline stability — the reason for the old fixed wrapper — now comes
+from the shell: the timeline row sits at the bottom of a fixed-height grid, so
+it cannot move when a frame switch changes the photo's aspect ratio.
+
+Step 9.5 history: `Viewer2D` was wrapped in an `aspect-[4/3]` container
+(mirroring `Viewer3D`) so the grid row height was deterministic and the
+Timeline stopped jittering on frame switches.
+
+**Corner tag (F3).** Optional `label` prop renders a `ViewerLabel` in the
+top-left corner (`pointer-events-none`, so clicks still reach the wrapper's
+deselect handler).
 
 The deselect handler (`onClick={() => onSelect?.(null)}`) lives on the
 wrapper `<div>` — **not** on the `<svg>`. This is so that clicks on the
@@ -642,6 +743,7 @@ type Viewer2DProps = {
   selectedId?: string | null;              // highlights the matching bbox (Step 5)
   onSelect?: (id: string | null) => void;  // wire to store.setSelectedObject in Step 5
   visibleIds?: Set<string>;                // Step 7 — only render bboxes whose ids are in the set
+  label?: string;                          // F3 — corner name tag ("CAM_FRONT" / "Image")
 };
 ```
 
