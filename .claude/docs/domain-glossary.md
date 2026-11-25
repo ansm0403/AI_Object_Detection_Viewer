@@ -564,8 +564,8 @@ scene from one camera: it shows that the analysis works, not how good the model 
 ## Multi-Camera Terms (F6 — six cameras)
 
 The running picture: **six cameras on the roof of the car, facing outward in a ring** — as if one
-person turned on the spot and took six photos. Terms added when the F6 design doc was written
-(2026-11-26); adjust when the feature lands.
+person turned on the spot and took six photos. (Added with the F6 design doc, 2026-11-26; checked
+against the implementation at the end of F6.)
 
 **Camera channel (카메라 이름)** *(F6)*
 Which way a camera faces. nuScenes names six: `CAM_FRONT`, `CAM_FRONT_LEFT`, `CAM_FRONT_RIGHT`,
@@ -625,6 +625,21 @@ of an object. The official nuScenes detection evaluation filters such boxes too 
 An object only partly inside a photo because it sits at the border of the camera's view. Detectors
 find such objects much less often (in the sample: 38 % when under half of the box is inside the
 photo, 68 % when all of it is). With six cameras the neighbouring camera often sees the whole object.
+
+**Best view (가장 잘 보이는 카메라)** *(F6)*
+Of the cameras that see an object, the one whose photo contains the largest share of its projected
+box (then the one where it is larger). The photo the app switches to when the object is selected,
+and the camera named first in the list tag ("B+") and the evidence line ("Seen by B · BR").
+
+**Active camera (지금 보는 카메라)** *(F6)*
+The camera whose photo the large camera image shows. A view setting — it follows from the selected
+object and can be overridden with a thumbnail click or `[` / `]`; it is NOT a second selection
+(Immutable Rule #2).
+
+**Photo (사진) vs frame (프레임)** *(F6)*
+A frame is one moment (a keyframe); with six cameras it has six photos. Evaluation counts per
+photo; review counts per box of a frame. "60 photos" in the sample are 10 frames × 6 cameras — ten
+moments, not sixty.
 
 **Preloading (미리 받기)** *(F6)*
 Fetching photos before they are needed, so a frame switch or playback shows them at once. One frame

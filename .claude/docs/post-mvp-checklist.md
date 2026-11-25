@@ -1242,6 +1242,169 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 
 ---
 
+## F6 — Six Cameras ✅ Done (2026-11-26; F6-A … F6-D)
+- **Design doc:** `docs/plan-feature/F6_six_cameras.md` (provisionally approved: the user looked at
+  the mockups and said "proceed as recommended" — all 17 decisions built as recommended and adjusted
+  from captures). Mockups + per-step captures: `docs/plan-feature/assets/F6/` (`compare.html`,
+  `steps.html`).
+- **Goal:** use all six nuScenes cameras. Selecting a 3D box shows the camera that sees it, and both
+  pillars — label review (F4) and detector evaluation (F5) — work around the whole vehicle instead of
+  in front of it only. Answers the posting's "multimodal data".
+- **Scope (as built):**
+  - **F6-A — data + logic (no visual change).** `prep_nuscenes.py` exports six cameras per frame
+    (photo, that photo's own `ego_pose`, calibration) as `cameras[]` — `nuscenes.json` format 1.2,
+    +50 photos (60, 8.04 MB), JSON 1,497 → 1,535 KB. The parser builds one 2D-box list per camera
+    (`Frame.cameras`). `lib/cameras`: `frameAsCamera`, `camerasSeeing`, `camerasByBestView`,
+    `pickCamera`, `stepCamera`, display order / short names, `preloadOrder`.
+  - **F6-B — camera cell + review.** Thumbnail row under the large photo (`CameraStrip`), the camera
+    follows the selection (`useActiveCamera`), `[` / `]`, "outside CAM_X · seen by B, BR", camera tags
+    in the object list and the evidence line, orders "By camera" and "Unsure first", practice mode
+    over all cameras, background photo preload.
+  - **F6-C — evaluation over six cameras.** `predict_nuscenes.py` runs all 60 photos →
+    `predictions.json` format `@2` (1,597 predictions, 120 KB). Each PHOTO is scored on its own and the
+    counts are added; a per-object outcome ("found by any camera") colours the 3D boxes. Bicycle-rack
+    rule. List and photo show the camera on screen; thumbnails carry that photo's miss count; the
+    panel adds recall by camera.
+  - **F6-D — finish.** Audit of every direct read of `frame.detections2D` / `imageUrl`, wording that
+    still described one camera, measurements on the production build.
+  - **Edge-case review** after F6-D: two more fixes, see below.
+- **Done when (design doc §8) — all met, verified by driving the real app with Playwright** (F6-A 41
+  checks, F6-B 58, F6-C 56, edge review 45; B and C re-run after the edge fixes):
+  - 583 boxes: 443 seen by one camera, 140 by two, **0 by none** (before F6: 383 could not be checked
+    against a photo). Boxes per camera 200 / 79 / 184 / 55 / 36 / 169.
+  - The front camera's 2D boxes, every 3D box and every LiDAR point are deep-equal to the pre-F6
+    file's; every pre-existing field of `nuscenes.json` is unchanged; a format-1.1 file still works as
+    one camera.
+  - Selecting a box behind the car shows the rear camera with the projected 3D box; a thumbnail click
+    keeps the selection; the photo follows a tracked object through playback; the canvas is never
+    re-created.
+  - **Front camera alone: found 91, missed 83, false alarms 13, not scored 26 — unchanged.** All 60
+    photos: **349 / 182 / 107 / 180**, Precision 77%, Recall 66%; rack rule off → 121 false alarms.
+    Per object: 295 of 418 found by at least one camera. Frame 6 in 3D: 28 green, 16 red, 17 grey
+    (was 12 / 10 / 39).
+  - A missing predictions file, a format-`@1` file (front camera only) and a missing photo each leave
+    review working and are reported, never counted as "0 found".
+  - No page scroll and a one-line top bar at 1024 / 1100 / 1280 / 1440 / 1536 / 1920 in review and
+    evaluate; no sideways scroll down to 320 px. COCO unchanged (no thumbnail row, no mode switch).
+  - Tests **530 → 688** (`lib/cameras` 62, parser +15, review +16, evaluation +65). `tsc --noEmit` 0
+    errors. CI lint 0 errors (19 pre-existing warnings). Production build passes. Both data scripts
+    run twice → byte-identical files.
+- **Changes from the plan, and why:**
+  1. **List tags show the best camera + "+", not every camera** ("B+" instead of "BR·B"). The full
+     names truncated "person" to "pers…" in the 240 px list. The complete list is in the tooltip and
+     in the evidence line. The distance column lost 8 px below 1400 px to pay for the tag.
+  2. **Camera names are listed best view first**, not in thumbnail order (mockup): the first name is
+     the camera the photo switches to, so the list, the evidence line and the photo agree.
+  3. **The per-object line sits under "Recall by camera"**, not under Precision / Recall (mockup). At
+     1536×700 it pushed the distance bars out of the 232 px panel.
+  4. **The panel's frame row is the sum over the frame's six photos** (19 / 5 / 35 / 17 for frame 6)
+     while the list is one photo. The list title carries the camera tag ("F", "FR") to tell them
+     apart. The design had not said which of the two the frame row is.
+  5. **Rack-ignored model boxes are drawn in grey on the photo** (the design only said "left out").
+     The model did report them; hiding them would hide a fact. They are not results and select
+     nothing; the rack label is selectable and explains itself.
+  6. **Four "not evaluated" reasons instead of two** in the pinned strip: not in this photo (with what
+     the other cameras made of it), seen by no camera, a class the model cannot name, a bicycle rack.
+  7. **"Unsure first" needed its own auto-advance** (`nextUnsure`): after re-judging an unsure box the
+     reviewer wants the next unsure one, not the next unreviewed one. Not in the design.
+  8. **`FrameEvaluation` kept its name and now means one photo**; the frame-level result is the new
+     `FrameCamerasEvaluation`. `evaluateFrame` is unchanged apart from the rack rule — it is handed
+     `frameAsCamera(frame, name)`.
+  9. **The size of `nuscenes.json` was estimated at +2–3 KB per frame; measured +3.8 KB** (+38 KB).
+  10. **From the edge-case review (not in the design):** the object list keeps the selected row
+      visible when a verdict moves it (Case 1); the thumbnail row has a fixed number of cells so
+      frames with fewer cameras do not move the panes (Case 2).
+  11. **Measured, not optimised.** Scoring 60 photos: 1.1 ms. Six cameras add no measurable
+      interaction latency over one camera. Preload concurrency 2 → 4 tried and reverted.
+- **Decisions kept from the design doc:** thumbnail row under the photo (cost: details panel 43 px
+  shorter — 275 → 232 at 1536×700); look-around order BL FL F FR BR B; automatic camera on selection
+  / frame change, manual choice until then; `[` `]`; per-photo counting; 3D colour = found by any
+  camera; list = the photo on screen; rack rule by centre, bicycle + motorcycle; no rule for labels
+  cut off by the image edge (it would change the front camera's numbers); `predictions@2` with the
+  camera in the id; `Frame.cameras` beside the existing fields; each photo's own ego pose, 3D frame
+  still CAM_FRONT's; preload all ten frames, thumbnails reuse the photo file; practice mode over any
+  camera; active camera as page view state (Rule #2); no new library.
+- **Not done / open:**
+  - **The numbers are still a demonstration, not a result**: one scene, ten frames. Sixty photos of
+    the same ten moments are not more evidence about the model.
+  - **Labels cut off by the image edge are scored like any other** (38% recall when less than half of
+    the box is in the photo vs 68% when all of it is). Stated in the panel; the per-object line and
+    "other camera: …" show what the neighbouring camera did.
+  - **Practice sets differ from F5's for the same seed** (the candidate pool grew from 200 to 583
+    boxes). Practice records are their own scope; real review records are unaffected.
+  - **Photos lag playback on slower connections** if Play is pressed at once (≈ 10 photos/s arrive at
+    20 Mbps, playback needs 12). Boxes and numbers do not depend on photos. F7 must bound the preload.
+  - **Memory held by preloaded photos not measured.** Frame rate on the user's laptop not measured
+    (headless software GL here).
+  - **three.js idle cost** — unchanged; the user chose to do it after F6, before F7.
+  - **Found, not caused by F6, not changed:** the last class chip is cut off at 1024 px; "5 false
+    alarm" is not pluralised. Reported to the user.
+  - Whether the nuScenes benchmark's bike-rack filter is applied to predictions, ground truth or both
+    was not confirmed from the source file read.
+  - COCO mode: still on hold.
+- **Edge refs:** Edge_F#6 Cases 1–6 + "measured and not changed" + "observed, accepted".
+
+<!-- KO (move to a localized file)
+## F6 — 카메라 6대 ✅ 완료 (2026-11-26; F6-A ~ F6-D)
+- 설계 문서: `docs/plan-feature/F6_six_cameras.md`(임시 승인: 사용자가 시안을 보고 "추천대로 진행하라"고 함. 결정 17개를
+  모두 추천안으로 만들고 캡처를 보며 조정). 시안과 단계별 캡처: `docs/plan-feature/assets/F6/`.
+- 목표: nuScenes 카메라 6대를 모두 쓴다. 3D 박스를 고르면 그 박스를 보는 카메라를 보여주고, 검수(F4)와 평가(F5)가
+  차 앞쪽만이 아니라 차 주위 전체에서 동작한다. 공고의 "멀티모달 데이터"에 답한다.
+- 범위(만든 것):
+  - F6-A 데이터와 로직(화면 변화 없음): 준비 스크립트가 프레임마다 카메라 6대(사진, 그 사진의 `ego_pose`, 보정값)를
+    `cameras[]`로 내보냄. `nuscenes.json` 형식 1.2, 사진 50장 추가(60장, 8.04MB), JSON 1,497 → 1,535KB.
+    파서가 카메라마다 2D 박스를 만듦(`Frame.cameras`). `lib/cameras`의 순수 함수들.
+  - F6-B 카메라 칸과 검수: 큰 사진 아래 썸네일 줄, 선택을 따라가는 카메라, `[` `]`, 안내문, 목록과 근거 줄의 카메라 표시,
+    정렬 "By camera"와 "Unsure first", 연습 모드의 6대 기준, 사진 미리 받기.
+  - F6-C 평가 6대: 예측 스크립트가 60장을 돌림 → `predictions.json` 형식 @2(예측 1,597개, 120KB). 사진 한 장씩 채점해
+    더하고, 물체 단위 결과("어느 카메라에서든 찾음")로 3D 박스를 칠함. 거치대 규칙. 목록과 사진은 지금 보는 카메라,
+    썸네일에 놓친 개수, 패널에 카메라별 Recall.
+  - F6-D 마무리: `frame.detections2D` / `imageUrl`을 직접 읽는 곳 전수 확인, 카메라 한 대를 전제로 한 문구 정리,
+    배포용 빌드 측정.
+  - F6-D 뒤 엣지 케이스 검증: 수정 2건 추가.
+- 완료 기준(설계 문서 8장): 모두 충족. 실제 앱을 Playwright로 조작해 확인(F6-A 41항목, B 58, C 56, 엣지 45).
+  - 박스 583개: 1대에 443개, 2대에 140개, **0대에 0개**(F6 전에는 383개를 사진으로 확인할 수 없었음).
+  - 앞 카메라의 2D 박스, 모든 3D 박스, LiDAR 점이 F6 전 파일로 만든 것과 완전히 같다. 형식 1.1 파일도 카메라 하나로 동작.
+  - **앞 카메라만: 찾음 91, 놓침 83, 헛짚음 13, 채점 제외 26 그대로.** 사진 60장: **349 / 182 / 107 / 180**, Precision 77%,
+    Recall 66%. 거치대 규칙을 끄면 헛짚음 121. 물체 단위로는 418개 중 295개. 프레임 6의 3D: 초록 28, 빨강 16, 회색 17
+    (이전 12 / 10 / 39).
+  - 예측 파일이 없거나, @1 형식이거나, 사진 한 장이 없어도 검수는 동작하고, "0개 찾음"으로 세지 않고 이유를 알린다.
+  - 1024 ~ 1920px에서 스크롤 없음·상단 바 한 줄(검수, 평가). 320px까지 가로 넘침 없음. COCO는 그대로.
+  - 테스트 530 → 688개, tsc 오류 0개, CI 린트 오류 0개(기존 경고 19개), 배포용 빌드 성공, 두 스크립트 모두 두 번 돌려 같은 파일.
+- 계획과 달라진 점과 이유:
+  1. 목록의 이름표는 모든 카메라가 아니라 "가장 잘 보이는 카메라 + '+'"("BR·B" 대신 "B+"). 다 적으면 240px 목록에서
+     "person"이 잘렸다. 전체는 툴팁과 근거 줄에 있다. 1400px 미만에서 거리 칸을 8px 줄여 자리를 맞췄다.
+  2. 카메라 이름은 썸네일 순서가 아니라 잘 보이는 순서로 적는다. 첫 이름이 큰 사진이 가는 카메라라서 서로 맞는다.
+  3. "물체 단위" 한 줄은 Precision / Recall 아래가 아니라 "Recall by camera" 아래에 둔다. 1536×700에서 거리별 막대를
+     화면 밖으로 밀어냈다.
+  4. 패널의 프레임 줄은 그 프레임의 사진 6장 합계이고 목록은 사진 한 장이다. 목록 제목에 카메라 이름표를 붙여 구분한다.
+  5. 거치대 규칙으로 뺀 모델 박스를 사진에 회색으로 그린다(설계는 "뺀다"만). 모델이 그린 것은 사실이라 숨기지 않았다.
+  6. 선택한 박스가 "평가하지 않음"인 이유를 2가지에서 4가지로 나눴다(이 사진에 없음, 어느 카메라에도 안 보임,
+     모델이 모르는 클래스, 자전거 거치대).
+  7. "Unsure first"에는 자체 넘김 규칙이 필요했다(`nextUnsure`). 다시 판정한 뒤에는 다음 판단 불가 박스로 간다.
+  8. `FrameEvaluation`은 이름을 유지하고 "사진 한 장"을 뜻하게 됐다. 프레임 단위 결과는 새 `FrameCamerasEvaluation`이다.
+  9. `nuscenes.json` 증가량은 프레임당 2~3KB로 추정했는데 실측은 3.8KB(전체 +38KB)였다.
+  10. 엣지 검증에서 추가: 판정으로 줄이 옮겨져도 선택한 줄이 보임(Case 1), 썸네일 줄의 칸 수를 고정해 카메라 수가 다른
+      프레임에서도 칸이 움직이지 않음(Case 2).
+  11. 재고 최적화하지 않음: 60장 채점 1.1ms, 카메라 6대가 조작 시간에 더한 것은 측정되지 않음, 미리 받기 동시 요청 2 → 4는
+      시험해 보고 되돌림.
+- 설계대로 유지: 사진 아래 썸네일 줄(대가: 패널 43px 감소), 둘러본 순서, 선택·프레임 전환 때 자동 카메라, `[` `]`,
+  사진 단위 합계, 3D 색은 "어느 카메라에서든 찾음", 목록은 지금 보는 사진, 거치대 규칙(중심 기준, 자전거와 오토바이),
+  가장자리에 잘린 정답에는 규칙 없음, `predictions@2`, `Frame.cameras`를 기존 필드 옆에, 사진마다 자기 ego pose,
+  10개 프레임 전부 미리 받기, 지금 보는 카메라는 page의 화면 설정(규칙 #2), 새 라이브러리 없음.
+- 남은 것:
+  - 숫자는 여전히 시연이지 결과가 아니다. 장면 하나, 프레임 10개다.
+  - 사진 가장자리에 잘린 정답도 그대로 채점한다(절반도 안 들어온 정답의 Recall 38%, 온전히 들어온 정답 68%).
+  - 연습 세트가 같은 시드라도 F5 때와 다르다(후보가 200개에서 583개로).
+  - 느린 회선에서 화면이 뜨자마자 재생하면 사진이 재생을 따라오지 못한다. F7에서 미리 받는 범위를 정해야 한다.
+  - 미리 받은 사진의 메모리, 사용자 노트북의 프레임률은 재지 않았다.
+  - three.js 상시 비용은 그대로다(사용자 결정: F6 뒤, F7 전).
+  - F6이 만든 것이 아니라 고치지 않은 것: 1024px에서 마지막 클래스 칩이 잘림, "5 false alarm"의 복수형.
+  - nuScenes 공식 평가의 거치대 처리가 예측과 정답 중 어디에 적용되는지는 확인하지 못했다.
+  - COCO 모드: 계속 보류.
+- Edge refs: Edge_F#6 Case 1~6, "측정하고 바꾸지 않은 것", "관찰하고 그대로 둔 것".
+-->
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -1254,7 +1417,9 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 > `docs/plan-feature/F#_*.md` (index: `docs/plan-feature/README.md`), one doc per feature, written
 > just before that feature starts. **F3 is done** (2026-11-25, see the F3 entry above; design doc
 > `F3_workspace_layout.md`). **F4 is done** (2026-11-25, see the F4 entry above; design doc
-> `F4_box_review.md`). Next: F5 — its design doc is written at the start of the F5 session.
+> `F4_box_review.md`). **F5 is done** (2026-11-26, `F5_camera_detection_eval.md`). **F6 is done**
+> (2026-11-26, see the F6 entry above; design doc `F6_six_cameras.md`). Next: the three.js idle-cost
+> item (its own session, before F7), then F7 — its design doc is written at the start of the F7 session.
 > Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
 
 ### Why change direction (the gap this closes)
@@ -1329,7 +1494,8 @@ parsing (becomes necessary in F7 when the frame count grows).
     such — same spirit as Rule #6.
   - **Pipeline.** The detector runs offline in `scripts/` (as in Step 11); IoU and matching are pure
     functions in `lib/` with Vitest (Rule #3). No runtime backend.
-- **F6:** data size with six images per keyframe; per-box "which camera sees it" lookup.
+- **F6:** data size with six images per keyframe; per-box "which camera sees it" lookup. *(Settled
+  in F6: 60 photos = 8.04 MB, all preloaded for ten frames; `lib/cameras`.)*
 - **F7:** how many of nuScenes-mini's keyframes (10 scenes, ~400 keyframes vs the 10 used today) to
   ship; searching on scene descriptions and per-frame counts with no backend; hosting size limits on
   Vercel; the binary / lazy-loading work above.
@@ -1338,6 +1504,9 @@ parsing (becomes necessary in F7 when the frame count grows).
 ### Known limits (state them wherever results are shown)
 - **Small sample.** With 10 keyframes × 1 camera, recall-by-distance has only a few boxes per
   distance bin. F5 proves the analysis works; the numbers become quotable only after F6/F7.
+  **After F6 (2026-11-26):** six cameras give 531 scored labels in 60 photos and bands from 0 to
+  70 m — but still ONE scene and ten moments. More photos of the same moments are not more
+  evidence; quotable numbers need F7's additional scenes.
 - **Recall only by distance.** A false positive has no matched ground truth, hence no distance.
 - **Derived 2D ground truth** is an approximation (see F5).
 - **This evaluates a 2D camera detector, not 3D detection.**
@@ -1364,8 +1533,18 @@ parsing (becomes necessary in F7 when the frame count grows).
     rule); re-run `predict_nuscenes.py` per camera — the predictions file has one `camera` field and
     frame-keyed entries, so its format must grow a camera level.
   - *F6 / F7:* only then may the evaluation numbers be quoted (10 frames × 1 camera today).
+    **F6 done: 60 photos, still one scene — wait for F7.**
   - *Possible later:* a human verdict on predictions ("this false alarm is really a missing label")
     and an export of evaluation results — would need a new review scope and UI.
+- **From F6 (2026-11-26):**
+  - *Before F7 (own session, user decision):* the three.js idle cost above. F6 measured that six
+    cameras add no interaction latency of their own — the 3D scene is the whole baseline.
+  - *F7:* bound the photo preload (`PRELOAD_FRAMES_AHEAD` in `page.tsx`; today all ten frames =
+    8 MB) and measure the memory the preloaded photos hold; the thumbnail row reuses the full
+    1600×900 file, which stops being acceptable with hundreds of frames.
+  - *Possible later:* a rule for labels cut off by the image edge (38% vs 68% recall; it would
+    change the front camera's numbers); a 3×2 view of all six photos; the two small pre-F6
+    wording / width items recorded in Edge_F#6 ("not caused by F6").
 - **COCO mode: left as it is for now.** Whether it stays as a secondary tab or is retired is decided
   after the F3 redesign shows what that tab looks like in the new layout (user decision, 2026-11-25).
   **F3 is done and COCO sits unchanged in the new layout; the user has not decided yet** (captures:

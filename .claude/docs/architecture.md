@@ -49,6 +49,11 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── Panel.tsx           # PANEL_CLASS, SECTION_TITLE_CLASS, PanelTitle, PanelHeader (32px title row), ViewerLabel (viewer corner tag)
 │   │   │   ├── useScrollSelectedIntoView.ts  # ✅ F5 — keep the selected <li> of a scrolling list in view (moved out of ObjectList unchanged; shared with the result list)
 │   │   │   └── index.ts            # barrel
+│   │   ├── camera/         # ✅ F6 — the six-camera UI (see "Six Cameras (F6)" below)
+│   │   │   ├── CameraStrip.tsx      # the thumbnail row: props cameras (CameraThumb {name, imageUrl, marker?, badge?}), activeName, onSelect, shortcutHint?, slots? (fixed cell count). Knows nothing about review / evaluation. + CameraStripPlaceholder (loading)
+│   │   │   ├── useActiveCamera.ts   # which camera the large image shows: follows the selection (pickCamera, decided while rendering), setCamera for a manual choice, resetCamera. View state, not a selection (Rule #2)
+│   │   │   ├── usePhotoPreload.ts   # fetches a list of photo URLs in the background, 2 at a time (the list comes from lib/cameras preloadOrder)
+│   │   │   └── index.ts             # barrel
 │   │   ├── evaluation/     # ✅ F5 — camera-detection evaluation UI (see "Evaluation (F5)" below). Presentation only; all logic is in lib/evaluation
 │   │   │   ├── ModeSwitch.tsx         # top bar: Review | Evaluate (type WorkMode); Evaluate blocked with a reason while practising
 │   │   │   ├── EvaluationHeadline.tsx # top bar right: model name + overall Precision / Recall (or "Loading…" / "Predictions unavailable")
@@ -160,6 +165,14 @@ apps/ai_detection_viewer_client/
 │   │   ├── data/           # ✅ F5-0 — loading helpers
 │   │   │   ├── fetch-json.ts                # fetchJson(url, {signal, fetchImpl}): rejects with "HTTP <status> while loading <url>" on a non-2xx answer (used for the dataset AND the predictions)
 │   │   │   └── fetch-json.test.ts           # 5 tests
+│   │   ├── cameras/        # ✅ F6 — reading a frame through its cameras, all pure. See "Six Cameras (F6)" below
+│   │   │   ├── names.ts          # DEFAULT_CAMERA, CAMERA_DISPLAY_ORDER (BL FL F FR BR B), cameraShortName, inDisplayOrder
+│   │   │   ├── views.ts          # cameraViews, frameAsCamera, camerasSeeing, camerasByObject, detectionInCamera, hasCamera, defaultCameraName, SINGLE_VIEW
+│   │   │   ├── pick.ts           # visibleFraction, camerasByBestView, bestViewsByObject, pickCamera, stepCamera
+│   │   │   ├── preload.ts        # preloadOrder(frames, index, framesAhead)
+│   │   │   ├── test-helpers.ts   # view / multiCameraFrame / singleImageFrame / cornersOf builders
+│   │   │   ├── *.test.ts         # 62 tests — names 7, views 18, pick 20, preload 8, sample-data 9 (the shipped file: 60 photos, boxes per camera, seen by 1 / 2 / 0 cameras)
+│   │   │   └── index.ts          # barrel
 │   │   ├── evaluation/     # ✅ F5 — camera-detection evaluation, all pure (no React / Zustand / DOM). See "Evaluation (F5)" below
 │   │   │   ├── types.ts          # Prediction2D (id `pred:<frame>:<index>`, `score`), PredictionSet, EvaluationRules, EvalResult (found / missed / false-alarm / not-scored), FrameEvaluation, EvalSummary
 │   │   │   ├── parse.ts          # parsePredictions (null for a wrong root; malformed items skipped), predictionId, isPredictionId
@@ -174,7 +187,7 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── describe.ts       # describeResult (the one-line reason), visibilityText
 │   │   │   ├── box-colors.ts     # boxOutcomeColors(frame, evaluation): colour of every 3D box (found / missed / grey)
 │   │   │   ├── test-helpers.ts   # box / makeFrame / makePrediction builders
-│   │   │   ├── *.test.ts         # 139 tests — iou 8, classes 5, parse 11, match 30, metrics 10, evaluate 6, outcomes 6, list 11, overlay 21, describe 9, box-colors 6, sample-data 16 (the SHIPPED files: 91 found / 83 missed / 13 false alarms / 26 not scored)
+│   │   │   ├── *.test.ts         # 204 tests after F6 (139 after F5): + per-photo / per-object evaluation, the bicycle-rack rule, predictions@1 and @2, six-camera numbers of the shipped sample. F5 breakdown was: iou 8, classes 5, parse 11, match 30, metrics 10, evaluate 6, outcomes 6, list 11, overlay 21, describe 9, box-colors 6, sample-data 16 (the SHIPPED files: 91 found / 83 missed / 13 false alarms / 26 not scored)
 │   │   │   └── index.ts          # barrel
 │   │   ├── review/         # ✅ F4 — review logic, all pure (no React / Zustand / DOM). See "Review (F4)" below
 │   │   │   ├── types.ts          # Verdict, RejectReason (+ REJECT_REASONS order = keys 1–6), ReviewRecord, ReviewMap, ReviewScope
@@ -212,7 +225,10 @@ apps/ai_detection_viewer_client/
 │       └── nuscenes/       # ✅ F2 — offline-generated (scripts/prep_nuscenes.py)
 │           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes + ~6.5k LiDAR pts/frame); NuScenesPrepped schema. Compact (no indent) — the inline lidar.points arrays dominate size (~1.5 MB). Format 1.1 since F4: each annotation also carries annotationToken / numLidarPts / visibility.
 │           ├── predictions.json # ✅ F5 — YOLOv8n predictions for the 10 CAM_FRONT images (scripts/predict_nuscenes.py): 428 predictions, score ≥ 0.05, ~32 KB. Format "ai-detection-viewer/predictions@1": { format, camera, model {name, weights, library, imageSize, minScore, nmsIou}, frames [{ token, predictions [{ class, score, bbox [x,y,w,h] }] }] }
-│           └── cam_front/       # 10 CAM_FRONT keyframe jpgs
+│           ├── cam_front/       # 10 CAM_FRONT keyframe jpgs
+│           └── cam_front_left/ cam_front_right/ cam_back/ cam_back_left/ cam_back_right/   # ✅ F6 — 10 keyframe jpgs each (60 photos, 8.04 MB in all)
+│                                # F6: nuscenes.json is format 1.2 (each frame has cameras[] — photo + that photo's ego_pose + calibration; top-level fields unchanged), ~1.5 MB.
+│                                #     predictions.json is format "…/predictions@2" (per frame: cameras { name: [predictions] }), 1,597 predictions on the 60 photos, 120 KB.
 └── vitest.config.ts        # include: src/**/*.test.ts + tests/**/*.test.ts
 
 scripts/                    # ✅ F2 — offline, build-time only (repo root, like Step 11's
@@ -224,10 +240,13 @@ scripts/                    # ✅ F2 — offline, build-time only (repo root, li
                             #   (Rule #3; decimation is subsampling, not a transform). NOT a runtime backend.
                             #   F4: also copies per-box annotationToken / numLidarPts / visibility level (format 1.1).
                             #   Re-running is deterministic (verified: output identical apart from the new fields).
+                            #   F6: exports all six cameras per frame as cameras[] (photo + its own ego_pose + calibration; format 1.2)
+                            #   and copies their photos into cam_<channel>/. Still no coordinate math. Run twice → identical file.
   predict_nuscenes.py       # ✅ F5 — runs YOLOv8n (ultralytics, CPU, imgsz 1280, conf 0.05) on the images listed in
                             #   nuscenes.json and writes predictions.json. Copies the model's output only: no class
                             #   filtering, no scoring (that is lib/evaluation's job, Rule #3). No timestamp in the file;
                             #   re-running is deterministic (verified: byte-identical). NOT a runtime backend.
+                            #   F6: runs every camera's photo listed in nuscenes.json (60) and writes format predictions@2.
 ```
 
 Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
@@ -250,6 +269,21 @@ type Frame = {
   // 'coco-estimated'; nuScenes frames = 'nuscenes-measured'. Optional, so
   // existing COCO frames (which omit it) are unaffected.
   source?: 'coco-estimated' | 'nuscenes-measured';
+  // (F6) Every camera that photographed the frame, default camera first. nuScenes
+  // only; absent on COCO. INVARIANT: cameras[0] IS the view in the top-level
+  // image fields above (detections2D is the same array). So on a nuScenes frame
+  // `detections2D` means "the default camera's boxes" — use lib/cameras for
+  // anything about another camera or all of them. See "Six Cameras (F6)".
+  cameras?: CameraView[];
+};
+
+// (F6) One camera's photo of a frame, with the frame's 3D boxes projected into it.
+type CameraView = {
+  name: string;      // camera channel, e.g. "CAM_FRONT_LEFT"
+  imageUrl: string;
+  imageWidth: number;
+  imageHeight: number;
+  detections2D: Detection2D[];   // same ids as the 3D boxes (Rule #1), also when two cameras see one object
 };
 
 type Detection2D = {
@@ -282,7 +316,7 @@ type Detection3D = {
   annotation?: {
     token?: string;        // sample_annotation.token — unique per box per frame (`id` repeats across frames)
     lidarPoints?: number;  // num_lidar_pts — counted by nuScenes on the ORIGINAL sweep, not our decimated cloud
-    visibility?: 'v0-40' | 'v40-60' | 'v60-80' | 'v80-100';  // nuScenes bins, across all 6 cameras
+    visibility?: 'v0-40' | 'v40-60' | 'v60-80' | 'v80-100';  // nuScenes bins: the object as a whole, across all 6 cameras (not one photo)
   };
 };
 
@@ -562,11 +596,12 @@ Wide (lg, ≥1024px): full viewport, the page never scrolls (lg:h-screen, min-h 
   filter labels share `SECTION_TITLE_CLASS` (11px, uppercase, semibold). Counts read "OBJECTS 40"
   (no parentheses).
 - **Viewer labels follow provenance** (Rule #6): `Frame.source === 'nuscenes-measured'` →
-  "LiDAR · measured 3D" / "CAM_FRONT"; otherwise "3D · estimated from 2D" / "Image". "CAM_FRONT" is
-  fixed because `scripts/prep_nuscenes.py` exports that camera only (until F6).
+  "LiDAR · measured 3D" / the name of the camera on screen (F6; "CAM_FRONT" until then); otherwise
+  "3D · estimated from 2D" / "Image".
 - **(F4 filled its spots — see "Review (F4)" below. F5 did not stack onto them: it added a
   Review | Evaluate mode in which each zone changes ROLE while the frame stays the same — see
-  "Evaluation (F5)" below. Still reserved: F6 cameras in the camera cell.)**
+  "Evaluation (F5)" below. F6 added the thumbnail row between the camera cell and the details panel —
+  see "Six Cameras (F6)" below; the details panel is 43 px shorter than in the table above.)**
 - **Reserved spots for later features** (F3 design doc §12): F4 review buttons at the top of the
   details panel and progress in the top bar, review status at the right of each list row; F5 summary
   in the details panel and a confidence slider in the filter bar; F6 cameras in the camera cell.
@@ -594,6 +629,9 @@ F3(2026-11-25)부터 `page.tsx`는 모든 것을 `components/workspace/Workspace
 -->
 
 ## Review (F4) — current
+
+> **F6 note:** written when there was one camera. What six cameras changed in review (camera tags,
+> "Seen by …", the two new orders, `[` / `]`, practice mode) is in "Six Cameras (F6)" below.
 
 F4 (2026-11-25) turns the nuScenes view into a review tool: every measured 3D box can be approved,
 rejected (with reasons) or marked unsure; the records are saved in the browser and exported. COCO is
@@ -747,6 +785,10 @@ F4(2026-11-25)부터 nuScenes 화면은 검수 도구다. 실측 3D 박스를 �
 -->
 
 ## Evaluation (F5) — current
+
+> **F6 note:** written when there was one camera. The rules below are unchanged and now apply PER
+> PHOTO; the data flow, the totals, the 3D colours and the numbers of the shipped sample are in "Six
+> Cameras (F6)" below (60 photos: 349 / 182 / 107 / 180; the front camera alone is still 91 / 83 / 13 / 26).
 
 F5 (2026-11-26) adds a second job to the nuScenes workspace: **scoring a 2D camera detector against
 the labels.** YOLOv8n is run offline on the ten CAM_FRONT photos; the app compares its boxes with the
@@ -925,6 +967,219 @@ YOLOv8n을 앞 카메라 사진 10장에 미리 돌려 두고, 앱이 그 박스
   보이는 것만 거르고 숫자는 바꾸지 않는다. Reset은 검수 모드의 거리 필터를 건드리지 않는다.
 - **단축키:** 평가 모드에서는 J / K / Z만 동작하고 검수 기록을 쓰는 키는 무시한다.
 - **상단 바 폭:** 전환 버튼 126px. 1024px(검수 모드)에서 두 묶음 사이 여유 68px이 가장 빠듯하다.
+-->
+
+## Six Cameras (F6) — current
+
+F6 (2026-11-26) makes the nuScenes workspace use all six cameras of the vehicle (`CAM_FRONT`,
+`CAM_FRONT_LEFT`, `CAM_FRONT_RIGHT`, `CAM_BACK`, `CAM_BACK_LEFT`, `CAM_BACK_RIGHT`). Review (F4) and
+evaluation (F5) keep their structure; what changes is that "the photo" became "one of six photos".
+COCO is untouched (one image, no `cameras`). Design: `docs/plan-feature/F6_six_cameras.md`; edge
+cases: `Edge_F#6.md`. **Where this section and the F4 / F5 sections above disagree about cameras,
+this section is current** (those describe the single-camera state they were written in).
+
+### Data: `Frame.cameras`
+
+```ts
+type Frame = {
+  /* …existing fields… */
+  cameras?: CameraView[];   // nuScenes only; default camera first
+};
+type CameraView = {
+  name: string;             // "CAM_FRONT_LEFT"
+  imageUrl: string; imageWidth: number; imageHeight: number;
+  detections2D: Detection2D[];   // this frame's 3D boxes projected into THIS photo; same ids (Rule #1)
+};
+```
+
+- **Invariant:** `frame.cameras[0]` IS the view in the top-level fields — `frame.detections2D ===
+  frame.cameras[0].detections2D`. So on a nuScenes frame `frame.detections2D` means "the default
+  camera's boxes", never "any camera's". Anything about another camera or all of them goes through
+  `lib/cameras`. (Audited in F6-D: the only direct readers left are code that is handed a
+  camera-view frame, the COCO paths, and the timeline's front-camera thumbnail.)
+- **`frameAsCamera(frame, name)`** returns the frame with that camera's photo and 2D boxes in the
+  top-level fields (3D boxes, points and id shared, not copied). It is what lets everything written
+  for one photo — `Viewer2D`, `selectVisibleDetectionIds`, `evaluateFrame`, `buildOverlay`,
+  `SelectedObjectInfo` — work on any camera unchanged. Returns the same object for the default
+  camera / an unknown name / a frame without cameras.
+- **Prepped file, format 1.2:** each frame gains `cameras: [{ channel, image, egoPose,
+  calibratedSensor }]`; the top-level `image` / `egoPose` / `calibratedSensor` stay (= CAM_FRONT =
+  `cameras[0]`). A 1.0 / 1.1 file has no `cameras` and parses as the one camera it always was.
+- **Each photo's own ego pose.** The six cameras fire up to 35 ms apart (the car moves 3–17 cm), so
+  nuScenes stores an `ego_pose` per photo. The parser projects into a camera with THAT pose
+  (`globalToEgo(ann, camera.egoPose)` → camera calibration); reusing CAM_FRONT's shifted rectangles
+  by a median of 2.8 px and up to 41 px. **The 3D frame is unchanged:** 3D boxes and LiDAR points
+  are still expressed in the top-level (CAM_FRONT) ego pose, so nothing in the 3D view or in any
+  distance moved.
+- **Sample:** 60 photos (8.04 MB), `nuscenes.json` 1,535 KB. 583 boxes: 443 seen by one camera, 140
+  by two, 0 by none; per camera 200 / 79 / 184 / 55 / 36 / 169.
+
+### `lib/cameras` (pure)
+
+| Function | What it answers |
+|---|---|
+| `cameraViews(frame)` | every view, default first; a frame without `cameras` → one unnamed view (`SINGLE_VIEW = ''`) |
+| `frameAsCamera(frame, name)` | the frame as one camera sees it (above) |
+| `camerasSeeing` / `camerasByObject` | which cameras have a 2D box of an object |
+| `visibleFraction(detection)` | share of the projected box inside the photo: clamped `bbox` area ÷ area around the unclamped `corners` |
+| `camerasByBestView` / `bestViewsByObject` | the cameras seeing an object, best first: larger visible share, then larger on the image, then camera order |
+| `pickCamera(frame, objectId, current)` | the camera to show: keep `current` if it sees the object (the photo must not change under the user); otherwise the best view; nothing selected / seen by none → `current` |
+| `stepCamera(row, current, ±1)` | neighbour in the thumbnail row, wrapping (the cameras form a ring) |
+| `CAMERA_DISPLAY_ORDER`, `inDisplayOrder`, `cameraShortName` | look-around order BL FL F FR BR B (neighbours in the row are neighbouring cameras); "CAM_FRONT_LEFT" → "FL" |
+| `preloadOrder(frames, index, framesAhead)` | photo URLs to fetch ahead: current frame, then following frames in playback order, wrapping, no duplicates |
+
+### Active camera (page view state)
+
+`useActiveCamera(frame, selectedObjectId)` → `{ activeCamera, setCamera, resetCamera }`. Which photo
+the camera cell shows is a VIEW setting like `cameraMode` / `cameraZoom`: not stored, not a
+selection — `selectedObjectId` stays the only selection (Rule #2), and the camera follows FROM it.
+
+- **Automatic** when the selection or the frame changes: `pickCamera`. This also makes the photo
+  follow a tracked object from one camera to the next during playback.
+- **Manual:** a thumbnail click or `[` / `]` (`setCamera`) holds until the selection or frame changes.
+- Chosen **while rendering** (state adjusted when the `(frame, selection)` key changes), not in an
+  effect, so no frame is painted with the old photo and its "outside this camera" notice.
+- `page.tsx` derives `viewFrame = frameAsCamera(currentFrame, activeCamera)`; `Viewer2D`, the 2D
+  visible set, the details panel's 2D row and the per-photo evaluation take `viewFrame`; the 3D view,
+  the object list and every review action take `currentFrame`.
+
+### Layout: the thumbnail row
+
+`WorkspaceShell` has an optional `cameraStrip` slot between the camera cell and the details panel
+(same `order` as the camera cell, so on narrow screens it stays under the photo). `CameraStrip` is a
+grid of `cameraSlots` cells — the largest camera count of any frame — so a frame with fewer cameras
+leaves cells empty instead of resizing the row (Edge_F#6 Case 2); shown when `cameraSlots > 1`. Each
+thumbnail: the photo (the same file as the large image), short name, sky ring on the active camera,
+a white marker where the selected box is, and in evaluate mode a badge with that photo's miss count.
+The row's height follows its width (16:9 cells): 400×35 in the 400 px column, 360×32 in the 360 px
+one. **Cost:** the details panel is 43 px shorter than after F5 (232 px at 1536×700).
+
+| Zone | 1536×700 | 1280×720 | 1440×900 |
+|---|---|---|---|
+| camera cell | 400×225 | 360×203 | 400×225 |
+| thumbnail row | 400×35 | 360×32 | 400×35 |
+| details panel | 400×232 | 360×278 | 400×432 |
+
+Photos are preloaded in the background (`usePhotoPreload(preloadOrder(frames, index,
+PRELOAD_FRAMES_AHEAD))`, 2 at a time, 300 ms after a change); all ten frames today. 60 photos are
+fetched in exactly 60 requests — large image, thumbnail, timeline and preloader share a file.
+
+### Review with six cameras
+
+- Object-list rows show a **camera tag** instead of the camera icon: the short name of the box's best
+  view, plus "+" when a second camera sees it ("B+"); full names in the tooltip. Single-camera
+  frames keep the icon.
+- The evidence line says **"Seen by B · BR"** (best view first) or "No camera sees it".
+- `Viewer2D` `outsideNote`: "Selected box is outside CAM_FRONT_RIGHT · seen by B, BR".
+- **Orders** (`QueueOrder`): `camera` now groups by best-view camera in look-around order, unseen
+  boxes last ("By camera"; with one camera it is the old "in camera first"); `unsure` puts boxes
+  marked unsure first ("Unsure first") and reads the live records — `orderBoxes(frame, order,
+  reviews?)`. Under `unsure`, Approve / Unsure advance to `nextUnsure` before `nextUnreviewed`.
+  Because a verdict can now move the selected row, `ObjectList` keys its scroll-into-view on the
+  row's index as well (Edge_F#6 Case 1).
+- **Shortcuts:** `[` / `]` → `{ type: 'camera', direction }` (once per press, not while typing).
+- **Practice mode:** "the camera sees it" = any camera does (`cameraViews`). Same seed, different
+  planted errors than before F6 (the candidate pool grew from 200 to 583 boxes).
+- Review records are keyed by (frame, object) and are unaffected.
+
+### Evaluation with six cameras
+
+**One photo is the unit.** A 2D detector sees one photo at a time, so each photo is scored on its own
+and the counts are added; an object in the overlap of two cameras is two labels.
+
+```
+predictions.json (@2) ── parsePredictions ──▶ PredictionSet { model, cameras, byFrame: Map<frameId, Map<camera, Prediction2D[]>> }
+frames + PredictionSet + rules
+        │  evaluateFrames
+        ▼
+DatasetEvaluation { byFrame: Map<frameId, FrameCamerasEvaluation>, summary (per photo), byCamera[], objects, ignored,
+                    evaluatedFrames, evaluatedPhotos, framesWithoutPredictions, photosWithoutPredictions }
+FrameCamerasEvaluation { byCamera: Map<camera, FrameEvaluation>, counts (sum), objects: Map<objectId, ObjectOutcome>,
+                         camerasWithoutPredictions, ignored, notEvaluated }
+        ├─ byCamera.get(activeCamera) ─▶ useFrameResults → ResultList, Viewer2D overlay, J / K   (the photo on screen)
+        ├─ objects ────────────────────▶ boxOutcomeColors → Viewer3D                             (per object)
+        ├─ counts ─────────────────────▶ Timeline badge, panel "Frame n" row                     (sum of the frame's photos)
+        └─ byCamera.get(c).counts ─────▶ thumbnail badges
+```
+
+- **`FrameEvaluation` now means one photo** (name kept from F5). `evaluateFrame(frame, predictions,
+  rules)` is unchanged apart from the rack rule; it is handed `frameAsCamera(frame, name)`.
+- **Per object** (`mergeObjectOutcomes`): found if ANY camera's photo found it, else missed if any
+  photo scored it, else not scored. Used for the 3D colour (one box, one colour; legend "found by a
+  camera / missed by all") and the panel's "By object" line — never mixed into precision / recall.
+- **Bicycle-rack rule** (`match.ts`, checked last): an unmatched bicycle / motorcycle prediction whose
+  CENTRE lies inside a `static_object.bicycle_rack` label is `ignored` — not a result, not counted,
+  not selectable; drawn grey on the photo with its rack. `EvaluationRules.ignoreRackRegions: false`
+  turns it off. The nuScenes detection benchmark filters the same boxes, by centre.
+- **Prediction ids** carry the camera: `pred:<frameId>:<camera>:<index>`. A false-alarm selection is
+  dropped when another camera's photo is shown (Edge_F#6 Case 3). File format `@1` (one camera per
+  file) is still read.
+- **"Not run" vs "ran and found nothing" is per photo.** A frame entry without a camera → that photo
+  is not evaluated (thumbnail "–", list message, left out of the totals); a frame none of whose photos
+  was run is left out entirely (Edge_F#6 Case 4).
+- **Pinned strip:** a label result adds what the other cameras made of the object ("other camera: F
+  missed", `describeOtherViews`); a selected box without a result in this photo says which of four
+  reasons applies (not in this photo — with where it is; seen by no camera; a class the model cannot
+  name; a bicycle rack).
+- **Panel:** precision / recall and every breakdown are per photo ("349 of 531 labels in 60 photos");
+  "Recall by camera" is new, with the per-object line under it; the frame row is the sum over the
+  frame's photos, the list is one photo (its title carries the camera tag).
+
+On the shipped sample at the default rules: **349 found, 182 missed, 107 false alarms, 180 not scored
+→ Precision 77%, Recall 66%** (rack rule off: 121 false alarms, 74%). The front camera alone is
+unchanged: 91 / 83 / 13 / 26. Per camera (found / missed / false alarms / not scored): F 91/83/13/26,
+FL 58/17/2/3, FR 102/34/40/48, B 19/21/1/8, BL 16/12/2/4, BR 63/15/49/91. Per object: 295 of 418
+found by at least one camera. **One scene, ten moments — still a demonstration, not a statement about
+the model.**
+
+<!-- KO (move to a localized file)
+## 카메라 6대 (F6) — 현재
+
+F6(2026-11-26)부터 nuScenes 작업 화면은 차량의 카메라 6대를 모두 쓴다. 검수(F4)와 평가(F5)의 구조는 그대로이고,
+"사진 한 장"이 "사진 6장 중 한 장"이 됐다. COCO는 그대로다(사진 하나, `cameras` 없음). **이 절과 위의 F4·F5 절이
+카메라에 대해 다르게 말하면 이 절이 현재 상태다**(그 절들은 카메라가 한 대이던 때의 기록이다).
+
+### 데이터: `Frame.cameras`
+- `Frame`에 `cameras?: CameraView[]`(nuScenes만, 기본 카메라가 맨 앞). `CameraView`는 카메라 이름, 사진, 그 사진에
+  비춘 2D 박스 목록이다. 같은 객체는 어느 카메라에서든 ID가 같다(규칙 #1).
+- **불변 조건:** `frame.cameras[0]`이 곧 최상위 필드의 내용이다(같은 배열). 그래서 nuScenes 프레임의
+  `frame.detections2D`는 "기본 카메라의 박스"이지 "어느 카메라든"이 아니다. 다른 카메라나 전체에 관한 것은 `lib/cameras`를 쓴다.
+- `frameAsCamera(frame, 이름)`은 그 카메라의 사진과 2D 박스를 최상위 필드에 넣은 프레임을 돌려준다. 사진 한 장을
+  다루던 코드(`Viewer2D`, 2D 필터, `evaluateFrame`, `buildOverlay`)가 고치지 않고 어느 카메라에서든 동작한다.
+- 준비 파일 형식 1.2: 프레임마다 `cameras` 배열이 생겼고 최상위 필드는 그대로다. 1.0 / 1.1 파일은 카메라 하나로 읽는다.
+- 사진마다 자기 차 위치(ego pose)를 쓴다. 카메라 6대는 최대 35ms 차이로 찍히고 그 사이 차가 3~17cm 움직인다.
+  3D 장면의 기준은 그대로 CAM_FRONT의 차 위치다(3D 박스, 점, 거리가 하나도 바뀌지 않았다).
+
+### `lib/cameras` (순수 함수)
+한 카메라로 본 프레임, 박스를 보는 카메라들, 사진 안에 들어온 비율(`visibleFraction`), 잘 보이는 순서
+(`camerasByBestView`), 보여줄 카메라 고르기(`pickCamera`: 지금 카메라가 보면 그대로, 아니면 가장 온전히 보이는 쪽),
+옆 카메라(`stepCamera`, 끝에서 돈다), 썸네일 순서와 짧은 이름, 미리 받을 사진 순서(`preloadOrder`).
+
+### 지금 보는 카메라 (page의 화면 설정)
+`useActiveCamera`가 관리한다. 선택 상태가 아니라 화면 설정이다(규칙 #2). 선택이나 프레임이 바뀌면 자동으로 고르고
+(재생 중에도 물체를 따라감), 썸네일 클릭이나 `[` `]`로 직접 고른 것은 그때까지 유지된다. 효과(effect)가 아니라
+렌더 중에 정해서, 옛 사진과 "밖에 있음" 안내가 한 프레임 보이는 일이 없다.
+
+### 배치: 썸네일 줄
+`WorkspaceShell`의 `cameraStrip` 자리(카메라 칸과 정보 패널 사이). 칸 수는 데이터셋에서 가장 많은 카메라 수로 고정해,
+카메라가 적은 프레임에서도 줄의 크기와 아래 패널이 움직이지 않는다. 대가: 정보 패널이 F5 뒤보다 43px 낮다
+(1536×700에서 232px). 사진은 뒤에서 미리 받는다(지금은 10개 프레임 전부, 60장이 정확히 60번의 요청).
+
+### 검수
+목록에 카메라 이름표("B+"), 근거 줄 "Seen by B · BR", 안내문에 어느 카메라에 있는지, 정렬 "By camera"(잘 보이는 카메라별로
+모음)와 "Unsure first"(다시 판정하면 다음 판단 불가 박스로), 단축키 `[` `]`, 연습 모드는 어느 카메라든 기준.
+판정으로 선택한 줄이 옮겨질 수 있으므로 목록은 줄의 위치도 보고 스크롤한다. 검수 기록의 키는 그대로다.
+
+### 평가
+**사진 한 장이 채점 단위다.** 사진마다 따로 채점해 더하고, 두 카메라에 보이는 물체는 정답 두 개로 센다.
+물체 단위 결과("어느 카메라에서든 찾음")는 3D 박스 색과 패널의 한 줄에만 쓴다. 거치대 규칙: 짝 없는 자전거·오토바이
+예측의 중심이 거치대 정답 안이면 뺀다(결과가 아니고, 사진에 회색으로 그림). 예측 ID에 카메라가 들어간다.
+"돌리지 않은 사진"과 "돌렸는데 아무것도 못 찾은 사진"을 사진 단위로 구분한다. 목록과 사진은 지금 보는 카메라,
+3D 색은 물체 단위, 타임라인과 패널의 프레임 줄은 그 프레임의 6장 합계, 썸네일 숫자는 그 사진의 놓친 개수다.
+
+실제 숫자(기본 규칙): 찾음 349, 놓침 182, 헛짚음 107, 채점 제외 180 → Precision 77%, Recall 66%(거치대 규칙을 끄면
+헛짚음 121). 앞 카메라만은 그대로 91 / 83 / 13 / 26. 물체 단위로는 418개 중 295개. **장면 하나, 열 순간이다.
+모델 성능이 아니라 분석이 동작한다는 시연이다.**
 -->
 
 ### Layout (after Step 9.5) — superseded by F3
