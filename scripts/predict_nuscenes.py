@@ -1,11 +1,12 @@
 """
-F5 — nuScenes 카메라 사진에 2D 탐지 모델(YOLO)을 돌려 예측 파일을 만든다.
+F5 / F6 — nuScenes 카메라 사진에 2D 탐지 모델(YOLO)을 돌려 예측 파일을 만든다.
+(F6: 프레임마다 카메라 6대의 사진을 모두 돌린다 — 사진 60장.)
 
 Step 11의 generate_predictions.py, F2의 prep_nuscenes.py와 같은 "오프라인 1회 도구"다.
 배포되는 웹앱의 일부가 아니다(런타임 백엔드 없음 — 정적 배포 유지).
 
-입력: public/sample-data/nuscenes/nuscenes.json 에 적힌 프레임과 사진
-      (앱이 실제로 보여주는 프레임 목록을 그대로 따라가므로 둘이 어긋날 수 없다)
+입력: public/sample-data/nuscenes/nuscenes.json 에 적힌 프레임과 카메라별 사진
+      (앱이 실제로 보여주는 프레임·카메라 목록을 그대로 따라가므로 둘이 어긋날 수 없다)
 출력: public/sample-data/nuscenes/predictions.json
 
 ⚠️ 이 스크립트는 모델의 출력을 그대로 적기만 한다(Immutable Rule #3).
@@ -39,10 +40,14 @@ PREPPED_PATH = NUSCENES_DIR / "nuscenes.json"
 OUTPUT_PATH = NUSCENES_DIR / "predictions.json"
 
 # 우리가 정의한 예측 파일 형식의 이름과 버전. 형식이 바뀌면 숫자를 올린다.
-PREDICTIONS_FORMAT = "ai-detection-viewer/predictions@1"
+#   @1 (F5): 파일 전체에 camera 하나, 프레임마다 predictions 목록 하나.
+#   @2 (F6): 프레임마다 cameras: { "CAM_FRONT": [예측...], ... }. 사진 한 장이 채점 단위다.
+#            앱의 파서(lib/evaluation/parse.ts)는 @1 파일도 계속 읽는다.
+PREDICTIONS_FORMAT = "ai-detection-viewer/predictions@2"
 
-# prep_nuscenes.py 가 내보내는 카메라. 카메라가 6대가 되면(F6) 둘을 함께 바꾼다.
-CAMERA = "CAM_FRONT"
+# cameras 목록이 없는 옛 nuscenes.json(형식 1.0, 1.1)의 유일한 카메라.
+# 그 파일들은 prep_nuscenes.py 가 CAM_FRONT 만 내보내던 때의 것이다.
+LEGACY_CAMERA = "CAM_FRONT"
 
 DEFAULT_WEIGHTS = "yolov8n.pt"  # 저장소 루트에 있는 파일 (가장 작은 YOLOv8)
 # 입력 크기. YOLO 기본값 640으로는 1600x900 사진의 먼 사람이 몇 픽셀로 줄어든다.
@@ -90,21 +95,35 @@ def predict_frame(model: YOLO, image_path: Path, image_size: int, min_score: flo
     return predictions
 
 
+def frame_cameras(frame: dict) -> list[tuple[str, str]]:
+    """프레임의 (카메라 이름, 사진의 public 경로) 목록. nuscenes.json 에 적힌 순서 그대로.
+
+    cameras 가 없는 옛 형식(1.0, 1.1)은 최상위 image 하나가 유일한 카메라다.
+    """
+    cameras = frame.get("cameras")
+    if not cameras:
+        return [(LEGACY_CAMERA, frame["image"]["path"])]
+    return [(camera["channel"], camera["image"]["path"]) for camera in cameras]
+
+
 def dump(document: dict) -> str:
     """예측 하나를 한 줄에 쓴다: 파일은 작게, git diff는 예측 단위로 읽히게."""
     lines = ["{"]
     lines.append(f'  "format": {json.dumps(document["format"])},')
-    lines.append(f'  "camera": {json.dumps(document["camera"])},')
+    lines.append(f'  "cameras": {json.dumps(document["cameras"])},')
     lines.append(f'  "model": {json.dumps(document["model"])},')
     lines.append('  "frames": [')
     frames = document["frames"]
     for fi, frame in enumerate(frames):
-        lines.append(f'    {{"token": {json.dumps(frame["token"])}, "predictions": [')
-        preds = frame["predictions"]
-        for pi, pred in enumerate(preds):
-            comma = "," if pi < len(preds) - 1 else ""
-            lines.append(f"      {json.dumps(pred, separators=(',', ':'))}{comma}")
-        lines.append("    ]}" + ("," if fi < len(frames) - 1 else ""))
+        lines.append(f'    {{"token": {json.dumps(frame["token"])}, "cameras": {{')
+        cameras = list(frame["cameras"].items())
+        for ci, (channel, preds) in enumerate(cameras):
+            lines.append(f'      {json.dumps(channel)}: [')
+            for pi, pred in enumerate(preds):
+                comma = "," if pi < len(preds) - 1 else ""
+                lines.append(f"        {json.dumps(pred, separators=(',', ':'))}{comma}")
+            lines.append("      ]" + ("," if ci < len(cameras) - 1 else ""))
+        lines.append("    }}" + ("," if fi < len(frames) - 1 else ""))
     lines.append("  ]")
     lines.append("}")
     return "\n".join(lines) + "\n"
@@ -133,19 +152,27 @@ def main():
 
     frames = []
     total = 0
+    photos = 0
+    channels: list[str] = []  # 파일에 나온 카메라 이름, 처음 나온 순서대로
     for frame in prepped["frames"]:
-        # image.path 는 브라우저가 보는 경로("/sample-data/...")다 → public/ 아래 실제 파일.
-        image_path = PUBLIC_DIR / frame["image"]["path"].lstrip("/")
-        if not image_path.is_file():
-            raise SystemExit(f"사진을 찾을 수 없음: {image_path}")
-        predictions = predict_frame(model, image_path, args.image_size, args.min_score)
-        frames.append({"token": frame["token"], "predictions": predictions})
-        total += len(predictions)
-        print(f"  {image_path.name}: {len(predictions)} predictions")
+        by_camera = {}
+        for channel, public_path in frame_cameras(frame):
+            # image.path 는 브라우저가 보는 경로("/sample-data/...")다 → public/ 아래 실제 파일.
+            image_path = PUBLIC_DIR / public_path.lstrip("/")
+            if not image_path.is_file():
+                raise SystemExit(f"사진을 찾을 수 없음: {image_path}")
+            predictions = predict_frame(model, image_path, args.image_size, args.min_score)
+            by_camera[channel] = predictions
+            if channel not in channels:
+                channels.append(channel)
+            total += len(predictions)
+            photos += 1
+            print(f"  {image_path.parent.name}/{image_path.name}: {len(predictions)} predictions")
+        frames.append({"token": frame["token"], "cameras": by_camera})
 
     document = {
         "format": PREDICTIONS_FORMAT,
-        "camera": CAMERA,
+        "cameras": channels,
         "model": {
             "name": weights_path.stem,
             "weights": weights_path.name,
@@ -158,7 +185,7 @@ def main():
     }
     output_path = Path(args.output)
     output_path.write_text(dump(document), encoding="utf-8", newline="\n")
-    print(f"\n[done] frames={len(frames)} predictions={total} → {output_path}")
+    print(f"\n[done] frames={len(frames)} photos={photos} predictions={total} → {output_path}")
 
 
 if __name__ == "__main__":

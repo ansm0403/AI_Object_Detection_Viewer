@@ -16,7 +16,17 @@ export type NotEvaluatedBox = {
   class: string;
   /** Measured distance from the ego vehicle in metres. */
   distance: number;
-  reason: 'outside-camera' | 'class-not-evaluated';
+  /**
+   * - `outside-camera`: not in the photo on screen (another camera has it);
+   * - `no-camera`: no camera sees it at all;
+   * - `class-not-evaluated`: in the photo, but of a class the model cannot name;
+   * - `group-region`: a bicycle rack — a label for a group, not an object to find.
+   */
+  reason: 'outside-camera' | 'no-camera' | 'class-not-evaluated' | 'group-region';
+  /** `outside-camera`: where it is instead, e.g. "FR found" or "seen by B". */
+  where?: string;
+  /** `group-region`: model boxes inside it that were left out of the score. */
+  ignoredCount?: number;
 };
 
 type Props = {
@@ -27,8 +37,10 @@ type Props = {
   /** Set when the selection is a 3D box outside the evaluation. */
   notEvaluated?: NotEvaluatedBox | null;
   rules: EvaluationRules;
-  /** Name of the camera the evaluation is about, e.g. "CAM_FRONT". */
+  /** Name of the camera whose photo is on screen, e.g. "CAM_FRONT". */
   camera?: string;
+  /** (F6) What the other cameras made of the same object (`describeOtherViews`). */
+  otherViews?: string | null;
 };
 
 /**
@@ -38,7 +50,14 @@ type Props = {
  * Fixed height — one headline and two lines of text — so the panel below does
  * not jump as the selection moves.
  */
-export function SelectedResult({ result, visibility, notEvaluated, rules, camera }: Props) {
+export function SelectedResult({
+  result,
+  visibility,
+  notEvaluated,
+  rules,
+  camera,
+  otherViews,
+}: Props) {
   let icon: ReactNode = null;
   let headline: ReactNode;
   let detail: string;
@@ -72,7 +91,7 @@ export function SelectedResult({ result, visibility, notEvaluated, rules, camera
           </span>
         </>
       );
-    detail = describeResult(result, rules);
+    detail = describeResult(result, rules) + (otherViews ? ` — ${otherViews}` : '');
   } else if (notEvaluated) {
     headline = (
       <>
@@ -84,10 +103,24 @@ export function SelectedResult({ result, visibility, notEvaluated, rules, camera
         </span>
       </>
     );
-    detail =
-      notEvaluated.reason === 'outside-camera'
-        ? `outside ${camera ?? 'the camera image'} — the model never saw it, so there is nothing to compare`
-        : 'the model has no class for this kind of object, so there is nothing to compare';
+    const photo = camera ?? 'this photo';
+    switch (notEvaluated.reason) {
+      case 'outside-camera':
+        detail = `not in the ${photo} photo${notEvaluated.where ? ` — ${notEvaluated.where}` : ''}`;
+        break;
+      case 'no-camera':
+        detail = 'no camera sees it — the model never saw it, so there is nothing to compare';
+        break;
+      case 'group-region': {
+        const n = notEvaluated.ignoredCount ?? 0;
+        detail =
+          'a rack is one label for all the bikes in it, which have no labels of their own' +
+          (n > 0 ? ` · ${n} model box${n === 1 ? '' : 'es'} on it, not counted` : '');
+        break;
+      }
+      default:
+        detail = 'the model has no class for this kind of object, so there is nothing to compare';
+    }
   } else {
     headline = <span className="text-zinc-500">No result selected</span>;
     detail = 'Select a row, or a box in the photo or the 3D view, to see why it was scored that way.';

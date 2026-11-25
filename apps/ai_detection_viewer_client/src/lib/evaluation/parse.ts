@@ -1,10 +1,15 @@
+import { DEFAULT_CAMERA } from '@/lib/cameras/names';
 import type { Prediction2D, PredictionModelInfo, PredictionSet } from './types';
 
 const PREDICTION_ID_PREFIX = 'pred:';
 
-/** The id of the `index`-th prediction of a frame (see `Prediction2D.id`). */
-export function predictionId(frameId: string, index: number): string {
-  return `${PREDICTION_ID_PREFIX}${frameId}:${index}`;
+/**
+ * The id of the `index`-th prediction of one photo (see `Prediction2D.id`).
+ * (F6) The camera is part of it: every photo of a frame numbers its
+ * predictions from 0, so without it six predictions would share an id.
+ */
+export function predictionId(frameId: string, camera: string, index: number): string {
+  return `${PREDICTION_ID_PREFIX}${frameId}:${camera}:${index}`;
 }
 
 /**
@@ -22,12 +27,21 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 /**
  * Parse the predictions file written by `scripts/predict_nuscenes.py`.
  *
+ * Two versions are read (the script writes the second):
+ *  - `@1` (F5): one camera for the whole file — `camera` at the top (CAM_FRONT
+ *    when absent) and a `predictions` list per frame;
+ *  - `@2` (F6): a `cameras` object per frame, one list per camera.
+ * A frame is read by its own shape, so a file is never rejected for its
+ * version string alone.
+ *
  * Same defensive style as `parseCoco` / `parseNuScenes` (Error Defaults): the
  * file is outside input, so nothing here throws.
  *  - A root that is not a predictions file → `null` (+ one warning). The caller
  *    shows "predictions unavailable"; it must not evaluate against an empty set,
  *    which would report every object as missed.
- *  - A malformed frame or prediction → skipped, counted in one warning.
+ *  - A malformed frame, camera entry or prediction → skipped, counted in one
+ *    warning. A skipped camera entry leaves that PHOTO without predictions
+ *    ("not run"), which is different from an empty list ("ran, found nothing").
  *
  * No filtering by class or score happens here: what is evaluated is decided by
  * the selectors at evaluation time, so the score slider can re-evaluate live.
@@ -40,44 +54,88 @@ export function parsePredictions(raw: unknown): PredictionSet | null {
     return null;
   }
 
-  const byFrame = new Map<string, Prediction2D[]>();
+  const fileCamera =
+    typeof raw.camera === 'string' && raw.camera !== '' ? raw.camera : DEFAULT_CAMERA;
+  const byFrame = new Map<string, Map<string, Prediction2D[]>>();
+  // Cameras in the order they first appear; the file's own list (if valid) wins.
+  const seenCameras: string[] = [];
   let skippedFrames = 0;
+  let skippedCameras = 0;
   let skippedPredictions = 0;
+
+  const readList = (list: unknown[], frameId: string, camera: string): Prediction2D[] => {
+    const predictions: Prediction2D[] = [];
+    list.forEach((rawPrediction, index) => {
+      const prediction = readPrediction(rawPrediction, predictionId(frameId, camera, index));
+      if (prediction) predictions.push(prediction);
+      else skippedPredictions += 1;
+    });
+    // Stable sort: equal scores keep their file order.
+    predictions.sort((a, b) => b.score - a.score);
+    if (!seenCameras.includes(camera)) seenCameras.push(camera);
+    return predictions;
+  };
 
   for (const rawFrame of raw.frames) {
     if (
       !isObject(rawFrame) ||
       typeof rawFrame.token !== 'string' ||
       rawFrame.token === '' ||
-      !Array.isArray(rawFrame.predictions) ||
       byFrame.has(rawFrame.token)
     ) {
       skippedFrames += 1;
       continue;
     }
     const frameId = rawFrame.token;
-    const predictions: Prediction2D[] = [];
-    rawFrame.predictions.forEach((rawPrediction, index) => {
-      const prediction = readPrediction(rawPrediction, predictionId(frameId, index));
-      if (prediction) predictions.push(prediction);
-      else skippedPredictions += 1;
-    });
-    // Stable sort: equal scores keep their file order.
-    predictions.sort((a, b) => b.score - a.score);
-    byFrame.set(frameId, predictions);
+
+    if (isObject(rawFrame.cameras)) {
+      // @2: one list per camera.
+      const byCamera = new Map<string, Prediction2D[]>();
+      for (const [camera, list] of Object.entries(rawFrame.cameras)) {
+        if (camera === '' || !Array.isArray(list)) {
+          skippedCameras += 1;
+          continue;
+        }
+        byCamera.set(camera, readList(list, frameId, camera));
+      }
+      byFrame.set(frameId, byCamera);
+    } else if (Array.isArray(rawFrame.predictions)) {
+      // @1: the frame's one list belongs to the file's one camera.
+      byFrame.set(
+        frameId,
+        new Map([[fileCamera, readList(rawFrame.predictions, frameId, fileCamera)]]),
+      );
+    } else {
+      skippedFrames += 1;
+    }
   }
 
-  if (skippedFrames > 0 || skippedPredictions > 0) {
+  if (skippedFrames > 0 || skippedCameras > 0 || skippedPredictions > 0) {
     console.warn(
-      `[parsePredictions] Skipped ${skippedFrames} malformed frame(s) and ${skippedPredictions} malformed prediction(s).`,
+      `[parsePredictions] Skipped ${skippedFrames} malformed frame(s), ${skippedCameras} malformed camera entr${skippedCameras === 1 ? 'y' : 'ies'} and ${skippedPredictions} malformed prediction(s).`,
     );
   }
 
   return {
     model: readModel(raw.model),
-    ...(typeof raw.camera === 'string' && raw.camera !== '' ? { camera: raw.camera } : {}),
+    cameras: readCameraList(raw.cameras, seenCameras),
     byFrame,
   };
+}
+
+/**
+ * The file's camera list: the names it declares, followed by any camera that
+ * has predictions but is not declared. A declared camera without a single
+ * entry is dropped — the list says what the file HAS.
+ */
+function readCameraList(declared: unknown, seen: readonly string[]): string[] {
+  if (!Array.isArray(declared)) return [...seen];
+  const names: string[] = [];
+  for (const name of declared) {
+    if (typeof name === 'string' && seen.includes(name) && !names.includes(name)) names.push(name);
+  }
+  for (const name of seen) if (!names.includes(name)) names.push(name);
+  return names;
 }
 
 function readPrediction(value: unknown, id: string): Prediction2D | null {

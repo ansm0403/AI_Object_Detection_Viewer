@@ -1,5 +1,6 @@
 'use client';
 
+import { cameraShortName } from '@/lib/cameras';
 import { isWeakEvidence } from '@/lib/review';
 import type { BoxAnnotationInfo } from '@/lib/types';
 import { EvidenceBars } from './icons';
@@ -9,8 +10,11 @@ export type BoxEvidence = {
   /** LiDAR points the dataset counted inside the box (absent in older files). */
   lidarPoints?: number;
   visibility?: BoxAnnotationInfo['visibility'];
-  /** Whether the box has a projection in the camera image shown. */
-  inCamera: boolean;
+  /**
+   * (F6) The cameras whose photo shows the box, best view first (camera
+   * channel names). Empty = no camera sees it; it can only be checked in 3D.
+   */
+  seenBy: string[];
 };
 
 const VISIBILITY_LABELS: Record<NonNullable<BoxAnnotationInfo['visibility']>, string> = {
@@ -27,14 +31,16 @@ const VISIBILITY_LABELS: Record<NonNullable<BoxAnnotationInfo['visibility']>, st
  *
  * Every value is the DATASET's own record, and the tooltips say so: the LiDAR
  * count is nuScenes' count on the original sweep (not the thinned cloud drawn in
- * the 3D view), and visibility is nuScenes' figure across all six cameras — not
- * a statement about the one camera image shown here.
+ * the 3D view), and visibility is nuScenes' figure for the object as a whole,
+ * across all six cameras — not a statement about the one photo shown (an object
+ * that is 80% visible overall can still be cut off at the edge of this photo).
  */
 export function EvidenceStrip({ evidence }: { evidence: BoxEvidence | null }) {
   if (!evidence) {
     return <div className="h-4 text-[11px] leading-4 text-zinc-600">No box selected</div>;
   }
-  const { lidarPoints, visibility, inCamera } = evidence;
+  const { lidarPoints, visibility, seenBy } = evidence;
+  const inCamera = seenBy.length > 0;
   const weak = lidarPoints !== undefined && isWeakEvidence(lidarPoints);
 
   return (
@@ -58,7 +64,7 @@ export function EvidenceStrip({ evidence }: { evidence: BoxEvidence | null }) {
       </span>
       <span
         className="inline-flex items-center gap-1.5"
-        title="nuScenes visibility: how much of the object is visible across all 6 camera images (not only the camera shown here)"
+        title="nuScenes visibility: how much of the object is visible, over all 6 camera images together — not how much of it this one photo shows"
       >
         <span className="text-zinc-500">Visible</span>
         <span className={visibility ? 'text-zinc-200' : 'text-zinc-600'}>
@@ -69,11 +75,18 @@ export function EvidenceStrip({ evidence }: { evidence: BoxEvidence | null }) {
         className={inCamera ? 'text-zinc-200' : 'text-amber-300/90'}
         title={
           inCamera
-            ? 'This box projects into the camera image shown'
-            : 'This box is beside or behind the camera shown — it cannot be checked against the photo'
+            ? `This box projects into the photo of ${seenBy.join(' and ')}${seenBy.length > 1 ? ' (best view first)' : ''}`
+            : 'No camera sees this box — it cannot be checked against a photo, only in the 3D view'
         }
       >
-        {inCamera ? 'In camera' : 'Not in camera'}
+        {inCamera ? (
+          <>
+            <span className="text-zinc-500">Seen by </span>
+            {seenBy.map(cameraShortName).join(' · ')}
+          </>
+        ) : (
+          'No camera sees it'
+        )}
       </span>
     </div>
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeResult, visibilityText } from './describe';
+import { describeOtherViews, describeResult, visibilityText } from './describe';
 import type { EvalResult, EvaluationRules, FalseAlarmRelation, MissReason } from './types';
 
 const RULES: EvaluationRules = { minScore: 0.25, iouThreshold: 0.3 };
@@ -94,5 +94,36 @@ describe('visibilityText', () => {
 
   it('is null when the data does not carry it', () => {
     expect(visibilityText(undefined)).toBeNull();
+  });
+});
+
+describe('describeOtherViews (F6)', () => {
+  const outcome = {
+    kind: 'found' as const,
+    views: [
+      { camera: 'CAM_FRONT', kind: 'missed' as const },
+      { camera: 'CAM_FRONT_RIGHT', kind: 'found' as const },
+    ],
+  };
+
+  it('says what the other camera made of the same object', () => {
+    expect(describeOtherViews(outcome, 'CAM_FRONT_RIGHT')).toBe('other camera: F missed');
+    expect(describeOtherViews(outcome, 'CAM_FRONT')).toBe('other camera: FR found');
+  });
+
+  it('lists every other camera when the photo on screen is none of them', () => {
+    expect(describeOtherViews(outcome, 'CAM_BACK')).toBe('other cameras: F missed, FR found');
+    expect(describeOtherViews(outcome, null)).toBe('other cameras: F missed, FR found');
+  });
+
+  it('spells "not scored" out', () => {
+    const hidden = { kind: 'not-scored' as const, views: [{ camera: 'CAM_BACK_RIGHT', kind: 'not-scored' as const }] };
+    expect(describeOtherViews(hidden, 'CAM_FRONT')).toBe('other camera: BR not scored');
+  });
+
+  it('is null when no other camera has a result for it', () => {
+    const single = { kind: 'missed' as const, views: [{ camera: 'CAM_BACK', kind: 'missed' as const }] };
+    expect(describeOtherViews(single, 'CAM_BACK')).toBeNull();
+    expect(describeOtherViews(undefined, 'CAM_BACK')).toBeNull();
   });
 });

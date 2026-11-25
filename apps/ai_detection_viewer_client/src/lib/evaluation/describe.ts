@@ -1,4 +1,6 @@
+import { cameraShortName } from '@/lib/cameras';
 import type { BoxAnnotationInfo } from '@/lib/types';
+import type { ObjectOutcome } from './evaluate';
 import type { EvalResult, EvaluationRules } from './types';
 
 /**
@@ -24,6 +26,29 @@ export function visibilityText(visibility: BoxAnnotationInfo['visibility']): str
 
 const score = (value: number): string => value.toFixed(2);
 const overlap = (value: number): string => `IoU ${value.toFixed(2)}`;
+
+const VIEW_WORD = { found: 'found', missed: 'missed', 'not-scored': 'not scored' } as const;
+
+/**
+ * (F6) What the OTHER cameras made of the same object, e.g. "other camera: F
+ * missed" — or `null` when no other camera has a result for it.
+ *
+ * An object in the overlap of two cameras is scored once per photo, and the
+ * two results often differ (it is usually cut off by the image edge in one of
+ * them). Saying so next to the selected result keeps a "missed" from being
+ * read as "the car never saw it".
+ */
+export function describeOtherViews(
+  outcome: ObjectOutcome | undefined,
+  camera: string | null,
+): string | null {
+  const others = (outcome?.views ?? []).filter((view) => view.camera !== camera);
+  if (others.length === 0) return null;
+  const list = others
+    .map((view) => `${cameraShortName(view.camera)} ${VIEW_WORD[view.kind]}`)
+    .join(', ');
+  return `other camera${others.length === 1 ? '' : 's'}: ${list}`;
+}
 
 /** Why the result is what it is, as one line. */
 export function describeResult(result: EvalResult, rules: EvaluationRules): string {

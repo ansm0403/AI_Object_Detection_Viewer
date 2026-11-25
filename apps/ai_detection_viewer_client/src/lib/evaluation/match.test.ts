@@ -21,7 +21,7 @@ describe('evaluateFrame — the basic outcomes', () => {
         objectId: 'a',
         class: 'person',
         distance: 12,
-        predictionId: 'pred:frame-1:0',
+        predictionId: 'pred:frame-1:CAM_TEST:0',
         score: 0.9,
         iou: 1,
       },
@@ -42,7 +42,7 @@ describe('evaluateFrame — the basic outcomes', () => {
     const frame = makeFrame([]);
     const { results, counts } = evaluateFrame(frame, [makePrediction(0, 'car', 0.6, B)], RULES);
     expect(results).toEqual([
-      { kind: 'false-alarm', predictionId: 'pred:frame-1:0', class: 'car', score: 0.6, nearest: null },
+      { kind: 'false-alarm', predictionId: 'pred:frame-1:CAM_TEST:0', class: 'car', score: 0.6, nearest: null },
     ]);
     expect(counts.falseAlarm).toBe(1);
   });
@@ -64,10 +64,10 @@ describe('evaluateFrame — matching rules', () => {
       [makePrediction(0, 'person', 0.5, A), makePrediction(1, 'person', 0.8, A)],
       RULES,
     );
-    expect(results[0]).toMatchObject({ kind: 'found', predictionId: 'pred:frame-1:1', score: 0.8 });
+    expect(results[0]).toMatchObject({ kind: 'found', predictionId: 'pred:frame-1:CAM_TEST:1', score: 0.8 });
     expect(results[1]).toMatchObject({
       kind: 'false-alarm',
-      predictionId: 'pred:frame-1:0',
+      predictionId: 'pred:frame-1:CAM_TEST:0',
       nearest: { objectId: 'a', class: 'person', iou: 1, relation: 'matched-elsewhere' },
     });
   });
@@ -82,7 +82,7 @@ describe('evaluateFrame — matching rules', () => {
     expect(results.find((r) => r.kind === 'found')).toMatchObject({ objectId: 'near' });
     expect(results.find((r) => r.kind === 'missed')).toMatchObject({
       objectId: 'far',
-      nearest: { predictionId: 'pred:frame-1:0', reason: 'matched-elsewhere' },
+      nearest: { predictionId: 'pred:frame-1:CAM_TEST:0', reason: 'matched-elsewhere' },
     });
   });
 
@@ -181,7 +181,7 @@ describe('evaluateFrame — labels that are not scored', () => {
     const frame = makeFrame([{ id: 'hidden', bbox: A, visibility: 'v0-40' }]);
     const { results, counts } = evaluateFrame(frame, [makePrediction(0, 'person', 0.9, A)], RULES);
     expect(counts).toEqual({ found: 0, missed: 0, falseAlarm: 0, notScored: 1 });
-    expect(results[0]).toMatchObject({ kind: 'not-scored', predictionIds: ['pred:frame-1:0'] });
+    expect(results[0]).toMatchObject({ kind: 'not-scored', predictionIds: ['pred:frame-1:CAM_TEST:0'] });
   });
 
   it('a prediction of ANOTHER class on it is still a false alarm', () => {
@@ -271,8 +271,8 @@ describe('evaluateFrame — shape of the result', () => {
       ['missed', 'a'],
       ['not-scored', 'b'],
       ['found', 'c'],
-      ['false-alarm', 'pred:frame-1:2'],
-      ['false-alarm', 'pred:frame-1:1'],
+      ['false-alarm', 'pred:frame-1:CAM_TEST:2'],
+      ['false-alarm', 'pred:frame-1:CAM_TEST:1'],
     ]);
   });
 
@@ -316,14 +316,14 @@ describe('findResult / selectionIdOf', () => {
   });
 
   it('resolves the prediction of a matched pair to the label\'s result', () => {
-    expect(findResult(evaluation, 'pred:frame-1:0')).toMatchObject({ kind: 'found', objectId: 'a' });
-    expect(findResult(evaluation, 'pred:frame-1:1')).toMatchObject({ kind: 'not-scored', objectId: 'b' });
+    expect(findResult(evaluation, 'pred:frame-1:CAM_TEST:0')).toMatchObject({ kind: 'found', objectId: 'a' });
+    expect(findResult(evaluation, 'pred:frame-1:CAM_TEST:1')).toMatchObject({ kind: 'not-scored', objectId: 'b' });
   });
 
   it('finds a false alarm by its prediction id', () => {
-    const result = findResult(evaluation, 'pred:frame-1:2');
+    const result = findResult(evaluation, 'pred:frame-1:CAM_TEST:2');
     expect(result).toMatchObject({ kind: 'false-alarm' });
-    expect(result && selectionIdOf(result)).toBe('pred:frame-1:2');
+    expect(result && selectionIdOf(result)).toBe('pred:frame-1:CAM_TEST:2');
   });
 
   it('returns undefined for a box that is not evaluated, an unknown id, or no id', () => {
@@ -334,7 +334,105 @@ describe('findResult / selectionIdOf', () => {
   });
 
   it('selects a label by its object id, so 2D, 3D and the list agree (Rule #1)', () => {
-    const found = findResult(evaluation, 'pred:frame-1:0');
+    const found = findResult(evaluation, 'pred:frame-1:CAM_TEST:0');
     expect(found && selectionIdOf(found)).toBe('a');
+  });
+});
+
+describe('evaluateFrame — bicycle racks (F6)', () => {
+  // nuScenes labels a rack as ONE box and gives the bikes parked in it no boxes
+  // of their own. The rack here spans x 1000–1400; a labelled bicycle stands
+  // next to it.
+  const RACK = box(1000, 400, 400, 100);
+  const frame = makeFrame([
+    { id: 'rack', class: 'static_object.bicycle_rack', bbox: RACK },
+    { id: 'bike', class: 'bicycle', bbox: box(1500, 400, 80, 80) },
+  ]);
+  const inRack = (index: number, x: number, cls = 'bicycle', score = 0.6) =>
+    makePrediction(index, cls, score, box(x, 410, 60, 80));
+
+  it('a bicycle box whose centre is inside a rack is neither a find nor a false alarm', () => {
+    const evaluation = evaluateFrame(frame, [inRack(0, 1050), inRack(1, 1200)], RULES);
+    expect(evaluation.counts.falseAlarm).toBe(0);
+    expect(evaluation.ignored).toEqual([
+      { predictionId: 'pred:frame-1:CAM_TEST:0', class: 'bicycle', score: 0.6, regionObjectId: 'rack', reason: 'bicycle-rack' },
+      { predictionId: 'pred:frame-1:CAM_TEST:1', class: 'bicycle', score: 0.6, regionObjectId: 'rack', reason: 'bicycle-rack' },
+    ]);
+    // It is not a result at all: nothing to select, nothing counted.
+    expect(findResult(evaluation, 'pred:frame-1:CAM_TEST:0')).toBeUndefined();
+    expect(evaluation.results.some((r) => r.kind === 'false-alarm')).toBe(false);
+  });
+
+  it('a motorcycle box in a rack is left out too; a person there is still a false alarm', () => {
+    const evaluation = evaluateFrame(
+      frame,
+      [inRack(0, 1100, 'motorcycle'), inRack(1, 1250, 'person')],
+      RULES,
+    );
+    expect(evaluation.ignored.map((i) => i.class)).toEqual(['motorcycle']);
+    expect(evaluation.counts.falseAlarm).toBe(1);
+  });
+
+  it('it is the CENTRE that decides: a box mostly outside the rack is a false alarm', () => {
+    // 60 px wide starting at x = 960: centre x = 990, 10 px left of the rack.
+    const outside = evaluateFrame(frame, [inRack(0, 960)], RULES);
+    expect(outside.ignored).toEqual([]);
+    expect(outside.counts.falseAlarm).toBe(1);
+    // Starting at x = 975: centre x = 1005, inside.
+    expect(evaluateFrame(frame, [inRack(0, 975)], RULES).ignored).toHaveLength(1);
+    // A centre exactly on the rack's edge counts as inside.
+    expect(evaluateFrame(frame, [inRack(0, 970)], RULES).ignored).toHaveLength(1);
+  });
+
+  it('a labelled bicycle next to the rack is matched as usual — the rule is checked last', () => {
+    const evaluation = evaluateFrame(
+      frame,
+      [makePrediction(0, 'bicycle', 0.9, box(1500, 400, 80, 80)), inRack(1, 1100)],
+      RULES,
+    );
+    expect(evaluation.counts).toMatchObject({ found: 1, missed: 0, falseAlarm: 0 });
+    expect(evaluation.ignored.map((i) => i.predictionId)).toEqual(['pred:frame-1:CAM_TEST:1']);
+  });
+
+  it('a labelled bicycle INSIDE the rack is still found by its own box', () => {
+    const withBike = makeFrame([
+      { id: 'rack', class: 'static_object.bicycle_rack', bbox: RACK },
+      { id: 'own', class: 'bicycle', bbox: box(1100, 410, 60, 80) },
+    ]);
+    const evaluation = evaluateFrame(withBike, [inRack(0, 1100), inRack(1, 1300)], RULES);
+    expect(evaluation.counts).toMatchObject({ found: 1, falseAlarm: 0 });
+    expect(evaluation.ignored).toHaveLength(1);
+  });
+
+  it('a box below the minimum score was never reported, so it is not "left out" either', () => {
+    const evaluation = evaluateFrame(frame, [inRack(0, 1100, 'bicycle', 0.1)], RULES);
+    expect(evaluation.ignored).toEqual([]);
+    expect(evaluation.counts.falseAlarm).toBe(0);
+  });
+
+  it('the rack itself is not a label to find: not found, not missed, not evaluated', () => {
+    const evaluation = evaluateFrame(frame, [], RULES);
+    expect(evaluation.results.map((r) => (r.kind === 'false-alarm' ? '' : r.objectId))).toEqual(['bike']);
+    expect(evaluation.notEvaluated).toBe(1);
+  });
+
+  it('without a rack in the photo nothing is left out', () => {
+    const noRack = makeFrame([{ id: 'bike', class: 'bicycle', bbox: box(1500, 400, 80, 80) }]);
+    const evaluation = evaluateFrame(noRack, [inRack(0, 1100)], RULES);
+    expect(evaluation.ignored).toEqual([]);
+    expect(evaluation.counts.falseAlarm).toBe(1);
+  });
+
+  it('can be switched off: the same boxes are then false alarms', () => {
+    const evaluation = evaluateFrame(frame, [inRack(0, 1050), inRack(1, 1200)], {
+      ...RULES,
+      ignoreRackRegions: false,
+    });
+    expect(evaluation.ignored).toEqual([]);
+    expect(evaluation.counts.falseAlarm).toBe(2);
+  });
+
+  it('every evaluation carries the list, empty when nothing was left out', () => {
+    expect(evaluateFrame(makeFrame([]), [], RULES).ignored).toEqual([]);
   });
 });

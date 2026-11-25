@@ -31,8 +31,12 @@ type Props = {
    */
   selectedId: string | null;
   onSelect: (id: string | null) => void;
-  /** 3D boxes of the frame that take no part in the evaluation. */
+  /** 3D boxes of the frame that take no part in the evaluation of this photo. */
   notEvaluated: number;
+  /** (F6) Whose results these are — the camera on screen, e.g. "FR". Shown in the title. */
+  scope?: string;
+  /** (F6) Full name of that camera, for tooltips. */
+  scopeTitle?: string;
   /** Shown instead of the list when the frame has no evaluation (and why). */
   unavailable?: string;
 };
@@ -57,6 +61,8 @@ export function ResultList({
   selectedId,
   onSelect,
   notEvaluated,
+  scope,
+  scopeTitle,
   unavailable,
 }: Props) {
   const rows = results.filter((result) => passesKindFilter(result, filter.kinds));
@@ -72,7 +78,18 @@ export function ResultList({
     <div className={`flex flex-col h-full ${PANEL_CLASS}`} onClick={() => onSelect(null)}>
       <div onClick={(e) => e.stopPropagation()}>
         <PanelHeader title="Results" count={unavailable ? undefined : results.length}>
-          <span className="text-[11px] text-zinc-500">distance · score</span>
+          <span className="text-[11px] text-zinc-500">
+            {scope && (
+              // The list is ONE photo's results: the camera on screen.
+              <span
+                className="mr-1.5 rounded px-1 py-px font-semibold text-zinc-300 ring-1 ring-inset ring-zinc-700"
+                title={`Results of the ${scopeTitle ?? scope} photo. Pick another camera in the thumbnail row to see its results.`}
+              >
+                {scope}
+              </span>
+            )}
+            distance · score
+          </span>
         </PanelHeader>
         {counts && (
           <div
@@ -196,10 +213,11 @@ export function ResultList({
       {!unavailable && notEvaluated > 0 && (
         <p
           className="shrink-0 px-3 py-1.5 border-t border-zinc-800 text-[11px] text-zinc-500"
-          title="3D boxes outside the camera image, or of a class the model cannot name. They are still in the 3D view and in Review mode."
+          title="3D boxes that are not in this photo (another camera may show them), or of a class the model cannot name. They are still in the 3D view and in Review mode."
           onClick={(e) => e.stopPropagation()}
         >
-          + {notEvaluated} box{notEvaluated === 1 ? '' : 'es'} not evaluated
+          + {notEvaluated} box{notEvaluated === 1 ? '' : 'es'}{' '}
+          {scope ? 'not in this photo' : 'not evaluated'}
         </p>
       )}
     </div>

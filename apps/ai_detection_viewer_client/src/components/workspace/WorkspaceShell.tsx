@@ -13,6 +13,13 @@ type WorkspaceShellProps = {
   main: ReactNode;
   /** Right column, top: the camera image + 2D boxes. */
   camera: ReactNode;
+  /**
+   * (F6) Right column, between the camera image and the details: the row of
+   * camera thumbnails. Optional — a dataset with one camera (COCO) passes
+   * nothing and the column is exactly as before. The row sizes itself (its
+   * height follows the column width); the details panel takes what is left.
+   */
+  cameraStrip?: ReactNode;
   /** Right column, bottom: selected object + analytics. */
   details: ReactNode;
   /** Bottom row: frame timeline. */
@@ -50,6 +57,7 @@ export function WorkspaceShell({
   list,
   main,
   camera,
+  cameraStrip,
   details,
   timeline,
   cameraAspect,
@@ -91,6 +99,13 @@ export function WorkspaceShell({
           >
             {camera}
           </section>
+          {/* (F6) Same `order` as the camera image, so on narrow screens the
+              thumbnails stay right under the photo they switch. */}
+          {cameraStrip && (
+            <section aria-label="Camera thumbnails" className="order-2 flex-none min-w-0">
+              {cameraStrip}
+            </section>
+          )}
           <section
             aria-label="Details"
             className="order-5 lg:flex-1 lg:min-h-0"

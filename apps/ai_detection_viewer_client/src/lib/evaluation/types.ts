@@ -23,10 +23,11 @@ export type Box2D = { x: number; y: number; width: number; height: number };
 /** One model prediction on one camera image. */
 export type Prediction2D = {
   /**
-   * `pred:<frameId>:<index in the file>`. The `pred:` prefix cannot collide
-   * with a label id (nuScenes instance tokens are hex only), and the frame id
-   * keeps a kept selection from pointing at a different prediction after a
-   * frame switch.
+   * `pred:<frameId>:<camera>:<index in the file>`. The `pred:` prefix cannot
+   * collide with a label id (nuScenes instance tokens are hex only); the frame
+   * id and (F6) the camera keep a kept selection from pointing at a different
+   * prediction after a frame or camera switch — the same index exists in every
+   * photo.
    */
   id: string;
   /** The class name exactly as the model reported it (e.g. "person", "traffic light"). */
@@ -48,10 +49,15 @@ export type PredictionModelInfo = {
 
 export type PredictionSet = {
   model: PredictionModelInfo;
-  /** Camera the predictions belong to, e.g. "CAM_FRONT". */
-  camera?: string;
-  /** Predictions per frame id, highest score first. A frame WITHOUT an entry was not run. */
-  byFrame: Map<string, Prediction2D[]>;
+  /** (F6) Every camera the file has predictions for, in the file's order. */
+  cameras: string[];
+  /**
+   * Predictions per frame id, then per camera name, highest score first.
+   * One PHOTO is the unit: a frame without an entry was not run at all, and a
+   * camera missing from a frame's entry means that photo was not run. An empty
+   * list means the model looked at the photo and reported nothing.
+   */
+  byFrame: Map<string, Map<string, Prediction2D[]>>;
 };
 
 // --- raw file (written by scripts/predict_nuscenes.py) ------------------------
@@ -61,10 +67,18 @@ export type RawPredictionBox = [number, number, number, number];
 
 export type RawPrediction = { class: string; score: number; bbox: RawPredictionBox };
 
+/**
+ * The file, in either version:
+ *  - `@1` (F5): one `camera` for the whole file, `predictions` per frame;
+ *  - `@2` (F6): `cameras` per frame — `{ "CAM_FRONT": [...], "CAM_BACK": [...] }`.
+ */
 export type RawPredictionFile = {
-  /** Format name + version, e.g. "ai-detection-viewer/predictions@1". */
+  /** Format name + version, e.g. "ai-detection-viewer/predictions@2". */
   format: string;
+  /** @1: the one camera of the file. */
   camera?: string;
+  /** @2: every camera in the file. */
+  cameras?: string[];
   model: {
     name: string;
     weights?: string;
@@ -73,7 +87,13 @@ export type RawPredictionFile = {
     minScore?: number;
     nmsIou?: number;
   };
-  frames: { token: string; predictions: RawPrediction[] }[];
+  frames: {
+    token: string;
+    /** @1 */
+    predictions?: RawPrediction[];
+    /** @2 */
+    cameras?: Record<string, RawPrediction[]>;
+  }[];
 };
 
 // --- evaluation ---------------------------------------------------------------
@@ -83,6 +103,12 @@ export type EvaluationRules = {
   minScore: number;
   /** Minimum overlap (IoU) for a prediction to count as having found a label. */
   iouThreshold: number;
+  /**
+   * (F6) Leave out bicycle / motorcycle predictions that sit inside a bicycle
+   * rack (see `IgnoredPrediction`). On unless set to `false` — the switch
+   * exists so the effect of the rule can be measured and tested.
+   */
+  ignoreRackRegions?: boolean;
 };
 
 /**
@@ -157,6 +183,23 @@ export type FalseAlarmResult = {
 
 export type EvalResult = FoundResult | MissedResult | NotScoredResult | FalseAlarmResult;
 
+/**
+ * (F6) A model box that is left out of the score because of WHERE it is: on a
+ * bicycle rack. nuScenes labels a rack as one box and gives the bikes parked
+ * in it no boxes of their own, so a detector that finds those bikes — correctly
+ * — would be charged one false alarm per bike. Such a box is neither right nor
+ * wrong: it is not a result, is not counted anywhere, and cannot be selected.
+ * (The nuScenes detection benchmark filters the same boxes, by their centre.)
+ */
+export type IgnoredPrediction = {
+  predictionId: string;
+  class: string;
+  score: number;
+  /** The rack label (its object id) whose rectangle contains the box's centre. */
+  regionObjectId: string;
+  reason: 'bicycle-rack';
+};
+
 export type EvalCounts = {
   found: number;
   missed: number;
@@ -164,16 +207,23 @@ export type EvalCounts = {
   notScored: number;
 };
 
+/**
+ * The evaluation of ONE PHOTO — one camera's image of one frame. (The name
+ * dates from F5, when a frame had one photo; F6 evaluates each of a frame's
+ * photos separately and combines them in `FrameCamerasEvaluation`.)
+ */
 export type FrameEvaluation = {
   frameId: string;
   /** Label results in the frame's label order, then false alarms by score (highest first). */
   results: EvalResult[];
   counts: EvalCounts;
   /**
-   * 3D boxes of the frame that take no part in the evaluation: not in the
-   * camera image, or of a class the model cannot name.
+   * 3D boxes of the frame that take no part in the evaluation OF THIS PHOTO:
+   * not in this camera's image, or of a class the model cannot name.
    */
   notEvaluated: number;
+  /** (F6) Model boxes left out because they sit in a bicycle rack. Not counted anywhere. */
+  ignored: IgnoredPrediction[];
 };
 
 /** Recall inside one distance band `[from, to)` in metres. */

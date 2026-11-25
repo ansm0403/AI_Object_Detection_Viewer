@@ -1,8 +1,14 @@
 import type { Detection2D, Detection3D, Frame } from '@/lib/types';
 import { detectionDistance } from '@/lib/selectors/distance-filter';
-import { isEvaluatedClass, toEvaluatedClass } from './classes';
+import {
+  BICYCLE_RACK_CLASS,
+  isEvaluatedClass,
+  isRackMemberClass,
+  toEvaluatedClass,
+} from './classes';
 import { iou } from './iou';
 import type {
+  Box2D,
   EvalCounts,
   EvalResult,
   EvaluationRules,
@@ -10,6 +16,7 @@ import type {
   FalseAlarmResult,
   FoundResult,
   FrameEvaluation,
+  IgnoredPrediction,
   MissReason,
   MissedResult,
   NotScoredResult,
@@ -67,9 +74,17 @@ type Label = {
  *     label that is not scored (step 4), in which case it is dropped.
  *  4. Labels of low visibility are NOT SCORED: neither found nor missed.
  *  5. Every other unmatched label is MISSED.
+ *  6. (F6) A bicycle / motorcycle prediction left without a label whose CENTRE
+ *     lies inside a bicycle-rack label is IGNORED (`IgnoredPrediction`): the
+ *     rack is one label for many bikes, so the box is neither right nor wrong.
+ *     Checked last — a bike standing next to a rack with its own label is
+ *     matched (or absorbed) like any other.
  *
  * Labels are the frame's `detections2D` (boxes that project into the image) of
  * an evaluated class; predictions of a class that is not evaluated are ignored.
+ *
+ * (F6) `frame` is ONE PHOTO: for a frame with several cameras pass
+ * `frameAsCamera(frame, name)` and that camera's predictions.
  */
 export function evaluateFrame(
   frame: Frame,
@@ -107,6 +122,13 @@ export function evaluateFrame(
     )
     .sort((a, b) => b.prediction.score - a.prediction.score);
 
+  // (F6) Bicycle racks in this photo: regions, not labels to be found.
+  const racks =
+    rules.ignoreRackRegions === false
+      ? []
+      : frame.detections2D.filter((d) => d.class === BICYCLE_RACK_CLASS);
+  const ignored: IgnoredPrediction[] = [];
+
   const falseAlarms: FalseAlarmResult[] = [];
   for (const { prediction, cls } of active) {
     let best: Label | null = null;
@@ -141,6 +163,21 @@ export function evaluateFrame(
     if (absorber) {
       absorber.predictionIds.push(prediction.id);
       continue;
+    }
+
+    // (F6) In a bicycle rack → the rack is the label; its bikes have none.
+    if (racks.length > 0 && isRackMemberClass(cls)) {
+      const rack = racks.find((region) => centreInside(prediction.bbox, region.bbox));
+      if (rack) {
+        ignored.push({
+          predictionId: prediction.id,
+          class: cls,
+          score: prediction.score,
+          regionObjectId: rack.id,
+          reason: 'bicycle-rack',
+        });
+        continue;
+      }
     }
 
     falseAlarms.push({
@@ -183,7 +220,21 @@ export function evaluateFrame(
     results,
     counts: countResults(results),
     notEvaluated: frame.detections3D.filter((d) => !byLabelId.has(d.id)).length,
+    ignored,
   };
+}
+
+/**
+ * Whether the centre of `inner` lies inside `outer` (edges included). The rack
+ * rule asks this instead of an IoU: one bike covers a small part of a rack, so
+ * their IoU is always low, but the bike's middle is on the rack.
+ */
+function centreInside(inner: Box2D, outer: Box2D): boolean {
+  const cx = inner.x + inner.width / 2;
+  const cy = inner.y + inner.height / 2;
+  return (
+    cx >= outer.x && cx <= outer.x + outer.width && cy >= outer.y && cy <= outer.y + outer.height
+  );
 }
 
 /** A missed label, with the prediction that overlaps it most (for the reader). */

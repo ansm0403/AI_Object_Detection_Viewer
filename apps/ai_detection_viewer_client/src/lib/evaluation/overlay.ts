@@ -1,6 +1,6 @@
 import type { Frame } from '@/lib/types';
 import type { ImageBox, ImageOverlay, ImageRect } from '@/lib/ui/image-overlay';
-import { isResultVisible, type ResultFilter } from './list';
+import { isResultVisible, passesKindFilter, type ResultFilter } from './list';
 import { findResult, selectionIdOf } from './match';
 import { CONTEXT_COLOR, NOT_EVALUATED_COLOR, OUTCOME_COLOR } from './outcomes';
 import type { EvalResult, FrameEvaluation, Prediction2D } from './types';
@@ -17,6 +17,9 @@ import type { EvalResult, FrameEvaluation, Prediction2D } from './types';
  * on top of each other, a miss as a lone dashed one, a false alarm as a lone
  * solid one. The viewer draws the result without knowing any of this.
  */
+
+/** Rack-ignored boxes are shown and hidden together with the "not scored" results. */
+const NOT_SCORED_LIKE = { kind: 'not-scored' } as EvalResult;
 
 const labelKey = (objectId: string) => `label:${objectId}`;
 const modelKey = (predictionId: string) => `model:${predictionId}`;
@@ -129,6 +132,32 @@ export function buildOverlay(
         selectId,
         ...(emphasis === 'selected' ? { caption: modelCaption(p) } : {}),
       });
+    }
+  }
+
+  // (F6) Model boxes left out as being in a bicycle rack, and the rack they
+  // are in: drawn in grey as context — the model did report them — but they
+  // are not results, so the boxes select nothing. The rack is a label (a real
+  // 3D box) and can be selected like any other. Shown with the "not scored"
+  // outcome, which they resemble: neither right nor wrong.
+  if (passesKindFilter(NOT_SCORED_LIKE, filter.kinds)) {
+    for (const ignored of evaluation.ignored) {
+      const p = prediction.get(ignored.predictionId);
+      if (!p || !(filter.classes.size === 0 || filter.classes.has(ignored.class))) continue;
+      const ofSelectedRack = selectedId === ignored.regionObjectId;
+      const emphasis = ofSelectedRack ? 'normal' : somethingSelected ? 'dim' : 'normal';
+      add({ key: modelKey(p.id), bbox: p.bbox, color: NOT_EVALUATED_COLOR, dashed: false, emphasis });
+      const rack = labelBox.get(ignored.regionObjectId);
+      if (rack && !rects.has(labelKey(rack.id))) {
+        add({
+          key: labelKey(rack.id),
+          bbox: rack.bbox,
+          color: NOT_EVALUATED_COLOR,
+          dashed: true,
+          emphasis,
+          selectId: rack.id,
+        });
+      }
     }
   }
 

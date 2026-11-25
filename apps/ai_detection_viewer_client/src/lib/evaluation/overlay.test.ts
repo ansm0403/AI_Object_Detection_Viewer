@@ -53,21 +53,21 @@ describe('buildOverlay — nothing selected', () => {
 
   it('draws labels dashed and model boxes solid, coloured by outcome', () => {
     expect(rect(o, 'label:found')).toMatchObject({ dashed: true, color: OUTCOME_COLOR.found });
-    expect(rect(o, 'model:pred:frame-1:0')).toMatchObject({ dashed: false, color: OUTCOME_COLOR.found });
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:0')).toMatchObject({ dashed: false, color: OUTCOME_COLOR.found });
     expect(rect(o, 'label:missed')).toMatchObject({ dashed: true, color: OUTCOME_COLOR.missed });
-    expect(rect(o, 'model:pred:frame-1:3')).toMatchObject({
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:3')).toMatchObject({
       dashed: false,
       color: OUTCOME_COLOR['false-alarm'],
     });
     expect(rect(o, 'label:hidden')).toMatchObject({ dashed: true, color: OUTCOME_COLOR['not-scored'] });
-    expect(rect(o, 'model:pred:frame-1:2')).toMatchObject({
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:2')).toMatchObject({
       dashed: false,
       color: OUTCOME_COLOR['not-scored'],
     });
   });
 
   it('does not draw a model box below the minimum score, nor a label that is not evaluated', () => {
-    expect(rect(o, 'model:pred:frame-1:1')).toBeUndefined();
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:1')).toBeUndefined();
     expect(rect(o, 'label:rack')).toBeUndefined();
   });
 
@@ -79,9 +79,9 @@ describe('buildOverlay — nothing selected', () => {
   it('a click selects the label for label-side boxes and the prediction for a false alarm', () => {
     expect(rect(o, 'label:found')?.selectId).toBe('found');
     // Both boxes of a matched pair select the same thing: the label.
-    expect(rect(o, 'model:pred:frame-1:0')?.selectId).toBe('found');
-    expect(rect(o, 'model:pred:frame-1:2')?.selectId).toBe('hidden');
-    expect(rect(o, 'model:pred:frame-1:3')?.selectId).toBe('pred:frame-1:3');
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:0')?.selectId).toBe('found');
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:2')?.selectId).toBe('hidden');
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:3')?.selectId).toBe('pred:frame-1:CAM_TEST:3');
   });
 
   it('paints large boxes first so small ones end up on top', () => {
@@ -94,23 +94,23 @@ describe('buildOverlay — a result selected', () => {
   it('found: both boxes emphasised and captioned, the rest dimmed, focus around the pair', () => {
     const o = overlay('found');
     expect(rect(o, 'label:found')).toMatchObject({ emphasis: 'selected', caption: 'label · person' });
-    expect(rect(o, 'model:pred:frame-1:0')).toMatchObject({
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:0')).toMatchObject({
       emphasis: 'selected',
       caption: 'model · person 0.90',
     });
     expect(rect(o, 'label:missed')?.emphasis).toBe('dim');
-    expect(rect(o, 'model:pred:frame-1:3')?.emphasis).toBe('dim');
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:3')?.emphasis).toBe('dim');
     expect(o.focus).toEqual(box(0, 0, 105, 205));
   });
 
   it('selecting by the matched prediction id resolves to the same pair', () => {
-    expect(overlay('pred:frame-1:0').focus).toEqual(box(0, 0, 105, 205));
+    expect(overlay('pred:frame-1:CAM_TEST:0').focus).toEqual(box(0, 0, 105, 205));
   });
 
   it('missed: adds the closest model box as context even though it is below the minimum score', () => {
     const o = overlay('missed');
     expect(rect(o, 'label:missed')).toMatchObject({ emphasis: 'selected', caption: 'label · person' });
-    const context = rect(o, 'model:pred:frame-1:1');
+    const context = rect(o, 'model:pred:frame-1:CAM_TEST:1');
     expect(context).toMatchObject({
       emphasis: 'normal',
       dashed: false,
@@ -123,8 +123,8 @@ describe('buildOverlay — a result selected', () => {
   });
 
   it('false alarm: emphasised alone when no label is under it', () => {
-    const o = overlay('pred:frame-1:3');
-    expect(rect(o, 'model:pred:frame-1:3')).toMatchObject({
+    const o = overlay('pred:frame-1:CAM_TEST:3');
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:3')).toMatchObject({
       emphasis: 'selected',
       caption: 'model · person 0.50',
     });
@@ -134,7 +134,7 @@ describe('buildOverlay — a result selected', () => {
   it('not scored: the label and the model boxes set aside with it', () => {
     const o = overlay('hidden');
     expect(rect(o, 'label:hidden')?.emphasis).toBe('selected');
-    expect(rect(o, 'model:pred:frame-1:2')?.emphasis).toBe('selected');
+    expect(rect(o, 'model:pred:frame-1:CAM_TEST:2')?.emphasis).toBe('selected');
   });
 
   it('a selected box that is not evaluated is still shown, in grey, and focused', () => {
@@ -167,7 +167,7 @@ describe('buildOverlay — companion of a false alarm', () => {
   const ev = evaluateFrame(f, preds, RULES);
 
   it('keeps the label under it readable (not dimmed) and captions it; focus covers both', () => {
-    const o = buildOverlay(f, preds, ev, { selectedId: 'pred:frame-1:1', filter: ALL });
+    const o = buildOverlay(f, preds, ev, { selectedId: 'pred:frame-1:CAM_TEST:1', filter: ALL });
     const labelRect = o.rects.find((r) => r.key === 'label:p');
     // The label is a visible "found" result: it keeps its outcome colour.
     expect(labelRect).toMatchObject({
@@ -176,13 +176,13 @@ describe('buildOverlay — companion of a false alarm', () => {
       caption: 'label · person',
       selectId: 'p',
     });
-    expect(o.rects.find((r) => r.key === 'model:pred:frame-1:0')?.emphasis).toBe('dim');
+    expect(o.rects.find((r) => r.key === 'model:pred:frame-1:CAM_TEST:0')?.emphasis).toBe('dim');
     expect(o.focus).toEqual(box(0, 0, 110, 200));
   });
 
   it('adds the label as grey context when its own result is filtered out', () => {
-    const o = buildOverlay(f, preds, ev, { selectedId: 'pred:frame-1:1', filter: only('false-alarm') });
-    expect(o.rects.map((r) => r.key).sort()).toEqual(['label:p', 'model:pred:frame-1:1']);
+    const o = buildOverlay(f, preds, ev, { selectedId: 'pred:frame-1:CAM_TEST:1', filter: only('false-alarm') });
+    expect(o.rects.map((r) => r.key).sort()).toEqual(['label:p', 'model:pred:frame-1:CAM_TEST:1']);
     expect(o.rects.find((r) => r.key === 'label:p')).toMatchObject({
       color: CONTEXT_COLOR,
       dashed: true,
@@ -218,5 +218,53 @@ describe('buildOverlay — bad geometry', () => {
     const o = buildOverlay(f, preds, ev, { selectedId: 'flat', filter: ALL });
     expect(o.rects).toEqual([]);
     expect(o.focus).toBeNull();
+  });
+});
+
+describe('buildOverlay — boxes left out in a bicycle rack (F6)', () => {
+  const rackFrame = makeFrame([
+    { id: 'rack', class: 'static_object.bicycle_rack', bbox: box(1000, 400, 400, 100) },
+    { id: 'walker', bbox: box(0, 0, 100, 200) },
+  ]);
+  const rackPredictions = [
+    makePrediction(0, 'person', 0.9, box(0, 0, 100, 200)),
+    makePrediction(1, 'bicycle', 0.6, box(1100, 410, 60, 80)),
+  ];
+  const rackEvaluation = evaluateFrame(rackFrame, rackPredictions, RULES);
+  const all = { kinds: new Set<EvalKind>(), classes: new Set<string>() };
+  const overlayOf = (selectedId: string | null, filter = all) =>
+    buildOverlay(rackFrame, rackPredictions, rackEvaluation, { selectedId, filter });
+  const rect = (overlay: ReturnType<typeof overlayOf>, key: string) => overlay.rects.find((r) => r.key === key);
+
+  it('draws the left-out box and its rack in grey: the model did report it', () => {
+    const overlay = overlayOf(null);
+    expect(rect(overlay, 'model:pred:frame-1:CAM_TEST:1')).toMatchObject({ color: NOT_EVALUATED_COLOR, dashed: false, emphasis: 'normal' });
+    expect(rect(overlay, 'label:rack')).toMatchObject({ color: NOT_EVALUATED_COLOR, dashed: true });
+  });
+
+  it('the left-out box selects nothing (it is not a result); the rack is a label and can be selected', () => {
+    const overlay = overlayOf(null);
+    expect(rect(overlay, 'model:pred:frame-1:CAM_TEST:1')?.selectId).toBeUndefined();
+    expect(rect(overlay, 'label:rack')?.selectId).toBe('rack');
+  });
+
+  it('is dimmed with everything else when a result is selected', () => {
+    expect(rect(overlayOf('walker'), 'model:pred:frame-1:CAM_TEST:1')?.emphasis).toBe('dim');
+  });
+
+  it('with the rack selected, the rack is captioned "not evaluated" and its boxes stay readable', () => {
+    const overlay = overlayOf('rack');
+    expect(rect(overlay, 'label:rack')).toMatchObject({ emphasis: 'selected', caption: 'label · static_object.bicycle_rack · not evaluated' });
+    expect(rect(overlay, 'model:pred:frame-1:CAM_TEST:1')?.emphasis).toBe('normal');
+    expect(overlay.focus).toEqual(box(1000, 400, 400, 100));
+  });
+
+  it('is shown and hidden together with the "not scored" results, and follows the class chips', () => {
+    const onlyMissed = { kinds: new Set<EvalKind>(['missed']), classes: new Set<string>() };
+    expect(rect(overlayOf(null, onlyMissed), 'model:pred:frame-1:CAM_TEST:1')).toBeUndefined();
+    const notScored = { kinds: new Set<EvalKind>(['not-scored']), classes: new Set<string>() };
+    expect(rect(overlayOf(null, notScored), 'model:pred:frame-1:CAM_TEST:1')).toBeDefined();
+    const onlyPeople = { kinds: new Set<EvalKind>(), classes: new Set(['person']) };
+    expect(rect(overlayOf(null, onlyPeople), 'model:pred:frame-1:CAM_TEST:1')).toBeUndefined();
   });
 });

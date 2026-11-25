@@ -37,6 +37,24 @@ export const EVALUATED_CLASSES: readonly string[] = [
 
 const EVALUATED = new Set(EVALUATED_CLASSES);
 
+/**
+ * (F6) The label class that marks a GROUP of objects labelled as one: a
+ * bicycle rack. The parser leaves this nuScenes category unmapped, so this is
+ * its raw name.
+ */
+export const BICYCLE_RACK_CLASS = 'static_object.bicycle_rack';
+
+/**
+ * (F6) Model classes that a rack swallows: what stands in a bicycle rack. The
+ * same two the nuScenes detection benchmark filters inside bike racks.
+ */
+const RACK_MEMBER_CLASSES = new Set(['bicycle', 'motorcycle']);
+
+/** Whether a prediction of this (app) class is left out when it sits inside a bicycle rack. */
+export function isRackMemberClass(appClass: string): boolean {
+  return RACK_MEMBER_CLASSES.has(appClass);
+}
+
 /** The app class a model class is compared against, or `null` when it is not evaluated. */
 export function toEvaluatedClass(modelClass: string): string | null {
   return MODEL_CLASS_TO_APP_CLASS.get(modelClass) ?? null;
