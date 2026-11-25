@@ -22,6 +22,7 @@ import { AnalyticsPanel } from '@/components/analytics';
 import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
 import {
   ExportMenu,
+  PracticeScoreCard,
   QueueBar,
   ReviewControls,
   ReviewProgress,
@@ -35,15 +36,18 @@ import {
   buildReviewExport,
   getReview,
   getReviewBlock,
+  makePracticeSet,
   nextFrameWithUnreviewed,
   nextUnreviewed,
   orderBoxes,
   reviewExportFilename,
   reviewExportToCsv,
   reviewExportToJson,
+  scorePractice,
   stepInQueue,
   summarizeProgress,
   verdictsOfFrame,
+  type PlantedError,
   type QueueOrder,
   type RejectReason,
   type ReviewAction,
@@ -51,7 +55,7 @@ import {
   type ReviewScope,
   type Verdict,
 } from '@/lib/review';
-import { useReviewStore, useViewerStore } from '@/store';
+import { REVIEW_STORAGE_KEY, useReviewStore, useViewerStore } from '@/store';
 import type { Frame } from '@/lib/types';
 
 // Static sample sources, one per dataset. Both are served from /public; there
@@ -93,6 +97,17 @@ export default function Index() {
   // review starts zoomed; Z or the corner toggle shows the whole photo. A VIEW
   // flag, like `cameraMode`: no effect on selection (Rule #2).
   const [cameraZoom, setCameraZoom] = useState(true);
+  // (F4-F) Practice mode: the same nuScenes scene with a few boxes deliberately
+  // made wrong (lib/review/practice), to practise — and score — catching errors.
+  //  - `practice` is what the user ASKED for (the toggle);
+  //  - `plantedErrors` is set together with `frames`, so it says what the data
+  //    on screen actually IS: null = the real annotations, an array = the
+  //    practice set and its answer key.
+  // Everything that must stay honest (badge, labels, review scope, export flag)
+  // keys on `plantedErrors`, never on the toggle — so nothing can claim
+  // "practice" or "measured" for one render while the other data is still shown.
+  const [practice, setPractice] = useState(false);
+  const [plantedErrors, setPlantedErrors] = useState<PlantedError[] | null>(null);
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -126,15 +141,31 @@ export default function Index() {
   const clearReview = useReviewStore((s) => s.clearReview);
   const resetReviewScope = useReviewStore((s) => s.resetScope);
   const reviewStorageFailed = useReviewStore((s) => s.storageFailed);
-  // Practice mode (modified boxes, its own records) arrives in F4-F.
-  const reviewScope: ReviewScope = 'nuscenes';
+  // Practice verdicts are about modified boxes; they live in their own scope
+  // and never mix with verdicts on the real annotations.
+  const reviewScope: ReviewScope = plantedErrors ? 'nuscenes-practice' : 'nuscenes';
   const reviews = reviewsByScope[reviewScope];
 
   // (F4) Load saved reviews AFTER mount. The store starts empty on both the
   // server render and the browser's first render, so the two match; this effect
   // then fills it from localStorage (see `skipHydration` in review-store).
+  //
+  // The same storage is shared by every tab of this app. Each tab keeps its own
+  // in-memory copy and saves ALL records on every change, so without syncing, a
+  // tab that was opened earlier would overwrite what another tab saved since
+  // (verified: 3 approvals made in tab A vanished after one verdict in tab B).
+  // The browser fires `storage` in the OTHER tabs whenever one tab writes;
+  // re-reading then keeps every tab on the latest records.
   useEffect(() => {
     void useReviewStore.persist.rehydrate();
+    const onStorage = (event: StorageEvent) => {
+      // key === null means the whole storage was cleared.
+      if (event.key === REVIEW_STORAGE_KEY || event.key === null) {
+        void useReviewStore.persist.rehydrate();
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   // Load the active dataset. Re-runs on dataset switch; clears stale frames so
@@ -143,24 +174,42 @@ export default function Index() {
   useEffect(() => {
     const ac = new AbortController();
     setFrames(null);
+    setPlantedErrors(null);
     setError(null);
     fetch(DATASET_SOURCES[datasetId], { signal: ac.signal })
       .then((r) => r.json())
       .then((raw) => {
         // COCO: parse → estimate 3D (enrichFrame). nuScenes: parseNuScenes
         // already returns measured, enriched frames — do not estimate again.
-        const parsed =
-          datasetId === 'coco'
-            ? parseCoco(raw).map((f) => enrichFrame(f))
-            : parseNuScenes(raw);
-        setFrames(parsed);
+        if (datasetId === 'coco') {
+          setFrames(parseCoco(raw).map((f) => enrichFrame(f)));
+          return;
+        }
+        // (F4-F) Practice set: modify a few boxes in the RAW data, then parse as
+        // usual — 3D boxes, camera projections and ids all follow from the same
+        // modified values. The file on disk is never changed.
+        if (practice) {
+          // Which boxes the camera sees decides where an error is FAIR (a wrong
+          // class can only be recognised in the photo). That needs one plain
+          // parse of the original data first; the practice set is parsed after.
+          const seen = new Set(
+            parseNuScenes(raw).flatMap((f) => f.detections2D.map((d) => `${f.id}/${d.id}`)),
+          );
+          const set = makePracticeSet(raw, {
+            inCamera: (frameToken, instanceToken) => seen.has(`${frameToken}/${instanceToken}`),
+          });
+          setFrames(parseNuScenes(set.prepped));
+          setPlantedErrors(set.planted);
+        } else {
+          setFrames(parseNuScenes(raw));
+        }
       })
       .catch((err) => {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         setError(String(err));
       });
     return () => ac.abort();
-  }, [datasetId]);
+  }, [datasetId, practice]);
 
   // Auto-select frames[0] when no valid frame is selected. Edge_#3 Case 3 (a):
   // the timeline policy is "always exactly one frame selected" — there is no
@@ -315,11 +364,15 @@ export default function Index() {
         : queue.filter((id) => !getReview(reviews, currentFrameId, id)).length,
     [queue, reviews, currentFrameId],
   );
-  // The next frame that still has unreviewed boxes (for the N shortcut).
+  // The next frame that still has unreviewed boxes the current filters let
+  // through (for the N shortcut) — the same rule as the queue, so N never lands
+  // on a frame whose remaining boxes are all hidden.
   const nextReviewFrameId = useMemo(
     () =>
-      reviewEnabled && frames ? nextFrameWithUnreviewed(frames, reviews, currentFrameId) : null,
-    [reviewEnabled, frames, reviews, currentFrameId],
+      reviewEnabled && frames
+        ? nextFrameWithUnreviewed(frames, reviews, currentFrameId, visibleIds3DOf)
+        : null,
+    [reviewEnabled, frames, reviews, currentFrameId, visibleIds3DOf],
   );
 
   // Approve and Unsure move on to the next unreviewed box of the queue, so a
@@ -518,8 +571,29 @@ export default function Index() {
       setIsPlaying(false); // (F2-C) stop autoplay when leaving the sequence
       setCameraMode('fixed'); // (F2-D-1) reset to the default overview camera
       setQueueOrder('scene'); // (F4) back to the dataset order
+      setPractice(false); // (F4-F) practice is a nuScenes-only mode
     },
     [datasetId, setSelectedObject, resetFilters],
+  );
+
+  // (F4-F) Enter / leave practice mode. The data reloads (the loader effect
+  // depends on `practice`); the frame position is kept (same frame ids), the
+  // object selection and playback are not — the boxes themselves change.
+  const handleTogglePractice = useCallback(() => {
+    setPractice((p) => !p);
+    setSelectedObject(null);
+    setIsPlaying(false);
+  }, [setSelectedObject]);
+  const practiceScores = useMemo(
+    () =>
+      plantedErrors && currentFrameId
+        ? {
+            frame: scorePractice(plantedErrors, reviews, currentFrameId),
+            overall: scorePractice(plantedErrors, reviews),
+            plantedInFrame: plantedErrors.filter((p) => p.frameId === currentFrameId),
+          }
+        : null,
+    [plantedErrors, reviews, currentFrameId],
   );
 
   // (F3) Every state — loading, error, empty, loaded — renders inside the same
@@ -539,6 +613,9 @@ export default function Index() {
       datasetId={datasetId}
       onSelectDataset={handleSelectDataset}
       source={currentFrame?.source}
+      practiceActive={plantedErrors !== null}
+      practiceRequested={practice}
+      onTogglePractice={datasetId === 'nuscenes' ? handleTogglePractice : undefined}
     >
       {reviewProgress && (
         <>
@@ -600,7 +677,13 @@ export default function Index() {
   // claims measured depth for estimated data (Immutable Rule #6). The camera name
   // is fixed because scripts/prep_nuscenes.py exports CAM_FRONT only (until F6).
   const isMeasured = currentFrame.source === 'nuscenes-measured';
-  const label3D = isMeasured ? 'LiDAR · measured 3D' : '3D · estimated from 2D';
+  // Practice set: the points are still measured, the boxes are not the
+  // dataset's any more — the tag must not read "measured 3D".
+  const label3D = plantedErrors
+    ? 'LiDAR measured · boxes modified (practice)'
+    : isMeasured
+      ? 'LiDAR · measured 3D'
+      : '3D · estimated from 2D';
   const label2D = isMeasured ? 'CAM_FRONT' : 'Image';
   const frameReviewCounts = reviewProgress?.byFrame.get(currentFrame.id);
   // (F4-D) Dataset facts about the selected box, for the strip above the
@@ -713,6 +796,16 @@ export default function Index() {
                     Frame {frameIndex} · {frameReviewCounts.reviewed}/{frameReviewCounts.total}
                   </span>
                 ),
+                bodyTop: practiceScores ? (
+                  <PracticeScoreCard
+                    // Keyed on the frame: "Reveal answers" resets per frame.
+                    key={currentFrame.id}
+                    frameScore={practiceScores.frame}
+                    overallScore={practiceScores.overall}
+                    plantedInFrame={practiceScores.plantedInFrame}
+                    onSelect={setSelectedObject}
+                  />
+                ) : undefined,
                 controls: (
                   <ReviewControls
                     record={
@@ -728,6 +821,11 @@ export default function Index() {
                     onClear={handleClearReview}
                     queueDone={queue.length > 0 && queueRemaining === 0}
                     onNextFrame={nextReviewFrameId ? handleNextReviewFrame : undefined}
+                    hiddenUnreviewed={
+                      reviewProgress
+                        ? reviewProgress.overall.total - reviewProgress.overall.reviewed
+                        : 0
+                    }
                   />
                 ),
               }

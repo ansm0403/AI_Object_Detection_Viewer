@@ -25,7 +25,9 @@ export function ReviewProgress({ counts, notSaved = false }: Props) {
   return (
     <div
       className="flex items-center gap-2 text-xs text-zinc-400 tabular-nums"
-      title="Reviewed boxes across all frames"
+      // The two counts below are hidden under 1280px (the top bar must stay on
+      // one line); the tooltip keeps them reachable there.
+      title={`Reviewed boxes across all frames — ${counts.approved} approved, ${counts.rejected} rejected, ${counts.unsure} unsure`}
     >
       <span>
         Reviewed <span className="font-semibold text-zinc-100">{counts.reviewed}</span> /{' '}
@@ -43,10 +45,10 @@ export function ReviewProgress({ counts, notSaved = false }: Props) {
         <span className="bg-zinc-400" style={{ width: width(counts.unsure) }} />
         <span className="bg-rose-400" style={{ width: width(counts.rejected) }} />
       </span>
-      <span className={counts.rejected > 0 ? 'text-rose-300' : 'text-zinc-600'}>
+      <span className={`hidden xl:inline ${counts.rejected > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
         {counts.rejected} rejected
       </span>
-      <span className={counts.unsure > 0 ? 'text-zinc-300' : 'text-zinc-600'}>
+      <span className={`hidden xl:inline ${counts.unsure > 0 ? 'text-zinc-300' : 'text-zinc-600'}`}>
         {counts.unsure} unsure
       </span>
       {notSaved && (

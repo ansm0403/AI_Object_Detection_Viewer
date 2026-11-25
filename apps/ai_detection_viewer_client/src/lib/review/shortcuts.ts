@@ -24,6 +24,8 @@ export type ReviewAction =
 /** The parts of a `KeyboardEvent` the resolver reads (kept minimal for tests). */
 export type ShortcutEvent = {
   key: string;
+  /** Physical key, e.g. "KeyA" / "Digit2" — independent of the input language. */
+  code?: string;
   ctrlKey?: boolean;
   metaKey?: boolean;
   altKey?: boolean;
@@ -82,6 +84,30 @@ export function isTypingTarget(target: unknown): boolean {
 }
 
 /**
+ * The character a key press stands for, lower-cased, for matching shortcuts.
+ *
+ * Normally that is `event.key`. But with a non-Latin input method active
+ * (Korean, Japanese, …) the same physical key reports a Hangul letter such as
+ * "ㅁ", or "Process" while the IME is composing — and the shortcuts would
+ * silently stop working until the user switches language. In that case the
+ * PHYSICAL key (`event.code`: "KeyA", "Digit2") decides instead.
+ */
+function shortcutKey(event: ShortcutEvent): string {
+  const { key, code } = event;
+  if (/^[a-z0-9]$/i.test(key)) return key.toLowerCase();
+  // A named key ("Enter", "Escape", …) or ASCII punctuation: never a fallback.
+  const nonAscii = key.length === 1 && key.charCodeAt(0) > 127; // e.g. a Hangul letter
+  const fromInputMethod = key === 'Process' || key === 'Unidentified' || nonAscii;
+  if (fromInputMethod && code) {
+    const letter = /^Key([A-Z])$/.exec(code);
+    if (letter) return letter[1].toLowerCase();
+    const digit = /^Digit([0-9])$/.exec(code);
+    if (digit) return digit[1];
+  }
+  return key;
+}
+
+/**
  * The review action for a key press, or `null` when the press is not a
  * shortcut.
  *
@@ -96,7 +122,7 @@ export function resolveShortcut(event: ShortcutEvent): ReviewAction | null {
   if (event.ctrlKey || event.metaKey || event.altKey) return null;
   if (isTypingTarget(event.target)) return null;
 
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  const key = shortcutKey(event);
 
   if (key === 'j') return { type: 'step', direction: 1 };
   if (key === 'k') return { type: 'step', direction: -1 };

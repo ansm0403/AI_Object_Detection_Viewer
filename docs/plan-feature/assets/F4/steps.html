@@ -81,6 +81,13 @@ const SHOTS = [
     note: '<b>검수 기록 초기화.</b> "Reset reviews…"를 누르면 바로 지워지지 않고 <b>"Click again to delete N"</b>으로 바뀝니다. 한 번 더 눌러야 지워집니다. 서버에 사본이 없어 되돌릴 수 없기 때문입니다. 메뉴를 닫으면 다시 처음 상태로 돌아갑니다.' },
   { step: 'E', name: 'E3 저장이 안 될 때', file: 'stepE3_not_saved', sizes: ['1536x700'],
     note: '<b>브라우저 저장소가 가득 찼거나 차단된 상황을 일부러 만든 화면.</b> 판정은 그대로 동작하고, 상단에 주황색 <b>NOT SAVED</b>가 뜹니다(마우스를 올리면 이유와 "내보내기로 보관하라"는 설명). 이 상태에서도 Export는 됩니다. 평소에는 보이지 않는 표시입니다.' },
+  { step: 'F', name: 'F1 연습 모드 켬', file: 'stepF1_practice_on', sizes: ['1536x700', '1280x720'],
+    mock: { '1536x700': 'E_practice' },
+    note: '<b>F4-F 실제 앱.</b> 상단의 <b>Practice</b>를 켠 화면입니다. 같은 장면에서 박스 몇 개(프레임마다 약 10%)를 일부러 어긋나게 만든 연습용 데이터입니다. 볼 곳: ① 상단 배지가 초록 "MEASURED"에서 주황 <b>"PRACTICE · LABELS MODIFIED"</b>로 바뀝니다. ② 3D 이름표도 "LIDAR MEASURED · BOXES MODIFIED (PRACTICE)"가 됩니다. ③ 진행률이 0부터 다시 시작합니다(연습의 판정은 원본 기록과 따로 보관). ④ 패널에 <b>PRACTICE SCORE</b> 칸이 생깁니다. 1280×720 화면은 "Reveal answers"로 정답을 펼친 상태입니다.' },
+  { step: 'F', name: 'F2 채점', file: 'stepF2_practice_scored', sizes: ['1536x700'],
+    note: '<b>연습 중 채점.</b> 심어 둔 오류 하나를 반려(맞는 사유 "Wrong position" 선택)하고, 하나는 승인해 버리고, 멀쩡한 박스 하나를 반려한 상태입니다. 채점 칸(패널을 조금 내리면 보임)은 <b>Found 1 / 4 · Missed 1 · False alarms 1</b>이 됩니다. Found = 찾음, Missed = 놓침(오류를 승인), False alarm = 헛짚음(멀쩡한 박스를 반려). F5에서 모델을 채점할 때 쓰는 구조(TP / FN / FP)와 같습니다.' },
+  { step: 'F', name: 'F3 심어 둔 크기 오류', file: 'stepF3_practice_size_error', sizes: ['1536x700'],
+    note: '<b>심어 둔 오류가 어떻게 보이는지.</b> 프레임 2의 보행자 박스를 0.56배로 줄인 것입니다. 카메라 확대에서 흰 선(3D 박스)이 사람의 다리 부분만 덮고 있어 틀렸다는 것이 바로 보입니다. 이렇게 "사진에서 확인할 수 있는 박스"에 오류의 절반 이상을 심습니다. 클래스 오류(예: 사람을 자전거로)는 사진으로만 알 수 있어서 카메라에 보이는 박스에만 심습니다.' },
 ];
 // 처음 열면 가장 최근 단계의 첫 화면을 보여준다.
 let shot = SHOTS.find((s) => s.step === SHOTS[SHOTS.length - 1].step), size = shot.sizes[0], showMock = false;

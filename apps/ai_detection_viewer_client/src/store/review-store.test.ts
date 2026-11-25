@@ -197,6 +197,26 @@ describe('review store persistence', () => {
     expect(store.getState().storageFailed).toBe(true);
   });
 
+  it('clears storageFailed once a later save succeeds, and that save holds everything', () => {
+    const data = new Map<string, string>();
+    let full = true;
+    const store = createReviewStore(() => ({
+      getItem: (name) => data.get(name) ?? null,
+      setItem: (name, value) => {
+        if (full) throw new DOMException('quota', 'QuotaExceededError');
+        data.set(name, value);
+      },
+      removeItem: (name) => void data.delete(name),
+    }));
+    store.getState().setVerdict('nuscenes', 'f1', 'a', 'approved', NOW);
+    expect(store.getState().storageFailed).toBe(true);
+    full = false; // space was freed
+    store.getState().setVerdict('nuscenes', 'f1', 'b', 'rejected', NOW);
+    expect(store.getState().storageFailed).toBe(false);
+    // The record made while saving failed is in the saved data too.
+    expect(Object.keys(saved(data).state.reviews.nuscenes)).toEqual(['f1/a', 'f1/b']);
+  });
+
   it('keeps working and raises storageFailed when storage access itself throws (blocked)', async () => {
     const store = createReviewStore(() => {
       throw new DOMException('denied', 'SecurityError');

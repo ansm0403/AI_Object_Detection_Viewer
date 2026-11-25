@@ -23,6 +23,8 @@ type Props = {
   title?: string;
   headerRight?: ReactNode;
   controls?: ReactNode;
+  // (F4-F) Extra content at the top of the SCROLLING area (the practice score).
+  bodyTop?: ReactNode;
 };
 
 export function AnalyticsPanel({
@@ -36,12 +38,14 @@ export function AnalyticsPanel({
   title = 'Analytics',
   headerRight,
   controls,
+  bodyTop,
 }: Props) {
   return (
     <aside className={`flex flex-col h-full ${PANEL_CLASS}`}>
       <PanelHeader title={title}>{headerRight}</PanelHeader>
       {controls}
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {bodyTop}
         <SelectedObjectInfo frame={frame} selectedId={selectedId} />
         {/* Measured (nuScenes) frames have no model scores — every box would
             land in the top bucket as a fake "100%" distribution (Rule #6). Swap

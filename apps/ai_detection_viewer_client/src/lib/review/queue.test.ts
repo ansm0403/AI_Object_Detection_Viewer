@@ -174,6 +174,20 @@ describe('nextFrameWithUnreviewed', () => {
     expect(nextFrameWithUnreviewed([f1, empty, f3], {}, 'f1')).toBe('f3');
   });
 
+  it('with filters: skips a frame whose unreviewed boxes are all filtered out', () => {
+    // f2's only box is hidden by the filter; f3's is visible.
+    const visibleIdsOf = (frame: { id: string }) => new Set(frame.id === 'f2' ? [] : ['a', 'b', 'c']);
+    expect(nextFrameWithUnreviewed(frames, {}, 'f1', visibleIdsOf)).toBe('f3');
+  });
+
+  it('with filters: null when what is left everywhere is hidden (no bouncing)', () => {
+    const reviews = approve({}, 'f3', 'c');
+    const visibleIdsOf = () => new Set(['c']); // f1 and f2 have nothing visible
+    expect(nextFrameWithUnreviewed(frames, reviews, 'f3', visibleIdsOf)).toBeNull();
+    // Without the filter those frames do count.
+    expect(nextFrameWithUnreviewed(frames, reviews, 'f3')).toBe('f1');
+  });
+
   it('starts from the first frame when the current id is unknown', () => {
     expect(nextFrameWithUnreviewed(frames, {}, null)).toBe('f1');
     expect(nextFrameWithUnreviewed([], {}, null)).toBeNull();

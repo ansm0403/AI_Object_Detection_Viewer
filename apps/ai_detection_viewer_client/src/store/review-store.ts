@@ -37,9 +37,10 @@ const STORAGE_VERSION = 1;
 type ReviewState = {
   reviews: ReviewsByScope;
   /**
-   * True once reading from or writing to browser storage has failed (storage
+   * True while reading from or writing to browser storage is failing (storage
    * blocked, or full). Reviews still work for this visit — they just will not
-   * survive a reload — and the UI says so instead of failing silently.
+   * survive a reload — and the UI says so instead of failing silently. Goes
+   * back to false after the next save that succeeds.
    */
   storageFailed: boolean;
 };
@@ -96,6 +97,8 @@ const browserBackend: StorageBackend = () =>
 export function createSafeStorage(
   backend: StorageBackend,
   onError: (error: unknown) => void,
+  /** Called after a write that really reached the storage. */
+  onSaved?: () => void,
 ): StateStorage {
   const attempt = <T>(action: (storage: NonNullable<ReturnType<StorageBackend>>) => T, fallback: T): T => {
     try {
@@ -108,7 +111,11 @@ export function createSafeStorage(
   };
   return {
     getItem: (name) => attempt((s) => s.getItem(name), null),
-    setItem: (name, value) => attempt((s) => s.setItem(name, value), undefined),
+    setItem: (name, value) =>
+      attempt((s) => {
+        s.setItem(name, value);
+        onSaved?.();
+      }, undefined),
     removeItem: (name) => attempt((s) => s.removeItem(name), undefined),
   };
 }
@@ -157,11 +164,19 @@ export function createReviewStore(backend: StorageBackend = browserBackend) {
         name: REVIEW_STORAGE_KEY,
         version: STORAGE_VERSION,
         storage: createJSONStorage(() =>
-          createSafeStorage(backend, () => {
-            // Guarded: setState itself triggers another save attempt, which
-            // would fail again and loop without this check.
-            if (!store.getState().storageFailed) store.setState({ storageFailed: true });
-          }),
+          createSafeStorage(
+            backend,
+            () => {
+              // Guarded: setState itself triggers another save attempt, which
+              // would fail again and loop without this check.
+              if (!store.getState().storageFailed) store.setState({ storageFailed: true });
+            },
+            () => {
+              // Saving works (again): every save writes ALL records, so nothing
+              // from the failed attempts is missing — the warning can go.
+              if (store.getState().storageFailed) store.setState({ storageFailed: false });
+            },
+          ),
         ),
         // Only the records are saved — not the failure flag.
         partialize: (state) => ({ reviews: state.reviews }),

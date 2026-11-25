@@ -106,22 +106,28 @@ export function nextUnreviewed(
 
 /**
  * The id of the next frame (after `currentFrameId`, wrapping) that still has an
- * unreviewed box. Looks at ALL boxes of each frame, not at the filtered queue:
- * "is this frame finished" is a fact about the data, not about the current
- * filter. `null` when every other frame is fully reviewed.
+ * unreviewed box the reviewer could actually work on.
+ *
+ * `visibleIdsOf` gives, per frame, the ids that pass the current filters — the
+ * same rule that builds the queue. With it, a frame whose only unreviewed boxes
+ * are filtered out is skipped: jumping there would land on an empty queue and
+ * offer the jump again, bouncing between frames. Without it every box counts.
+ * `null` when no other frame qualifies.
  */
 export function nextFrameWithUnreviewed(
   frames: Frame[],
   reviews: ReviewMap,
   currentFrameId: string | null,
+  visibleIdsOf?: (frame: Frame) => Set<string>,
 ): string | null {
   if (frames.length === 0) return null;
   const start = frames.findIndex((f) => f.id === currentFrameId);
   for (let step = 1; step <= frames.length; step += 1) {
     const frame = frames[(start + step + frames.length) % frames.length];
     if (frame.id === currentFrameId) continue;
+    const visible = visibleIdsOf?.(frame);
     const hasUnreviewed = frame.detections3D.some(
-      (box) => !getReview(reviews, frame.id, box.id),
+      (box) => (!visible || visible.has(box.id)) && !getReview(reviews, frame.id, box.id),
     );
     if (hasUnreviewed) return frame.id;
   }

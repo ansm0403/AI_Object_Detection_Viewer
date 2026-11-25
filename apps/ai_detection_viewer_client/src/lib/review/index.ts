@@ -45,5 +45,18 @@ export {
 } from './export';
 export type { ReviewExport, ReviewExportFileType, ReviewExportRow } from './export';
 export { sanitizeReviews } from './persisted';
+export {
+  DEFAULT_PRACTICE_SEED,
+  EXPECTED_REASON,
+  makePracticeSet,
+  scorePractice,
+} from './practice';
+export type {
+  InCameraFn,
+  PlantedError,
+  PracticeErrorKind,
+  PracticeOptions,
+  PracticeScore,
+} from './practice';
 export { SHORTCUT_KEYS, isTypingTarget, resolveShortcut } from './shortcuts';
 export type { ReviewAction, ShortcutEvent } from './shortcuts';

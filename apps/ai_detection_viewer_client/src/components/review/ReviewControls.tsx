@@ -31,6 +31,12 @@ type Props = {
   queueDone: boolean;
   /** Jump to the next frame with unreviewed boxes; absent when there is none. */
   onNextFrame?: () => void;
+  /**
+   * Unreviewed boxes that exist but are not reachable right now because the
+   * filters hide them. Only shown when the queue is done and there is no frame
+   * to jump to — so the panel never claims "all done" while boxes remain.
+   */
+  hiddenUnreviewed: number;
 };
 
 /**
@@ -52,6 +58,7 @@ export function ReviewControls({
   onClear,
   queueDone,
   onNextFrame,
+  hiddenUnreviewed,
 }: Props) {
   const verdict = record?.verdict;
   const disabled = blocked !== null;
@@ -181,7 +188,13 @@ export function ReviewControls({
 
       {queueDone && (
         <div className="flex items-center justify-between gap-2 rounded-md bg-emerald-400/10 px-2.5 py-1.5 text-[11px] text-emerald-200 ring-1 ring-inset ring-emerald-400/25">
-          <span>{onNextFrame ? 'No unreviewed boxes left in this list' : 'Every box is reviewed'}</span>
+          <span>
+            {onNextFrame
+              ? 'No unreviewed boxes left in this list'
+              : hiddenUnreviewed > 0
+                ? `Nothing left with these filters · ${hiddenUnreviewed} unreviewed hidden`
+                : 'Every box is reviewed'}
+          </span>
           {onNextFrame && (
             <button
               type="button"

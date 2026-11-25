@@ -44,6 +44,37 @@ describe('resolveShortcut — key map', () => {
   });
 });
 
+describe('resolveShortcut — non-Latin input methods', () => {
+  it('uses the physical key when the key is a Hangul letter (Korean input on)', () => {
+    expect(resolveShortcut({ key: 'ㅁ', code: 'KeyA' })).toEqual({ type: 'verdict', verdict: 'approved' });
+    expect(resolveShortcut({ key: 'ㄱ', code: 'KeyR' })).toEqual({ type: 'verdict', verdict: 'rejected' });
+    expect(resolveShortcut({ key: 'ㅓ', code: 'KeyJ' })).toEqual({ type: 'step', direction: 1 });
+  });
+
+  it('uses the physical key while an IME is composing ("Process")', () => {
+    expect(resolveShortcut({ key: 'Process', code: 'KeyU' })).toEqual({ type: 'verdict', verdict: 'unsure' });
+    expect(resolveShortcut({ key: 'Process', code: 'Digit2' })).toEqual({ type: 'reason', reason: 'wrong_size' });
+  });
+
+  it('prefers the typed Latin letter when there is one (e.g. a Dvorak layout)', () => {
+    // On Dvorak the physical KeyA position types "a" too, but KeyJ types "h":
+    // the character the user typed wins over the physical position.
+    expect(resolveShortcut({ key: 'h', code: 'KeyJ' })).toBeNull();
+    expect(resolveShortcut({ key: 'j', code: 'KeyC' })).toEqual({ type: 'step', direction: 1 });
+  });
+
+  it('does not turn named keys or punctuation into shortcuts via their code', () => {
+    expect(resolveShortcut({ key: 'Enter', code: 'KeyA' })).toBeNull();
+    expect(resolveShortcut({ key: '!', code: 'Digit1' })).toBeNull();
+    expect(resolveShortcut({ key: 'ㅁ' })).toBeNull(); // no code to fall back to
+    expect(resolveShortcut({ key: 'ㅁ', code: 'Semicolon' })).toBeNull();
+  });
+
+  it('still ignores input-method keys while typing in a text field', () => {
+    expect(resolveShortcut({ key: 'ㅁ', code: 'KeyA', target: { tagName: 'INPUT', type: 'text' } })).toBeNull();
+  });
+});
+
 describe('resolveShortcut — when shortcuts must not fire', () => {
   it('ignores combinations with Ctrl / Meta / Alt (e.g. Ctrl+R reloads)', () => {
     expect(press('r', { ctrlKey: true })).toBeNull();
