@@ -11,6 +11,7 @@ import {
   type EvalKind,
   type EvalResult,
   type FrameEvaluation,
+  type ObjectOutcome,
   type Prediction2D,
   type ResultFilter,
 } from '@/lib/evaluation';
@@ -20,8 +21,19 @@ type Input = {
   frame: Frame | null;
   /** The model's predictions for this frame (all scores), if it was run on it. */
   predictions: readonly Prediction2D[] | undefined;
-  /** The frame's evaluation, or `null` when there is none (not evaluating, no predictions). */
+  /**
+   * The evaluation of the PHOTO on screen (`frame` is the frame as that camera
+   * sees it), or `null` when there is none (not evaluating, no predictions).
+   */
   frameEvaluation: FrameEvaluation | null;
+  /**
+   * (F6) What became of each labelled object across ALL cameras of the frame —
+   * the 3D boxes are coloured by this, not by the one photo on screen. `null`
+   * when no photo of the frame was evaluated.
+   */
+  objectOutcomes: ReadonlyMap<string, ObjectOutcome> | null;
+  /** The frame with all its 3D boxes (the same object for every camera). */
+  boxFrame: Frame | null;
   /** The app's single selection (`selectedObjectId`). */
   selectedId: string | null;
   /** Class chips of the filter bar (empty = all). */
@@ -45,7 +57,8 @@ export type FrameResults = {
 };
 
 /**
- * Everything the evaluate-mode panes derive from one frame's evaluation (F5),
+ * Everything the evaluate-mode panes derive from one photo's evaluation (F5;
+ * F6: the photo of the camera on screen, plus the per-object colours),
  * memoised in one place so the page only wires it up.
  *
  * It holds no state and decides nothing itself: order, filtering, the overlay
@@ -55,6 +68,8 @@ export function useFrameResults({
   frame,
   predictions,
   frameEvaluation,
+  objectOutcomes,
+  boxFrame,
   selectedId,
   classes,
   kinds,
@@ -77,8 +92,8 @@ export function useFrameResults({
     [frame, predictions, frameEvaluation, selectedId, filter],
   );
   const boxColors = useMemo(
-    () => (frame && frameEvaluation ? boxOutcomeColors(frame, frameEvaluation) : null),
-    [frame, frameEvaluation],
+    () => (boxFrame && objectOutcomes ? boxOutcomeColors(boxFrame, objectOutcomes) : null),
+    [boxFrame, objectOutcomes],
   );
   return { filter, ordered, queue, selectedResult, overlay, boxColors };
 }

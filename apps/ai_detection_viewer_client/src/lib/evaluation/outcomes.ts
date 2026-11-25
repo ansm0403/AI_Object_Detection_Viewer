@@ -19,6 +19,16 @@ export const OUTCOME_LABEL: Record<EvalKind, string> = {
   'not-scored': 'Not scored',
 };
 
+/**
+ * The outcome as it reads after a count: "1 false alarm", "5 false alarms".
+ * Only "false alarm" is a noun that takes a plural; "3 missed", "3 found" and
+ * "3 not scored" do not change.
+ */
+export function outcomeCountLabel(kind: EvalKind, count: number): string {
+  const label = OUTCOME_LABEL[kind].toLowerCase();
+  return kind === 'false-alarm' && count !== 1 ? `${label}s` : label;
+}
+
 /** One-line meaning, for tooltips. Facts about the comparison, not verdicts on the model. */
 export const OUTCOME_HINT: Record<EvalKind, string> = {
   found: 'A model box of the same class overlaps this label enough (true positive)',
@@ -36,8 +46,8 @@ export const OUTCOME_COLOR: Record<EvalKind, string> = {
 };
 
 /**
- * A box that takes no part in the evaluation (outside the camera image, or of
- * a class the model cannot name). Same grey as "not scored": neither counts.
+ * A box that takes no part in the evaluation (no camera's photo shows it, or it
+ * is of a class the model cannot name). Same grey as "not scored": neither counts.
  */
 export const NOT_EVALUATED_COLOR = '#71717a';
 

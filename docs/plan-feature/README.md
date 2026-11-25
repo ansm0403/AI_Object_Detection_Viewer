@@ -36,7 +36,7 @@ Post-MVP 기능을 **구현하기 전에** 쓰는 설계 문서 모음이다. �
 | F3 | 스크롤 없는 작업 화면 | [F3_workspace_layout.md](F3_workspace_layout.md) | **구현 완료 (2026-11-25).** 결과와 계획 대비 달라진 점은 체크리스트 F3 항목. 시안과 캡처는 [assets/F3/](assets/F3/README.md) |
 | F4 | 3D 박스 검수 | [F4_box_review.md](F4_box_review.md) | **구현 완료 (2026-11-25).** 결과와 계획 대비 달라진 점은 체크리스트 F4 항목, 경계 사례는 `docs/edgecases/Edge_F#4.md`. 시안과 단계별 캡처는 [assets/F4/](assets/F4/README.md) |
 | F5 | 카메라 탐지 평가 | [F5_camera_detection_eval.md](F5_camera_detection_eval.md) | **구현 완료 (2026-11-26).** 결과와 계획 대비 달라진 점은 체크리스트 F5 항목, 경계 사례는 `docs/edgecases/Edge_F#5.md`. 시안과 단계별 캡처는 [assets/F5/](assets/F5/README.md) |
-| F6 | 카메라 6대 | 아직 없음 | |
+| F6 | 카메라 6대 | [F6_six_cameras.md](F6_six_cameras.md) | **구현 완료 (2026-11-26).** 결과와 계획 대비 달라진 점은 체크리스트 F6 항목, 경계 사례는 `docs/edgecases/Edge_F#6.md`. 시안과 단계별 캡처는 [assets/F6/](assets/F6/README.md) |
 | F7 | 장면 탐색 | 아직 없음 | |
 | F8 (도전) | 위에서 본 화면에서 3D 박스 수정 | 아직 없음 | |
 

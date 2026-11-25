@@ -19,7 +19,9 @@ export type ReviewAction =
   /** Jump to the next frame that still has unreviewed boxes. */
   | { type: 'next-frame' }
   /** Camera image: full view ↔ zoom on the selected box. */
-  | { type: 'toggle-zoom' };
+  | { type: 'toggle-zoom' }
+  /** (F6) Show the neighbouring camera: +1 = the next one to the right, −1 = to the left. */
+  | { type: 'camera'; direction: 1 | -1 };
 
 /** The parts of a `KeyboardEvent` the resolver reads (kept minimal for tests). */
 export type ShortcutEvent = {
@@ -44,6 +46,8 @@ export const SHORTCUT_KEYS = {
   previous: 'K',
   nextFrame: 'N',
   zoom: 'Z',
+  previousCamera: '[',
+  nextCamera: ']',
 } as const;
 
 // <input> types that take typed text. A range slider or a checkbox is an
@@ -141,6 +145,12 @@ export function resolveShortcut(event: ShortcutEvent): ReviewAction | null {
       return { type: 'next-frame' };
     case 'z':
       return { type: 'toggle-zoom' };
+    // (F6) Brackets step through the cameras. Far from the verdict keys on
+    // purpose; the digits are taken by the reject reasons.
+    case '[':
+      return { type: 'camera', direction: -1 };
+    case ']':
+      return { type: 'camera', direction: 1 };
     default:
       break;
   }

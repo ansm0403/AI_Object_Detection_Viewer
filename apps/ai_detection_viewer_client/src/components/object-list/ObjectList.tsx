@@ -2,6 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react';
 import type { Detection3D, Frame } from '@/lib/types';
+import { bestViewsByObject, cameraShortName } from '@/lib/cameras';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { displayId } from '@/lib/ui/display-id';
 import { PANEL_CLASS, PanelHeader, useScrollSelectedIntoView } from '@/components/workspace';
@@ -34,12 +35,12 @@ type ObjectListProps = {
 };
 
 /**
- * (F3, decision 4) Lists every 3D box of the frame, not only the ones the
+ * (F3, decision 4) Lists every 3D box of the frame, not only the ones one
  * camera sees. The 3D view is the main view (Rule #5), and on nuScenes most
- * boxes are beside / behind the front camera and have no 2D projection — they
- * were reachable only by clicking in the 3D view before. Rows on measured
- * frames show whether the box is in the camera image and its distance from the
- * ego vehicle. COCO is 1:1 (2D and 3D share ids), so it lists the same objects.
+ * boxes are beside / behind the front camera — they were reachable only by
+ * clicking in the 3D view before. Rows on measured frames show (F6) which
+ * camera's photo shows the box and its distance from the ego vehicle. COCO is
+ * 1:1 (2D and 3D share ids), so it lists the same objects.
  */
 export function ObjectList({
   frame,
@@ -55,7 +56,15 @@ export function ObjectList({
   // the list (3D / camera click, J / K, auto-advance after a verdict) or when
   // the list is re-ordered. (F5) The logic moved, unchanged, into a hook shared
   // with the evaluation result list.
-  const selectedRef = useScrollSelectedIntoView(selectedId, orderKey);
+  //
+  // (F6) The row's POSITION is part of the key, not only the ordering's name:
+  // under "Unsure first" a verdict moves the selected row to another group while
+  // the selection and the ordering stay the same (rejecting the top unsure box
+  // sent its row about 900px below the visible list — Edge_F#6 Case 1). The result
+  // list had the same need in F5 (Edge_F#5 Case 3).
+  const listed = orderedBoxes ?? frame.detections3D;
+  const selectedIndex = selectedId ? listed.findIndex((box) => box.id === selectedId) : -1;
+  const selectedRef = useScrollSelectedIntoView(selectedId, `${orderKey ?? ''}:${selectedIndex}`);
   // Measured (nuScenes) frames have no model score — the parser's 1.0 is a
   // placeholder, so the confidence gauge is not shown (Rule #6).
   const showConfidence = frameHasConfidence(frame);
@@ -63,13 +72,14 @@ export function ObjectList({
   // (some boxes have no projection). On COCO both would be fake or trivially
   // true, so neither is shown there.
   const isMeasured = frame.source === 'nuscenes-measured';
-  // A 3D box is "in the camera" when it has a 2D projection with the same id
-  // (Immutable Rule #1: same object → same id across 2D and 3D).
-  const idsInCamera = useMemo(
-    () => new Set(frame.detections2D.map((d) => d.id)),
-    [frame],
-  );
+  // A 3D box is "seen by a camera" when it has a 2D projection with the same id
+  // in that camera's photo (Immutable Rule #1: same object → same id across 2D
+  // and 3D). (F6) Asked of EVERY camera of the frame, best view first — not of
+  // `frame.detections2D`, which is the default camera alone.
+  const camerasById = useMemo(() => bestViewsByObject(frame), [frame]);
+  const cameraCount = frame.cameras?.length ?? 1;
   const boxes = orderedBoxes ?? frame.detections3D;
+  const unseenCount = boxes.reduce((n, box) => n + (camerasById.has(box.id) ? 0 : 1), 0);
 
   return (
     <div
@@ -79,9 +89,18 @@ export function ObjectList({
       <div onClick={(e) => e.stopPropagation()}>
         <PanelHeader title="Objects" count={boxes.length}>
           {isMeasured && (
-            <span className="flex items-center gap-1 text-[11px] text-zinc-500 tabular-nums">
+            <span
+              className="flex items-center gap-1 text-[11px] text-zinc-500 tabular-nums"
+              title={
+                cameraCount > 1
+                  ? `${boxes.length - unseenCount} of ${boxes.length} boxes are in at least one of the ${cameraCount} camera photos`
+                  : undefined
+              }
+            >
               <CameraIcon inCamera />
-              {idsInCamera.size} in camera
+              {cameraCount > 1
+                ? `${cameraCount} cameras${unseenCount > 0 ? ` · ${unseenCount} unseen` : ''}`
+                : `${boxes.length - unseenCount} in camera`}
             </span>
           )}
         </PanelHeader>
@@ -97,7 +116,7 @@ export function ObjectList({
           {boxes.map((d) => {
             const isSelected = d.id === selectedId;
             const isHidden = visibleIds ? !visibleIds.has(d.id) : false;
-            const inCamera = idsInCamera.has(d.id);
+            const seenBy = camerasById.get(d.id) ?? NO_CAMERAS;
             const color = getClassColor(d.class);
 
             return (
@@ -129,7 +148,12 @@ export function ObjectList({
                 <span title={d.class} className="flex-1 min-w-0 text-sm text-zinc-100 truncate">
                   {d.class}
                 </span>
-                {isMeasured && <CameraIcon inCamera={inCamera} />}
+                {isMeasured &&
+                  (cameraCount > 1 ? (
+                    <CameraTag seenBy={seenBy} />
+                  ) : (
+                    <CameraIcon inCamera={seenBy.length > 0} />
+                  ))}
                 {/* (F4) LiDAR evidence — only when the data carries the count. */}
                 {d.annotation?.lidarPoints !== undefined && (
                   <EvidenceBars points={d.annotation.lidarPoints} />
@@ -149,7 +173,10 @@ export function ObjectList({
                   </span>
                 ) : isMeasured ? (
                   // Measured distance from the ego vehicle (real metres).
-                  <span className="text-[11px] text-zinc-500 tabular-nums w-10 text-right shrink-0">
+                  // (F6) Narrower below 1400px: the camera tag next to it took
+                  // 10px more than the icon it replaced, and the class name
+                  // must not pay for it.
+                  <span className="text-[11px] text-zinc-500 tabular-nums w-8 min-[1400px]:w-10 text-right shrink-0">
                     {Math.round(detectionDistance(d))} m
                   </span>
                 ) : (
@@ -172,6 +199,29 @@ export function ObjectList({
         </ul>
       )}
     </div>
+  );
+}
+
+const NO_CAMERAS: string[] = [];
+
+// (F6) Which camera shows the box, on frames with several cameras: the short
+// name of its best view ("FR"), plus "+" when a second camera sees it too. The
+// row is narrow, so the full list of cameras is in the tooltip (and in the
+// evidence line of the selected box). "—" = no camera sees it.
+function CameraTag({ seenBy }: { seenBy: string[] }) {
+  const label =
+    seenBy.length === 0 ? 'No camera sees this box' : `Seen by ${seenBy.join(', ')}`;
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={`shrink-0 w-[22px] text-right text-[10px] font-semibold tracking-wide tabular-nums ${
+        seenBy.length === 0 ? 'text-zinc-700' : 'text-zinc-400'
+      }`}
+    >
+      {seenBy.length === 0 ? '—' : cameraShortName(seenBy[0])}
+      {seenBy.length > 1 && <span className="text-zinc-500">+</span>}
+    </span>
   );
 }
 

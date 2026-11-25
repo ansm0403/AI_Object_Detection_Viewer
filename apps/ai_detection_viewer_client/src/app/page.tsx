@@ -15,6 +15,13 @@ import {
   selectVisibleDetectionIds3D,
 } from '@/lib/selectors';
 import { Viewer2D } from '@/components/viewer-2d';
+import {
+  CameraStrip,
+  CameraStripPlaceholder,
+  useActiveCamera,
+  usePhotoPreload,
+  type CameraThumb,
+} from '@/components/camera';
 import { Viewer3D } from '@/components/viewer-3d';
 import { ObjectList } from '@/components/object-list';
 import { Filters } from '@/components/filters';
@@ -32,20 +39,33 @@ import {
   SelectedResult,
   useFrameResults,
   usePredictions,
+  type NotEvaluatedBox,
   type WorkMode,
 } from '@/components/evaluation';
 import {
+  BICYCLE_RACK_CLASS,
   DEFAULT_MIN_SCORE,
   IOU_THRESHOLD,
+  describeOtherViews,
   evaluateFrames,
   findResult,
   isPredictionId,
+  outcomeCountLabel,
   selectionIdOf,
   visibilityText,
   type EvalKind,
   type EvaluationRules,
 } from '@/lib/evaluation';
 import { DISTANCE_MAX } from '@/lib/ui/distance';
+import {
+  camerasByBestView,
+  cameraShortName,
+  cameraViews,
+  frameAsCamera,
+  inDisplayOrder,
+  preloadOrder,
+  stepCamera,
+} from '@/lib/cameras';
 import {
   ExportMenu,
   PracticeScoreCard,
@@ -65,6 +85,7 @@ import {
   makePracticeSet,
   nextFrameWithUnreviewed,
   nextUnreviewed,
+  nextUnsure,
   orderBoxes,
   reviewExportFilename,
   reviewExportToCsv,
@@ -97,6 +118,12 @@ const DATASET_SOURCES: Record<DatasetId, string> = {
 const PREDICTION_SOURCES: Partial<Record<DatasetId, string>> = {
   nuscenes: '/sample-data/nuscenes/predictions.json',
 };
+
+// (F6) How many frames ahead of the current one the photos are fetched in the
+// background. One frame is six photos (~0.8 MB) and playback moves every half
+// second, so they must be there before they are shown. The sample has ten
+// frames, so this fetches all of them (8 MB); a larger dataset (F7) lowers it.
+const PRELOAD_FRAMES_AHEAD = 10;
 
 // Set intersection (no Set.prototype.intersection in our target runtimes).
 const intersectIds = (a: Set<string>, b: Set<string>): Set<string> =>
@@ -238,8 +265,11 @@ export default function Index() {
           // Which boxes the camera sees decides where an error is FAIR (a wrong
           // class can only be recognised in the photo). That needs one plain
           // parse of the original data first; the practice set is parsed after.
+          // (F6) "The camera sees it" = ANY of the frame's cameras does.
           const seen = new Set(
-            parseNuScenes(raw).flatMap((f) => f.detections2D.map((d) => `${f.id}/${d.id}`)),
+            parseNuScenes(raw).flatMap((f) =>
+              cameraViews(f).flatMap((view) => view.detections2D.map((d) => `${f.id}/${d.id}`)),
+            ),
           );
           const set = makePracticeSet(raw, {
             inCamera: (frameToken, instanceToken) => seen.has(`${frameToken}/${instanceToken}`),
@@ -323,6 +353,42 @@ export default function Index() {
   // actually shown, like every other honesty check).
   const evaluating = mode === 'evaluate' && reviewEnabled && plantedErrors === null;
 
+  // (F6) Which camera the camera cell shows. A VIEW setting (not a selection,
+  // Rule #2): it follows the selected object — the photo that shows the box is
+  // put on screen — and a thumbnail click overrides it until the selection or
+  // the frame changes. The same in both modes: evaluate mode scores every
+  // camera's photo, and shows the one on screen.
+  const { activeCamera, setCamera, resetCamera } = useActiveCamera(currentFrame, selectedObjectId);
+  // The current frame AS THAT CAMERA SEES IT: its photo and its 2D boxes in
+  // the usual fields. Everything that deals with one photo (the 2D viewer,
+  // the 2D filter, the details panel's 2D row) takes this frame; everything
+  // about the objects themselves (3D view, list, review) takes `currentFrame`.
+  const viewFrame = useMemo(
+    () => (currentFrame ? frameAsCamera(currentFrame, activeCamera) : null),
+    [currentFrame, activeCamera],
+  );
+  // The frame's cameras in look-around order (thumbnail row, [ / ] keys).
+  // One entry for a single-camera frame (COCO, old sample files): no row.
+  const cameraRow = useMemo(
+    () => (currentFrame ? inDisplayOrder(cameraViews(currentFrame), (view) => view.name) : []),
+    [currentFrame],
+  );
+  // (F6) The most cameras any frame of the dataset has. The thumbnail row is
+  // laid out for this many, and is shown whenever it is more than one — also on
+  // a frame that happens to have fewer — so the panes do not move from frame to
+  // frame when the data is uneven (Edge_F#6 Case 2). COCO: 1 → no row.
+  const cameraSlots = useMemo(
+    () => (frames ? frames.reduce((max, frame) => Math.max(max, cameraViews(frame).length), 0) : 0),
+    [frames],
+  );
+  // Fetch the coming frames' photos in the background (nuScenes only: the
+  // frames that have several cameras).
+  const preloadUrls = useMemo(() => {
+    if (!frames || !currentFrame?.cameras) return [];
+    return preloadOrder(frames, frames.indexOf(currentFrame), PRELOAD_FRAMES_AHEAD);
+  }, [frames, currentFrame]);
+  usePhotoPreload(preloadUrls);
+
   // In evaluate mode the store's `confidenceThreshold` is the MODEL's minimum
   // score (set on entering, see `handleSelectMode`). It must not filter the
   // labels — they carry a placeholder confidence, not a score — and the
@@ -348,13 +414,13 @@ export default function Index() {
   // the distance filter. COCO is 1:1, so both sets coincide there.
   const visibleIds = useMemo(
     () =>
-      currentFrame
+      viewFrame
         ? intersectIds(
-            selectVisibleDetectionIds(currentFrame, labelThreshold, visibleClasses),
+            selectVisibleDetectionIds(viewFrame, labelThreshold, visibleClasses),
             withinDistance,
           )
         : new Set<string>(),
-    [currentFrame, labelThreshold, visibleClasses, withinDistance],
+    [viewFrame, labelThreshold, visibleClasses, withinDistance],
   );
   // The 3D rule as a function of the frame, so the SAME rule can be applied to
   // a frame other than the current one (F4: the queue of the frame we are about
@@ -414,22 +480,33 @@ export default function Index() {
         });
         continue;
       }
+      // (F6) Added over the frame's photos (one per camera).
       const { missed, found, falseAlarm } = result.counts;
+      const photos = result.byCamera.size;
       badges.set(frame.id, {
         text: `${missed} missed`,
         tone: missed > 0 ? 'alert' : 'good',
-        title: `${missed} missed · ${found} found · ${falseAlarm} false alarm${falseAlarm === 1 ? '' : 's'}`,
+        title: `${missed} missed · ${found} found · ${falseAlarm} ${outcomeCountLabel('false-alarm', falseAlarm)}${photos > 1 ? ` · in ${photos} photos` : ''}`,
       });
     }
     return badges;
   }, [evaluation, frames]);
-  // (F5) The current frame's results, as the list, the camera image and the
-  // J / K queue need them. `null` evaluation → empty list, no overlay.
+  // (F6) The current frame's evaluation: every photo of it, and the outcome
+  // per object across the cameras (what the 3D boxes are coloured by).
   const frameEvaluation = (currentFrame && evaluation?.byFrame.get(currentFrame.id)) ?? null;
+  // The evaluation of the PHOTO on screen — what the list, the camera image
+  // and the J / K queue show. `null` → empty list, no overlay.
+  const photoEvaluation =
+    (activeCamera !== null && frameEvaluation?.byCamera.get(activeCamera)) || null;
   const frameResults = useFrameResults({
-    frame: currentFrame,
-    predictions: currentFrame ? predictions.set?.byFrame.get(currentFrame.id) : undefined,
-    frameEvaluation,
+    frame: viewFrame,
+    predictions:
+      currentFrame && activeCamera !== null
+        ? predictions.set?.byFrame.get(currentFrame.id)?.get(activeCamera)
+        : undefined,
+    frameEvaluation: photoEvaluation,
+    objectOutcomes: frameEvaluation?.objects ?? null,
+    boxFrame: currentFrame,
     selectedId: selectedObjectId,
     classes: visibleClasses,
     kinds: shownKinds,
@@ -445,14 +522,15 @@ export default function Index() {
   // (F5) A false alarm is selected by its PREDICTION id, through the same
   // `selectedObjectId` as everything else (Rule #2). Such an id only means
   // something while that prediction is a result on screen: drop it when the
-  // frame changes, when evaluate mode is left, or when the score slider moves
-  // past it — otherwise an invisible "selection" would linger.
+  // frame changes, when evaluate mode is left, when the score slider moves past
+  // it, or (F6) when another camera's photo is shown — otherwise an invisible
+  // "selection" would linger.
   useEffect(() => {
     if (!selectedObjectId || !isPredictionId(selectedObjectId)) return;
-    if (!frameEvaluation || !findResult(frameEvaluation, selectedObjectId)) {
+    if (!photoEvaluation || !findResult(photoEvaluation, selectedObjectId)) {
       setSelectedObject(null);
     }
-  }, [selectedObjectId, frameEvaluation, setSelectedObject]);
+  }, [selectedObjectId, photoEvaluation, setSelectedObject]);
 
   const reviewProgress = useMemo(
     () => (reviewEnabled && frames ? summarizeProgress(frames, reviews) : null),
@@ -482,8 +560,17 @@ export default function Index() {
   // `orderedBoxes`; the queue is the part of it that passes the filters — the
   // boxes J / K walk and the pool "next unreviewed" is drawn from.
   const orderedBoxes = useMemo(
-    () => (currentFrame ? orderBoxes(currentFrame, reviewEnabled ? queueOrder : 'scene') : []),
-    [currentFrame, reviewEnabled, queueOrder],
+    () =>
+      currentFrame
+        ? orderBoxes(
+            currentFrame,
+            reviewEnabled ? queueOrder : 'scene',
+            // Only the "unsure first" order depends on the verdicts; the others
+            // must not re-sort on every key press.
+            queueOrder === 'unsure' ? reviews : undefined,
+          )
+        : [],
+    [currentFrame, reviewEnabled, queueOrder, reviews],
   );
   const queue = useMemo(() => buildQueue(orderedBoxes, visibleIds3D), [orderedBoxes, visibleIds3D]);
   const queueRemaining = useMemo(
@@ -516,7 +603,12 @@ export default function Index() {
       // Read the records AFTER the update (the `reviews` in this closure is the
       // pre-update snapshot and would still count this box as unreviewed).
       const latest = useReviewStore.getState().reviews[reviewScope];
-      const next = nextUnreviewed(queue, latest, currentFrameId, selectedObjectId);
+      // (F6) Working through the "unsure first" list: go on to the next box
+      // that is still unsure; when none is left, to the next unreviewed one.
+      const next =
+        (queueOrder === 'unsure'
+          ? nextUnsure(queue, latest, currentFrameId, selectedObjectId)
+          : null) ?? nextUnreviewed(queue, latest, currentFrameId, selectedObjectId);
       if (next) setSelectedObject(next);
     },
     [
@@ -526,6 +618,7 @@ export default function Index() {
       reviewScope,
       setVerdict,
       queue,
+      queueOrder,
       setSelectedObject,
     ],
   );
@@ -582,7 +675,10 @@ export default function Index() {
     if (!target) return;
     setIsPlaying(false);
     setSelectedFrame(target.id);
-    const targetQueue = buildQueue(orderBoxes(target, queueOrder), visibleIds3DOf(target));
+    const targetQueue = buildQueue(
+      orderBoxes(target, queueOrder, reviews),
+      visibleIds3DOf(target),
+    );
     setSelectedObject(nextUnreviewed(targetQueue, reviews, target.id, null));
   }, [
     frames,
@@ -602,8 +698,25 @@ export default function Index() {
       // (F5) Evaluate mode only looks: moving through the list (J / K) and the
       // camera zoom (Z) work; the keys that WRITE a review do nothing, so a
       // stray "A" cannot approve a box whose verdict is not even on screen.
-      if (evaluating && action.type !== 'step' && action.type !== 'toggle-zoom') return;
+      if (
+        evaluating &&
+        action.type !== 'step' &&
+        action.type !== 'toggle-zoom' &&
+        action.type !== 'camera'
+      ) {
+        return;
+      }
       switch (action.type) {
+        case 'camera': {
+          // (F6) The camera to the left / right in the thumbnail row.
+          const next = stepCamera(
+            cameraRow.map((view) => view.name),
+            activeCamera,
+            action.direction,
+          );
+          if (next !== null && cameraRow.length > 1) setCamera(next);
+          break;
+        }
         case 'verdict':
           handleVerdict(action.verdict);
           break;
@@ -634,6 +747,9 @@ export default function Index() {
     },
     [
       evaluating,
+      cameraRow,
+      activeCamera,
+      setCamera,
       frameResults.queue,
       frameResults.selectedResult,
       handleVerdict,
@@ -716,8 +832,9 @@ export default function Index() {
       setPractice(false); // (F4-F) practice is a nuScenes-only mode
       setMode('review'); // (F5) evaluate is a nuScenes-only mode
       setShownKinds(new Set()); // (F5) show every outcome again
+      resetCamera(); // (F6) back to the default camera
     },
-    [datasetId, setSelectedObject, resetFilters],
+    [datasetId, setSelectedObject, resetFilters, resetCamera],
   );
 
   // (F5) Switch between reviewing and evaluating. The frame and the selected
@@ -806,7 +923,7 @@ export default function Index() {
           modelName={predictions.set?.model.name}
           basis={
             evaluation
-              ? `All ${evaluation.evaluatedFrames} evaluated frames · ${predictions.set?.camera ?? 'camera'} · score ≥ ${confidenceThreshold.toFixed(2)} · IoU ≥ ${IOU_THRESHOLD} · small sample`
+              ? `All ${evaluation.evaluatedPhotos} evaluated photos (${evaluation.evaluatedFrames} frames × ${evaluation.byCamera.length} camera${evaluation.byCamera.length === 1 ? '' : 's'}), each scored on its own · score ≥ ${confidenceThreshold.toFixed(2)} · IoU ≥ ${IOU_THRESHOLD} · small sample`
               : undefined
           }
         />
@@ -825,7 +942,7 @@ export default function Index() {
     </Header>
   );
 
-  if (error || !frames || frames.length === 0 || !currentFrame) {
+  if (error || !frames || frames.length === 0 || !currentFrame || !viewFrame) {
     // Loading (no frames yet) and the one render between frames arriving and
     // the auto-select effect firing (no currentFrame) both show skeletons.
     const loading = !error && (!frames || frames.length > 0);
@@ -860,6 +977,11 @@ export default function Index() {
         list={pane}
         main={mainContent}
         camera={pane}
+        // (F6) nuScenes has the thumbnail row; keep its place while loading
+        // so the details panel does not jump when the photos arrive.
+        cameraStrip={
+          datasetId === 'nuscenes' ? <CameraStripPlaceholder pulse={loading} /> : undefined
+        }
         details={<PanePlaceholder pulse={loading} className="min-h-48 lg:min-h-0" />}
         timeline={<PanePlaceholder pulse={loading} className="min-h-[84px]" />}
       />
@@ -873,7 +995,7 @@ export default function Index() {
   const filterMode = datasetId === 'nuscenes' && !evaluating ? 'distance' : 'confidence';
   // (F3) Viewer name tags, keyed on the frame's provenance so the 3D tag never
   // claims measured depth for estimated data (Immutable Rule #6). The camera name
-  // is fixed because scripts/prep_nuscenes.py exports CAM_FRONT only (until F6).
+  // is the camera on screen (F6); a frame without camera names says "Image".
   const isMeasured = currentFrame.source === 'nuscenes-measured';
   // Practice set: the points are still measured, the boxes are not the
   // dataset's any more — the tag must not read "measured 3D".
@@ -882,7 +1004,7 @@ export default function Index() {
     : isMeasured
       ? 'LiDAR · measured 3D'
       : '3D · estimated from 2D';
-  const label2D = isMeasured ? 'CAM_FRONT' : 'Image';
+  const label2D = isMeasured && activeCamera ? activeCamera : 'Image';
   const frameReviewCounts = reviewProgress?.byFrame.get(currentFrame.id);
   // (F4-D) Dataset facts about the selected box, for the strip above the
   // verdict buttons. Null when nothing (in this frame) is selected.
@@ -893,9 +1015,73 @@ export default function Index() {
     ? {
         lidarPoints: selectedBox.annotation?.lidarPoints,
         visibility: selectedBox.annotation?.visibility,
-        inCamera: currentFrame.detections2D.some((d) => d.id === selectedBox.id),
+        // (F6) Every camera whose photo shows the box, best view first.
+        seenBy: camerasByBestView(currentFrame, selectedBox.id),
       }
     : null;
+  // (F6) The thumbnail row: each camera's photo, and where the selected box is
+  // in it. Only for frames with several cameras. In evaluate mode each
+  // thumbnail also says how many labels the model missed in that photo.
+  const showCameraStrip = cameraSlots > 1;
+  const cameraThumbs: CameraThumb[] = cameraRow.map((view) => {
+    const box = selectedObjectId
+      ? view.detections2D.find((d) => d.id === selectedObjectId)
+      : undefined;
+    const photo = evaluating ? frameEvaluation?.byCamera.get(view.name) : undefined;
+    const badge: CameraThumb['badge'] =
+      !evaluating || !frameEvaluation
+        ? undefined
+        : photo
+          ? {
+              text: String(photo.counts.missed),
+              tone: photo.counts.missed > 0 ? 'alert' : 'muted',
+              title: `${photo.counts.missed} missed · ${photo.counts.found} found · ${photo.counts.falseAlarm} ${outcomeCountLabel('false-alarm', photo.counts.falseAlarm)} in this photo`,
+            }
+          : { text: '–', tone: 'muted', title: 'No predictions for this photo — not evaluated' };
+    return {
+      name: view.name,
+      imageUrl: view.imageUrl,
+      ...(badge ? { badge } : {}),
+      ...(box
+        ? {
+            marker: {
+              x: box.bbox.x / view.imageWidth,
+              y: box.bbox.y / view.imageHeight,
+              width: box.bbox.width / view.imageWidth,
+              height: box.bbox.height / view.imageHeight,
+            },
+          }
+        : {}),
+    };
+  });
+  // (F6) Evaluate mode: the selected 3D box has no result in the photo on
+  // screen. Four different reasons, and the panel must not confuse them.
+  const selectedNotEvaluated: NotEvaluatedBox | null = (() => {
+    if (frameResults.selectedResult || !selectedBox || !selectedEvidence) return null;
+    const base = { class: selectedBox.class, distance: detectionDistance(selectedBox) };
+    const inPhoto = viewFrame.detections2D.some((d) => d.id === selectedBox.id);
+    if (inPhoto && selectedBox.class === BICYCLE_RACK_CLASS) {
+      return {
+        ...base,
+        reason: 'group-region',
+        ignoredCount:
+          photoEvaluation?.ignored.filter((i) => i.regionObjectId === selectedBox.id).length ?? 0,
+      };
+    }
+    if (inPhoto) return { ...base, reason: 'class-not-evaluated' };
+    if (selectedEvidence.seenBy.length === 0) return { ...base, reason: 'no-camera' };
+    // In another camera's photo: say how it did there, or at least where it is.
+    const elsewhere = describeOtherViews(frameEvaluation?.objects.get(selectedBox.id), activeCamera);
+    return {
+      ...base,
+      reason: 'outside-camera',
+      where: elsewhere ?? `seen by ${selectedEvidence.seenBy.map(cameraShortName).join(', ')}`,
+    };
+  })();
+  // The selected box is not in the photo on screen: say which camera has it.
+  const otherCameras = (selectedEvidence?.seenBy ?? []).filter((name) => name !== activeCamera);
+  const outsideNote =
+    otherCameras.length > 0 ? `seen by ${otherCameras.map(cameraShortName).join(', ')}` : undefined;
 
   return (
     <WorkspaceShell
@@ -933,22 +1119,27 @@ export default function Index() {
           // its boxes. A click still goes through the one `selectedObjectId`.
           <ResultList
             results={frameResults.ordered}
-            counts={frameEvaluation?.counts ?? null}
+            // (F6) The list is the photo on screen; its title says which camera.
+            scope={cameraRow.length > 1 && activeCamera ? cameraShortName(activeCamera) : undefined}
+            scopeTitle={activeCamera ?? undefined}
+            counts={photoEvaluation?.counts ?? null}
             filter={frameResults.filter}
             onToggleKind={handleToggleKind}
             selectedId={
               frameResults.selectedResult ? selectionIdOf(frameResults.selectedResult) : null
             }
             onSelect={setSelectedObject}
-            notEvaluated={frameEvaluation?.notEvaluated ?? 0}
+            notEvaluated={photoEvaluation?.notEvaluated ?? 0}
             unavailable={
-              frameEvaluation
+              photoEvaluation
                 ? undefined
                 : predictions.status === 'loading'
                   ? 'Loading predictions…'
-                  : predictions.set
-                    ? 'No predictions for this frame — not evaluated.'
-                    : 'Predictions unavailable.'
+                  : !predictions.set
+                    ? 'Predictions unavailable.'
+                    : frameEvaluation
+                      ? 'No predictions for this photo — not evaluated.'
+                      : 'No predictions for this frame — not evaluated.'
             }
           />
         ) : (
@@ -999,16 +1190,22 @@ export default function Index() {
           // same Canvas, the same camera. No evaluation for this frame → class
           // colours and no legend.
           boxColors={evaluating ? (frameResults.boxColors ?? undefined) : undefined}
-          legend={evaluating && frameResults.boxColors ? <BoxColorLegend /> : undefined}
+          legend={
+            evaluating && frameResults.boxColors ? (
+              <BoxColorLegend anyCamera={cameraRow.length > 1} />
+            ) : undefined
+          }
         />
       }
       camera={
         <Viewer2D
-          frame={currentFrame}
+          // (F6) The frame as the camera on screen sees it.
+          frame={viewFrame}
           selectedId={selectedObjectId}
           onSelect={setSelectedObject}
           visibleIds={visibleIds}
           label={label2D}
+          outsideNote={outsideNote}
           // (F4-D) Zoom + projected 3D box, only where 2D boxes ARE projections
           // of reviewed 3D boxes. COCO gets no toggle and stays as before.
           zoom={reviewEnabled && cameraZoom}
@@ -1022,6 +1219,17 @@ export default function Index() {
           legend={evaluating ? <OverlayLegend /> : undefined}
         />
       }
+      cameraStrip={
+        showCameraStrip && activeCamera !== null ? (
+          <CameraStrip
+            cameras={cameraThumbs}
+            activeName={activeCamera}
+            onSelect={setCamera}
+            slots={cameraSlots}
+            shortcutHint={`${SHORTCUT_KEYS.previousCamera} ${SHORTCUT_KEYS.nextCamera}`}
+          />
+        ) : undefined
+      }
       details={
         evaluating ? (
           // (F5) In evaluate mode the details panel is the evaluation panel.
@@ -1029,36 +1237,35 @@ export default function Index() {
             status={predictions.status === 'none' ? 'failed' : predictions.status}
             error={predictions.error}
             evaluation={evaluation}
-            frameEvaluation={evaluation?.byFrame.get(currentFrame.id) ?? null}
+            frameEvaluation={frameEvaluation}
             frameIndex={frameIndex}
             frameBoxCount={totalCount}
             model={predictions.set?.model}
-            camera={predictions.set?.camera}
             rules={evaluationRules}
             pinned={
               <SelectedResult
                 result={frameResults.selectedResult}
                 visibility={visibilityText(selectedBox?.annotation?.visibility)}
-                // A selected 3D box with no result: say why it is not scored.
-                notEvaluated={
-                  !frameResults.selectedResult && selectedBox && selectedEvidence
-                    ? {
-                        class: selectedBox.class,
-                        distance: detectionDistance(selectedBox),
-                        reason: selectedEvidence.inCamera
-                          ? 'class-not-evaluated'
-                          : 'outside-camera',
-                      }
+                // A selected 3D box with no result in this photo: say why.
+                notEvaluated={selectedNotEvaluated}
+                rules={evaluationRules}
+                camera={activeCamera ?? undefined}
+                // (F6) The same object in the other cameras' photos.
+                otherViews={
+                  frameResults.selectedResult && frameResults.selectedResult.kind !== 'false-alarm'
+                    ? describeOtherViews(
+                        frameEvaluation?.objects.get(frameResults.selectedResult.objectId),
+                        activeCamera,
+                      )
                     : null
                 }
-                rules={evaluationRules}
-                camera={predictions.set?.camera}
               />
             }
           />
         ) : (
         <AnalyticsPanel
-          frame={currentFrame}
+          // (F6) The 2D bbox row describes the box in the photo on screen.
+          frame={viewFrame}
           selectedId={selectedObjectId}
           buckets={confidenceBuckets}
           threshold={confidenceThreshold}

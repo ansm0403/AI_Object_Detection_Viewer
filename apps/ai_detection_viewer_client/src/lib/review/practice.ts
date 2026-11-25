@@ -66,7 +66,8 @@ const MIN_ELONGATION_FOR_HEADING = 1.5;
 const MIN_LENGTH_FOR_HEADING = 2;
 
 /**
- * Tells whether a box is visible in the camera image shown to the reviewer.
+ * Tells whether a box can be checked against a photo — (F6) whether at least one
+ * of the frame's cameras shows it.
  * The practice set uses it to stay FAIR:
  *  - a box in the camera can be checked against the photo even when it holds
  *    few LiDAR points, so it is a valid place for an error;

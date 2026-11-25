@@ -32,6 +32,7 @@ export {
   buildQueue,
   nextFrameWithUnreviewed,
   nextUnreviewed,
+  nextUnsure,
   orderBoxes,
   stepInQueue,
 } from './queue';

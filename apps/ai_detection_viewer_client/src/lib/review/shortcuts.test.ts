@@ -127,3 +127,32 @@ describe('isTypingTarget', () => {
     expect(isTypingTarget('body')).toBe(false);
   });
 });
+
+describe('resolveShortcut — camera keys (F6)', () => {
+  it('maps [ and ] to the camera on the left / right', () => {
+    expect(press('[')).toEqual({ type: 'camera', direction: -1 });
+    expect(press(']')).toEqual({ type: 'camera', direction: 1 });
+  });
+
+  it('acts once per press: a held bracket does not spin through the cameras', () => {
+    expect(press(']', { repeat: true })).toBeNull();
+    expect(press('[', { repeat: true })).toBeNull();
+  });
+
+  it('does nothing while typing or with a modifier', () => {
+    expect(press(']', { target: { tagName: 'TEXTAREA' } })).toBeNull();
+    expect(press('[', { ctrlKey: true })).toBeNull();
+    expect(press(']', { altKey: true })).toBeNull();
+  });
+
+  it('the shifted bracket keys ({ }) are not shortcuts', () => {
+    expect(press('{')).toBeNull();
+    expect(press('}')).toBeNull();
+  });
+
+  it('works with a Korean input method active (brackets are not composed)', () => {
+    expect(press(']', { code: 'BracketRight' })).toEqual({ type: 'camera', direction: 1 });
+    // While the IME reports "Process", punctuation is never guessed from the key code.
+    expect(press('Process', { code: 'BracketRight' })).toBeNull();
+  });
+});

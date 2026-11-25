@@ -1,4 +1,5 @@
 import type { Detection3D, Frame } from '@/lib/types';
+import { CAMERA_DISPLAY_ORDER, bestViewsByObject } from '@/lib/cameras';
 import { getReview } from './records';
 import type { ReviewMap } from './types';
 
@@ -7,12 +8,18 @@ import type { ReviewMap } from './types';
  *  - `scene`:    the dataset's own order.
  *  - `evidence`: fewest LiDAR points first, so the boxes with the weakest
  *                sensor evidence are looked at first.
- *  - `camera`:   boxes visible in the camera image first (they can be checked
- *                against the photo), the rest after.
+ *  - `camera`:   (F6) grouped by the camera that shows each box best, the
+ *                groups in look-around order (rear-left → front → rear), boxes
+ *                no camera sees last. Walking the queue then stays on one photo
+ *                for a run of boxes instead of jumping between cameras. With a
+ *                single camera this is the pre-F6 "in camera first".
+ *  - `unsure`:   (F6) boxes marked "unsure" first. Most of them were marked so
+ *                because the front camera did not show them; with six cameras
+ *                they can be looked at again.
  */
-export type QueueOrder = 'scene' | 'evidence' | 'camera';
+export type QueueOrder = 'scene' | 'evidence' | 'camera' | 'unsure';
 
-export const QUEUE_ORDERS: readonly QueueOrder[] = ['scene', 'evidence', 'camera'];
+export const QUEUE_ORDERS: readonly QueueOrder[] = ['scene', 'evidence', 'camera', 'unsure'];
 
 /**
  * The frame's 3D boxes in list order.
@@ -21,10 +28,14 @@ export const QUEUE_ORDERS: readonly QueueOrder[] = ['scene', 'evidence', 'camera
  * keep their relative position and the list does not reshuffle between renders.
  * A box without a LiDAR count (older sample file) sorts after all counted ones
  * under `evidence` — "unknown" must not masquerade as "no points".
+ *
+ * `reviews` is only read by the `unsure` order (it sorts by the current
+ * verdicts); without it that order is the dataset order.
  */
-export function orderBoxes(frame: Frame, order: QueueOrder): Detection3D[] {
+export function orderBoxes(frame: Frame, order: QueueOrder, reviews?: ReviewMap): Detection3D[] {
   const boxes = frame.detections3D;
   if (order === 'scene') return boxes;
+  if (order === 'unsure' && !reviews) return boxes;
 
   const indexed = boxes.map((box, index) => ({ box, index }));
   if (order === 'evidence') {
@@ -36,9 +47,22 @@ export function orderBoxes(frame: Frame, order: QueueOrder): Detection3D[] {
       if (pa !== pb) return pa < pb ? -1 : 1;
       return a.index - b.index;
     });
+  } else if (order === 'unsure') {
+    const rank = (b: Detection3D) =>
+      reviews && getReview(reviews, frame.id, b.id)?.verdict === 'unsure' ? 0 : 1;
+    indexed.sort((a, b) => rank(a.box) - rank(b.box) || a.index - b.index);
   } else {
-    const inCamera = new Set(frame.detections2D.map((d) => d.id));
-    const rank = (b: Detection3D) => (inCamera.has(b.id) ? 0 : 1);
+    // The camera a box is checked against is its best view — the same camera
+    // the page switches to when the box is selected (`pickCamera`).
+    const bestViews = bestViewsByObject(frame);
+    const UNKNOWN_CAMERA = CAMERA_DISPLAY_ORDER.length;
+    const NOT_SEEN = UNKNOWN_CAMERA + 1;
+    const rank = (b: Detection3D) => {
+      const best = bestViews.get(b.id)?.[0];
+      if (best === undefined) return NOT_SEEN;
+      const position = CAMERA_DISPLAY_ORDER.indexOf(best);
+      return position === -1 ? UNKNOWN_CAMERA : position;
+    };
     indexed.sort((a, b) => rank(a.box) - rank(b.box) || a.index - b.index);
   }
   return indexed.map((entry) => entry.box);
@@ -100,6 +124,30 @@ export function nextUnreviewed(
     const id = queue[(start + step + queue.length) % queue.length];
     if (id === currentId) continue;
     if (!getReview(reviews, frameId, id)) return id;
+  }
+  return null;
+}
+
+/**
+ * (F6) The next box in the queue whose verdict is "unsure", searching forward
+ * from `currentId` and wrapping. `currentId` itself is never returned. `null`
+ * when no other box is marked unsure.
+ *
+ * Used while the list is ordered "unsure first": after re-judging one of those
+ * boxes the reviewer wants the next one of them, not the next unreviewed box.
+ */
+export function nextUnsure(
+  queue: string[],
+  reviews: ReviewMap,
+  frameId: string,
+  currentId: string | null,
+): string | null {
+  if (queue.length === 0) return null;
+  const start = currentId === null ? -1 : queue.indexOf(currentId);
+  for (let step = 1; step <= queue.length; step += 1) {
+    const id = queue[(start + step + queue.length) % queue.length];
+    if (id === currentId) continue;
+    if (getReview(reviews, frameId, id)?.verdict === 'unsure') return id;
   }
   return null;
 }

@@ -36,6 +36,10 @@ type Viewer2DProps = {
   // (F5) Content of the legend pill in the bottom-left corner. Only used with
   // `overlay`, and then always shown (zoomed or not).
   legend?: ReactNode;
+  // (F6) What to say after "Selected box is outside <label>" — the page passes
+  // where the box IS (e.g. "seen by FR, BR"). Omitted → "check it in the 3D
+  // view", for a box no camera shows.
+  outsideNote?: string;
 };
 
 const SELECTED_STROKE_WIDTH = 4;
@@ -57,9 +61,12 @@ export function Viewer2D({
   zoomShortcut,
   overlay,
   legend,
+  outsideNote,
 }: Viewer2DProps) {
   const [imageError, setImageError] = useState(false);
-  useEffect(() => { setImageError(false); }, [frame.id]);
+  // (F6) Keyed on the photo, not only the frame: another camera of the same
+  // frame is another file, and its failure / success is its own.
+  useEffect(() => { setImageError(false); }, [frame.id, frame.imageUrl]);
   // 화면에 그릴 2D detection 목록을 만드는 부분. SVG는 CSS z-index를 무시하고
   // paint order(배열 순서)대로 hit-test 하므로, 면적 오름차순으로 정렬해 큰
   // bbox가 마지막에 그려지게 → 겹친 영역에서 큰 객체가 클릭 우선순위를 가짐.
@@ -269,7 +276,7 @@ export function Viewer2D({
         // (F5) Sits above the legend pill when there is one.
         className={`absolute left-1/2 ${overlay && legend ? 'bottom-9' : 'bottom-2.5'} z-10 -translate-x-1/2 whitespace-nowrap pointer-events-none select-none rounded px-2.5 py-1 text-[11px] text-amber-200 bg-zinc-950/80 ring-1 ring-amber-500/45`}
       >
-        Selected box is outside {label ?? 'this camera'} · check it in the 3D view
+        Selected box is outside {label ?? 'this camera'} · {outsideNote ?? 'check it in the 3D view'}
       </span>
     )}
     </div>

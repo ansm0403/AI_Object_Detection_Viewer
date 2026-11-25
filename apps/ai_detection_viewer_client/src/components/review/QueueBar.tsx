@@ -5,7 +5,10 @@ import { QUEUE_ORDERS, type QueueOrder } from '@/lib/review';
 const ORDER_LABELS: Record<QueueOrder, string> = {
   scene: 'Scene order',
   evidence: 'Fewest LiDAR pts',
-  camera: 'In camera first',
+  // (F6) Was "In camera first": with six cameras every box is in some camera,
+  // so the useful grouping is BY camera (the photo changes once per group).
+  camera: 'By camera',
+  unsure: 'Unsure first',
 };
 
 type Props = {

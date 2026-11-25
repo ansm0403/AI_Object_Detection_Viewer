@@ -4,6 +4,12 @@ import type { Box2D, Prediction2D } from './types';
 
 /** Tiny builders shared by the evaluation tests. */
 
+/**
+ * Camera name in the ids of test predictions. `evaluateFrame` scores ONE photo
+ * and does not read it; it only has to be the same wherever an id is spelled out.
+ */
+export const TEST_CAMERA = 'CAM_TEST';
+
 export const box = (x: number, y: number, width: number, height: number): Box2D => ({
   x,
   y,
@@ -62,6 +68,7 @@ export function makePrediction(
   score: number,
   bbox: Box2D,
   frameId = 'frame-1',
+  camera = TEST_CAMERA,
 ): Prediction2D {
-  return { id: predictionId(frameId, index), class: cls, score, bbox };
+  return { id: predictionId(frameId, camera, index), class: cls, score, bbox };
 }

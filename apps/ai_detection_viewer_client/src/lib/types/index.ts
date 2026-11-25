@@ -11,6 +11,29 @@ export type Frame = {
   // across datasets, not dropped). COCO frames = 'coco-estimated'; nuScenes
   // frames = 'nuscenes-measured'. Optional: absent on existing COCO frames.
   source?: 'coco-estimated' | 'nuscenes-measured';
+  // (F6) Every camera that photographed this frame, default camera first.
+  // nuScenes only (six cameras; one for sample files prepped before F6); absent
+  // on COCO frames, which have exactly one image and keep working unchanged.
+  //
+  // INVARIANT: when present, `cameras[0]` IS the view in the top-level fields —
+  // `imageUrl` / `imageWidth` / `imageHeight` / `detections2D` above are the
+  // default camera's (the same array, not a copy). So on a nuScenes frame
+  // `frame.detections2D` means "the boxes in the DEFAULT camera", never "the
+  // boxes in any camera": use `lib/cameras` (`camerasSeeing`, `frameAsCamera`)
+  // for anything that is about another camera or about all of them.
+  cameras?: CameraView[];
+};
+
+// (F6) One camera's photo of a frame, with the frame's 3D boxes projected into
+// THAT photo. A box seen by two cameras has a `Detection2D` in both views, and
+// both carry the object's one id (Immutable Rule #1: same object ⇒ same id).
+export type CameraView = {
+  // Camera channel as the dataset names it, e.g. "CAM_FRONT_LEFT".
+  name: string;
+  imageUrl: string;
+  imageWidth: number;
+  imageHeight: number;
+  detections2D: Detection2D[];
 };
 
 export type Detection2D = {

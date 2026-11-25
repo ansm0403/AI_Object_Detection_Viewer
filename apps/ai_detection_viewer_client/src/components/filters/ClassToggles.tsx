@@ -1,6 +1,7 @@
 'use client';
 
 import { getClassColor } from '@/lib/ui/class-colors';
+import { classLabel } from '@/lib/ui/class-label';
 import { SECTION_TITLE_CLASS } from '@/components/workspace';
 
 type Props = {
@@ -33,8 +34,16 @@ export function ClassToggles({ classes, visibleClasses, onToggle }: Props) {
             type="button"
             onClick={() => onToggle(name)}
             aria-pressed={active}
+            // The chip shows the short name ("bicycle_rack"); the class itself is
+            // still the full one, kept as the tooltip and for screen readers.
+            title={classLabel(name) === name ? undefined : name}
+            aria-label={name}
             className={[
-              'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs select-none whitespace-nowrap',
+              // Tighter below 1280px: with nuScenes' seven classes the row did not
+              // fit the bar at 1024px and the last chip ("motorcycle") was cut off.
+              // Measured: 649px needed, 558px available. The short name saves
+              // ~88px and the padding 28px.
+              'inline-flex items-center gap-1.5 px-1.5 xl:px-2 py-0.5 rounded-full text-xs select-none whitespace-nowrap',
               'border transition-colors',
               active
                 ? 'border-sky-400/50 bg-sky-400/10 text-zinc-100'
@@ -45,7 +54,7 @@ export function ClassToggles({ classes, visibleClasses, onToggle }: Props) {
               className="w-2 h-2 rounded-full"
               style={{ backgroundColor: active ? color : '#3f3f46' }}
             />
-            {name}
+            {classLabel(name)}
           </button>
         );
       })}

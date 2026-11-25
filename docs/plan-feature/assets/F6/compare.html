@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>F6 시안 비교</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #050506; color: #e4e4e7;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 5; background: #111113; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row + .row { margin-top: 8px; }
+  .lbl { font-size: 12px; color: #71717a; width: 64px; }
+  button { font: inherit; font-size: 13px; color: #d4d4d8; background: #1f1f23; border: 1px solid #3f3f46;
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: #71717a; }
+  button.on { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
+  button.before.on { background: #3f3f46; border-color: #a1a1aa; color: #fff; }
+  button:disabled { opacity: .3; cursor: default; }
+  kbd { font: 600 11px ui-monospace, monospace; border: 1px solid #52525b; border-radius: 3px; padding: 0 4px; color: #a1a1aa; }
+  .note { margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #d4d4d8; max-width: 1180px; }
+  .note b { color: #fff; }
+  .hint { font-size: 12px; color: #71717a; margin-left: 10px; }
+  .stage { padding: 16px; overflow-x: auto; }
+  .tag { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .tag.mock { background: #0c4a6e; color: #bae6fd; }
+  .tag.now { background: #3f3f46; color: #fff; }
+  .tag.probe { background: #3b2f0b; color: #fde68a; }
+  img { display: block; border: 1px solid #27272a; cursor: pointer; max-width: none; }
+  .legend { margin: 8px 0 0; font-size: 13px; color: #a1a1aa; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 999px; margin: 0 4px 0 12px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="row"><span class="lbl">창 크기</span><span id="sizes"></span>
+    <span class="hint">사용자 노트북 창은 약 1536×700 · 이미지는 실제 크기(1:1) · 모두 프레임 6</span></div>
+  <div class="row"><span class="lbl">화면</span><button id="before" class="before">지금 (F5 완료 화면) <kbd>B</kbd></button><span id="states"></span>
+    <span class="hint">이미지를 클릭하거나 <kbd>Space</kbd>를 누르면 지금 ↔ 시안이 같은 자리에서 바뀝니다 · <kbd>←</kbd> <kbd>→</kbd> 이동</span></div>
+  <p class="legend">카메라 이름: <b>F</b> 앞 · <b>FL</b> 왼쪽 앞 · <b>FR</b> 오른쪽 앞 · <b>B</b> 뒤 · <b>BL</b> 왼쪽 뒤 · <b>BR</b> 오른쪽 뒤 &nbsp;·&nbsp; 평가 모드의 색:<i style="background:#34d399"></i>찾음 <i style="background:#fb7185"></i>놓침 <i style="background:#fbbf24"></i>헛짚음 <i style="background:#71717a"></i>채점 제외 / 평가 안 함</p>
+  <p class="note" id="note"></p>
+</div>
+<div class="stage">
+  <span class="tag" id="tag"></span>
+  <img id="img" alt="" />
+</div>
+<script>
+const SIZES = ['1536x700', '1280x720', '1440x900'];
+// k: 시안 파일 접두어, sizes: 남긴 창 크기, before: 지금 화면 파일 접두어(없으면 null), probe: 조사 사진(창 크기와 무관)
+const STATES = [
+  { k: 'A1_review_bus', name: 'A1 추천안 · 검수 (버스)', sizes: ['1536x700', '1280x720', '1440x900'], before: 'review_bus',
+    note: '<b>추천안: 큰 사진 1장 + 그 아래 썸네일 6개.</b> 목록에서 <b>버스</b>(17m, 차 뒤쪽)를 골랐습니다. 지금 화면(B)에서는 앞 카메라에 안 보여 "Selected box is outside CAM_FRONT" 안내만 나오고 확인할 방법이 없습니다. 시안에서는 ① <b>큰 사진이 자동으로 뒤 카메라(CAM_BACK)로 바뀌고</b>, 버스에 3D 박스가 겹쳐 그려집니다(흰 선 = 박스, 하늘색 = 박스의 앞면). ② <b>썸네일 6개</b>는 차 주위를 한 바퀴 둘러본 순서(왼쪽 뒤 → 왼쪽 앞 → 앞 → 오른쪽 앞 → 오른쪽 뒤 → 뒤)입니다. 하늘색 테두리가 지금 보는 카메라이고, <b>흰 네모는 선택한 버스가 그 사진의 어디에 있는지</b>입니다. 버스가 BR과 B 두 장에 걸쳐 보입니다. ③ 왼쪽 목록의 카메라 아이콘 자리에 <b>그 박스를 보는 카메라 이름</b>이 나옵니다. ④ 판정 버튼 위 근거 줄이 "Not in camera" 대신 "Seen by BR · B"가 됩니다. <b>대가:</b> 썸네일 줄(높이 35px + 간격 8px)만큼 오른쪽 아래 패널이 낮아집니다(1536×700에서 275 → 232px).' },
+  { k: 'A2_review_car_full', name: 'A2 검수 · 사진 전체', sizes: ['1536x700'], before: null,
+    note: 'A1과 같은 배치에서 <b>오른쪽 앞 카메라(CAM_FRONT_RIGHT)의 차</b>를 고르고, 사진을 확대하지 않은 <b>전체 보기</b>입니다. 주차장의 차들에 정답 박스가 그려져 있습니다. 앞 카메라만 쓰던 지금까지는 이 차들을 사진으로 확인할 수 없었습니다. (그려 넣은 시안의 한계: 실제 앱은 전체 보기에서 선택한 박스를 흰 사각형으로 그립니다.)' },
+  { k: 'A3_evaluate_car', name: 'A3 추천안 · 평가 (차)', sizes: ['1536x700', '1280x720'], before: 'evaluate_car',
+    note: '<b>평가 모드.</b> 같은 차 하나를 지금 화면(B)과 번갈아 보세요. 이 차(35m)는 <b>앞 카메라에서는 사진 오른쪽 끝에 잘려</b> 모델이 놓쳤고(지금 화면: Missed), <b>오른쪽 앞 카메라에서는 온전히 보여</b> 모델이 찾았습니다(시안: Found, 점수 0.45). ① <b>3D 뷰가 가장 크게 바뀝니다.</b> 지금은 박스 61개 중 39개가 회색(앞 카메라에 안 보여 평가 안 함)인데, 6대가 되면 회색은 17개로 줄고 초록 28개, 빨강 16개가 됩니다. 3D 색은 "어느 카메라에서든 찾았으면 초록"입니다. ② 썸네일의 <b>빨간 숫자는 그 카메라에서 놓친 개수</b>입니다. ③ 왼쪽 목록과 사진은 <b>지금 보는 카메라 한 장</b>의 결과입니다(목록 제목에 "FR"). ④ 숫자는 <b>사진 60장</b>(프레임 10개 × 카메라 6대)을 채점한 실제 값입니다: Precision 77%, Recall 66%. ⑤ 타임라인의 "N missed"는 그 프레임의 카메라 6대 합계입니다.' },
+  { k: 'B1_overlay_review_bus', name: 'B1 대안 · 사진 위 썸네일', sizes: ['1536x700'], before: 'review_bus',
+    note: '<b>대안: 썸네일을 큰 사진 안쪽 아래에 겹쳐 놓는 방식.</b> 오른쪽 아래 패널의 높이를 잃지 않습니다(275px 그대로). 대신 ① 썸네일이 <b>큰 사진의 아랫부분을 가리고</b>(도로와 가까운 물체가 있는 자리), ② 범례와 안내문이 위로 밀리며, ③ 썸네일이 50×28px로 더 작아집니다. A1과 번갈아 보세요.' },
+  { k: 'C1_chips_review_bus', name: 'C1 대안 · 이름표만', sizes: ['1536x700'], before: 'review_bus',
+    note: '<b>대안: 썸네일 없이 카메라 이름표 6개만 두는 방식.</b> 사진 위 가운데의 "BL FL F FR BR B"가 카메라 선택 버튼이고, 흰 점은 선택한 박스가 보이는 카메라입니다. 자리를 전혀 쓰지 않고 만들 것도 가장 적습니다. 대신 <b>다른 카메라에 무엇이 찍혔는지 눌러 보기 전에는 알 수 없습니다</b>. "카메라 6대를 한눈에"라는 F6의 목적이 화면에 드러나지 않습니다.' },
+  { k: 'six_cameras_frame06', name: 'P1 조사 · 카메라 6대', probe: true,
+    note: '<b>조사 사진(시안 아님).</b> 프레임 6의 카메라 6대 원본 사진에 정답 박스(3D 박스를 각 사진에 비춘 사각형)를 그린 것입니다. 윗줄이 왼쪽 앞 / 앞 / 오른쪽 앞, 아랫줄이 왼쪽 뒤 / 뒤 / 오른쪽 뒤입니다. 오른쪽에 주차장이 있어 차가 몰려 있고, 뒤에는 버스와 자전거 거치대가 있습니다. 10개 프레임의 박스 583개는 <b>모두 어느 카메라엔가 보입니다</b>(1대에 443개, 2대에 140개).' },
+  { k: 'bicycle_rack_frame03_CAM_BACK_LEFT', name: 'P2 조사 · 자전거 거치대', probe: true,
+    note: '<b>조사 사진.</b> 프레임 3, 왼쪽 뒤 카메라의 자전거 거치대 부근을 2배로 키운 것입니다. <b>노란 네모 = 정답의 "자전거 거치대" 박스 하나</b>, 빨간 네모 = YOLO가 찾은 자전거(숫자는 점수). 거치대에는 실제 자전거가 여러 대 있지만 nuScenes는 이것을 거치대 하나로만 표시합니다. 그래서 모델이 자전거를 맞게 찾아도 전부 헛짚음이 됩니다(점수 0.25 이상에서 10개 프레임에 14개, 14개 모두 거치대 박스 안). 이것이 거치대 규칙이 필요한 이유입니다.' },
+  { k: 'results_frame09_CAM_FRONT_RIGHT', name: 'P3 조사 · 주차장 결과', probe: true,
+    note: '<b>조사 사진.</b> 프레임 9, 오른쪽 앞 카메라의 채점 결과입니다. 초록 = 찾은 정답, 주황 = 놓친 정답, 회색 = 채점 제외(40% 미만으로 보임), <b>빨강 = 헛짚음</b>. 주차장처럼 차가 겹쳐 있는 곳에서는 정답 박스(3D 상자를 비춘 것)가 서로 많이 겹치고 헐렁해서, 모델이 차를 맞게 찾아도 "겹침 부족"이나 "이미 다른 박스가 차지함"으로 헛짚음이 되는 경우가 있습니다. 사진 60장의 헛짚음 121개를 나눠 보면: 같은 클래스인데 겹침 부족 36개, 근처에 정답 없음 33개(정답이 없는 먼 차 등), 이미 짝이 있는 정답 위의 두 번째 박스 28개, 가장 가까운 정답이 다른 클래스 24개(거치대의 자전거 14개 포함)입니다. 앞 카메라만의 숫자(찾음 91, 놓침 83, 헛짚음 13)는 그대로이고, 옆·뒤 사진이 더해지면서 전체 Precision이 88% → 74%(거치대 규칙을 넣으면 77%)가 됩니다.' },
+];
+let size = SIZES[0], state = STATES[0], showBefore = false;
+const $ = (id) => document.getElementById(id);
+const has = (s, sz) => s.probe || s.sizes.includes(sz);
+
+function render() {
+  $('sizes').innerHTML = '';
+  SIZES.forEach((sz) => {
+    const b = document.createElement('button');
+    b.textContent = sz.replace('x', '×'); b.className = sz === size ? 'on' : '';
+    b.onclick = () => { size = sz; if (!has(state, size)) state = STATES[0]; render(); };
+    $('sizes').appendChild(b); $('sizes').append(' ');
+  });
+  $('states').innerHTML = '';
+  STATES.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `${s.name} <kbd>${i + 1}</kbd>`; b.className = !showBefore && s === state ? 'on' : '';
+    b.disabled = !has(s, size);
+    b.onclick = () => { state = s; showBefore = false; render(); };
+    $('states').append(' '); $('states').appendChild(b);
+  });
+  const beforeOk = Boolean(state.before) && !state.probe;
+  $('before').className = 'before' + (showBefore ? ' on' : '');
+  $('before').disabled = !beforeOk;
+  if (showBefore && !beforeOk) showBefore = false;
+  $('img').src = state.probe
+    ? `2026-11-26_probe/${state.k}.jpg`
+    : showBefore
+      ? `2026-11-26_before/nuscenes_frame6_${state.before}_${size}.jpg`
+      : `2026-11-26_mockup/${state.k}_${size}.jpg`;
+  $('tag').textContent = state.probe ? `조사 사진 ${state.name}` : showBefore ? '지금 (F5 완료 화면)' : `시안 ${state.name}`;
+  $('tag').className = 'tag ' + (state.probe ? 'probe' : showBefore ? 'now' : 'mock');
+  $('note').innerHTML = state.note;
+}
+const flip = () => { showBefore = !showBefore; render(); };
+const go = (delta) => {
+  let i = STATES.indexOf(state);
+  for (let n = 0; n < STATES.length; n += 1) {
+    i = (i + delta + STATES.length) % STATES.length;
+    if (has(STATES[i], size)) { state = STATES[i]; showBefore = false; render(); return; }
+  }
+};
+$('before').onclick = flip;
+$('img').onclick = flip;
+addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'b' || e.key === 'B') { e.preventDefault(); flip(); return; }
+  if (e.key === 'ArrowRight') { go(1); return; }
+  if (e.key === 'ArrowLeft') { go(-1); return; }
+  const n = Number(e.key);
+  if (n >= 1 && n <= STATES.length && has(STATES[n - 1], size)) { state = STATES[n - 1]; showBefore = false; render(); }
+});
+render();
+</script>
+</body>
+</html>

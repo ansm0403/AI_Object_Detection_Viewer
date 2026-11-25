@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { __testing, parseNuScenes } from './parser';
+import type { Detection2D, Frame } from '@/lib/types';
 import type { NuScenesAnnotation, NuScenesLidar, NuScenesPrepped } from './types';
 
 // Identity ego + identity sensor means GLOBAL = EGO = CAMERA coords, so the
@@ -282,5 +283,160 @@ describe('parseNuScenes annotation info (F4)', () => {
     const [frame] = parseNuScenes(preppedWith([REVIEWABLE]));
     expect(frame.detections2D).toHaveLength(1);
     expect('annotation' in frame.detections2D[0]).toBe(false);
+  });
+});
+
+describe('parseNuScenes cameras (F6)', () => {
+  // The parser always gives a nuScenes frame at least one camera view.
+  const camerasOf = (frame: Frame) => frame.cameras ?? [];
+  const cornerOf = (detection: Detection2D) => (detection.corners ?? [])[0];
+  // With identity poses GLOBAL = EGO = CAMERA. A camera turned half a turn
+  // about its y axis looks the other way: (x, y, z) → (−x, y, −z). So FRONT
+  // (z = +10) is in front of the forward camera and behind the rear one, and
+  // BEHIND (z = −10) the other way round.
+  const HALF_TURN_Y: [number, number, number, number] = [0, 0, 1, 0];
+  const camera = (
+    channel: string,
+    overrides: {
+      egoTranslation?: [number, number, number];
+      sensorRotation?: [number, number, number, number];
+    } = {},
+  ) => ({
+    channel,
+    image: { path: `/sample-data/nuscenes/${channel.toLowerCase()}/a.jpg`, width: 1600, height: 900 },
+    egoPose: { translation: overrides.egoTranslation ?? [0, 0, 0], rotation: IDENTITY_WXYZ },
+    calibratedSensor: {
+      translation: [0, 0, 0] as [number, number, number],
+      rotation: overrides.sensorRotation ?? IDENTITY_WXYZ,
+      cameraIntrinsic: K,
+    },
+  });
+  const withCameras = (cameras: unknown, annotations = [FRONT, BEHIND]): NuScenesPrepped => {
+    const prepped = preppedWith(annotations);
+    (prepped.frames[0] as Record<string, unknown>).cameras = cameras;
+    return prepped;
+  };
+  const FORWARD = camera('CAM_FRONT');
+  const REAR = camera('CAM_BACK', { sensorRotation: HALF_TURN_Y });
+
+  it('a file without cameras (format 1.0 / 1.1) yields the one camera it always was', () => {
+    const [frame] = parseNuScenes(preppedWith([FRONT, BEHIND]));
+    expect(frame.cameras).toHaveLength(1);
+    expect(camerasOf(frame)[0].name).toBe('CAM_FRONT');
+    expect(camerasOf(frame)[0].imageUrl).toBe('/sample-data/nuscenes/cam_front/a.jpg');
+    expect(camerasOf(frame)[0].detections2D.map((d) => d.id)).toEqual(['inst-front']);
+  });
+
+  it('builds one view per camera, in file order, each with its own photo', () => {
+    const [frame] = parseNuScenes(withCameras([FORWARD, REAR]));
+    expect(camerasOf(frame).map((v) => v.name)).toEqual(['CAM_FRONT', 'CAM_BACK']);
+    expect(camerasOf(frame)[1].imageUrl).toBe('/sample-data/nuscenes/cam_back/a.jpg');
+    expect(camerasOf(frame)[1].imageWidth).toBe(1600);
+  });
+
+  it('projects each box into the cameras that face it', () => {
+    const [frame] = parseNuScenes(withCameras([FORWARD, REAR]));
+    expect(camerasOf(frame)[0].detections2D.map((d) => d.id)).toEqual(['inst-front']);
+    expect(camerasOf(frame)[1].detections2D.map((d) => d.id)).toEqual(['inst-behind']);
+    // Every 3D box is seen by a camera now; with the forward camera alone,
+    // inst-behind had no 2D box at all.
+    expect(frame.detections3D).toHaveLength(2);
+  });
+
+  it('the top-level image fields ARE the first camera (same array, not a copy)', () => {
+    const [frame] = parseNuScenes(withCameras([FORWARD, REAR]));
+    expect(frame.detections2D).toBe(camerasOf(frame)[0].detections2D);
+    expect(frame.imageUrl).toBe(camerasOf(frame)[0].imageUrl);
+    expect(frame.imageWidth).toBe(camerasOf(frame)[0].imageWidth);
+    expect(frame.imageHeight).toBe(camerasOf(frame)[0].imageHeight);
+  });
+
+  it('the first camera gives exactly the 2D boxes the file gave before it listed cameras', () => {
+    const [before] = parseNuScenes(preppedWith([FRONT, BEHIND]));
+    const [after] = parseNuScenes(withCameras([FORWARD, REAR]));
+    expect(after.detections2D).toEqual(before.detections2D);
+  });
+
+  it('adding cameras does not move a single 3D box or LiDAR point', () => {
+    const lidar = lidarWith([1, 2, 3, 4, 5, 6]);
+    const plain = preppedWith([FRONT, BEHIND], lidar);
+    const listed = preppedWith([FRONT, BEHIND], lidar);
+    // A second camera whose photo was taken with the car 1 m further on.
+    (listed.frames[0] as Record<string, unknown>).cameras = [
+      FORWARD,
+      camera('CAM_BACK', { egoTranslation: [1, 0, 0], sensorRotation: HALF_TURN_Y }),
+    ];
+    const [before] = parseNuScenes(plain);
+    const [after] = parseNuScenes(listed);
+    expect(after.detections3D).toEqual(before.detections3D);
+    expect(after.pointCloud).toEqual(before.pointCloud);
+  });
+
+  it('one object seen by two cameras keeps ONE id in both views (Rule #1)', () => {
+    const [frame] = parseNuScenes(withCameras([FORWARD, camera('CAM_FRONT_RIGHT')], [FRONT]));
+    const [a, b] = camerasOf(frame);
+    expect(a.detections2D[0].id).toBe('inst-front');
+    expect(b.detections2D[0].id).toBe('inst-front');
+    expect(frame.detections3D[0].id).toBe('inst-front');
+  });
+
+  it("projects with each photo's OWN ego pose (the cameras do not fire together)", () => {
+    // Same lens, same mounting — but when the second photo was taken the car
+    // was 1 m further along x. The box, 10 m ahead, must sit 1 m × (1000 px /
+    // 10 m) = 100 px further left in that photo.
+    const [frame] = parseNuScenes(
+      withCameras([FORWARD, camera('CAM_LATER', { egoTranslation: [1, 0, 0] })], [FRONT]),
+    );
+    const first = camerasOf(frame)[0].detections2D[0];
+    const later = camerasOf(frame)[1].detections2D[0];
+    expect(later.bbox.y).toBeCloseTo(first.bbox.y, 6);
+    expect(cornerOf(later)[1]).toBeCloseTo(cornerOf(first)[1], 6);
+    // Corner 0 is 9.25 m ahead (see the F4 corner test): 1 m → 1000 / 9.25 px.
+    expect(cornerOf(first)[0] - cornerOf(later)[0]).toBeCloseTo(1000 / 9.25, 6);
+  });
+
+  it('gives every view its own corners (F4 zoom draws the projected box in any camera)', () => {
+    const [frame] = parseNuScenes(withCameras([FORWARD, REAR]));
+    expect(camerasOf(frame)[1].detections2D[0].corners).toHaveLength(8);
+  });
+
+  it('skips a malformed camera and a repeated channel, keeping the valid ones', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const broken = { ...camera('CAM_BROKEN'), calibratedSensor: { translation: [0, 0, 0] } };
+    const [frame] = parseNuScenes(
+      withCameras([FORWARD, broken, null, 'CAM_BACK', camera('CAM_FRONT'), { ...REAR, channel: '' }, REAR]),
+    );
+    expect(camerasOf(frame).map((v) => v.name)).toEqual(['CAM_FRONT', 'CAM_BACK']);
+    expect(warn).toHaveBeenCalledTimes(5);
+    warn.mockRestore();
+  });
+
+  it('when the FIRST camera is unusable, the next one becomes the default view', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const [frame] = parseNuScenes(withCameras([{ channel: 'CAM_FRONT' }, REAR]));
+    expect(camerasOf(frame).map((v) => v.name)).toEqual(['CAM_BACK']);
+    expect(frame.imageUrl).toBe('/sample-data/nuscenes/cam_back/a.jpg');
+    expect(frame.detections2D).toBe(camerasOf(frame)[0].detections2D);
+    expect(frame.detections2D.map((d) => d.id)).toEqual(['inst-behind']);
+    warn.mockRestore();
+  });
+
+  it.each([
+    ['an empty list', []],
+    ['only unusable entries', [null, { channel: 'CAM_FRONT' }]],
+    ['something that is not a list', { CAM_FRONT: FORWARD }],
+  ])('falls back to the top-level camera for %s — the frame is never lost', (_label, cameras) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const [frame] = parseNuScenes(withCameras(cameras));
+    expect(frame.cameras).toHaveLength(1);
+    expect(camerasOf(frame)[0].name).toBe('CAM_FRONT');
+    expect(frame.detections2D.map((d) => d.id)).toEqual(['inst-front']);
+    expect(frame.detections3D).toHaveLength(2);
+    warn.mockRestore();
+  });
+
+  it('a camera that sees nothing still gets an (empty) view', () => {
+    const [frame] = parseNuScenes(withCameras([FORWARD, REAR], [FRONT]));
+    expect(camerasOf(frame)[1].detections2D).toEqual([]);
   });
 });

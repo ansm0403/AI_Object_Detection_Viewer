@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EVAL_KINDS, OUTCOME_COLOR, OUTCOME_LABEL, countOf, formatPercent } from './outcomes';
+import { EVAL_KINDS, OUTCOME_COLOR, OUTCOME_LABEL, countOf, formatPercent, outcomeCountLabel } from './outcomes';
 import type { EvalCounts } from './types';
 
 describe('outcomes table', () => {
@@ -36,5 +36,26 @@ describe('formatPercent', () => {
   it('shows a dash — never 0% — when there is no ratio', () => {
     expect(formatPercent(null)).toBe('—');
     expect(formatPercent(Number.NaN)).toBe('—');
+  });
+});
+
+describe('outcomeCountLabel', () => {
+  it('pluralises "false alarm" by its count', () => {
+    expect(outcomeCountLabel('false-alarm', 1)).toBe('false alarm');
+    expect(outcomeCountLabel('false-alarm', 5)).toBe('false alarms');
+    expect(outcomeCountLabel('false-alarm', 0)).toBe('false alarms');
+  });
+
+  it('leaves the outcomes that are not nouns unchanged at any count', () => {
+    for (const count of [0, 1, 19]) {
+      expect(outcomeCountLabel('missed', count)).toBe('missed');
+      expect(outcomeCountLabel('found', count)).toBe('found');
+      expect(outcomeCountLabel('not-scored', count)).toBe('not scored');
+    }
+  });
+
+  it('reads as a phrase after the number', () => {
+    expect(`${5} ${outcomeCountLabel('false-alarm', 5)}`).toBe('5 false alarms');
+    expect(`${1} ${outcomeCountLabel('false-alarm', 1)}`).toBe('1 false alarm');
   });
 });

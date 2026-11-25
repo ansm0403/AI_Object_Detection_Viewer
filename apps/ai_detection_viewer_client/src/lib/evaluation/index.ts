@@ -10,6 +10,7 @@ export type {
   FalseAlarmResult,
   FoundResult,
   FrameEvaluation,
+  IgnoredPrediction,
   MissReason,
   MissedResult,
   NotScoredResult,
@@ -21,7 +22,13 @@ export type {
   RecallBin,
 } from './types';
 export { iou } from './iou';
-export { EVALUATED_CLASSES, isEvaluatedClass, toEvaluatedClass } from './classes';
+export {
+  BICYCLE_RACK_CLASS,
+  EVALUATED_CLASSES,
+  isEvaluatedClass,
+  isRackMemberClass,
+  toEvaluatedClass,
+} from './classes';
 export { isPredictionId, parsePredictions, predictionId } from './parse';
 export {
   DEFAULT_MIN_SCORE,
@@ -33,7 +40,17 @@ export {
   selectionIdOf,
 } from './match';
 export { DISTANCE_BIN_METRES, precisionOf, ratio, recallOf, summarize } from './metrics';
-export { evaluateFrames, type DatasetEvaluation } from './evaluate';
+export {
+  evaluateFrameCameras,
+  evaluateFrames,
+  mergeObjectOutcomes,
+  type CameraSummary,
+  type DatasetEvaluation,
+  type FrameCamerasEvaluation,
+  type ObjectCounts,
+  type ObjectOutcome,
+  type ObjectOutcomeKind,
+} from './evaluate';
 export {
   isResultVisible,
   orderResults,
@@ -43,7 +60,7 @@ export {
   type ResultFilter,
 } from './list';
 export { buildOverlay, unionBox, type OverlayOptions } from './overlay';
-export { describeResult, visibilityText } from './describe';
+export { describeOtherViews, describeResult, visibilityText } from './describe';
 export { boxOutcomeColors } from './box-colors';
 export {
   CONTEXT_COLOR,
@@ -54,4 +71,5 @@ export {
   OUTCOME_LABEL,
   countOf,
   formatPercent,
+  outcomeCountLabel,
 } from './outcomes';
