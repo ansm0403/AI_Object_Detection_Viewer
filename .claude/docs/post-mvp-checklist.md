@@ -1077,6 +1077,171 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 
 ---
 
+## F5 — Camera Detection Evaluation ✅ Done (2026-11-26; F5-0, F5-A … F5-D)
+- **Design doc:** `docs/plan-feature/F5_camera_detection_eval.md` (provisionally approved: decision 1
+  — a Review | Evaluate mode — chosen by the user from mockups, decisions 2–13 built as recommended
+  and adjusted from captures). Mockups + per-step captures: `docs/plan-feature/assets/F5/`
+  (`compare.html`, `steps.html`).
+- **Goal:** score a 2D camera detector (YOLOv8n, run offline) against the nuScenes labels on the
+  camera image, and show **where in 3D** the missed objects are and how recall changes with distance.
+  The second pillar of the roadmap ("does the model get it right"), next to F4 ("is the label right").
+- **Scope (as built):**
+  - **F5-0 — loader fix (separate `fix:`).** `lib/data/fetch-json.ts`: an HTTP failure is reported as
+    its status, not as a JSON parse error (the item deferred in F4).
+  - **F5-A — data + logic (no visual change).** `scripts/predict_nuscenes.py` →
+    `predictions.json` (428 predictions on the 10 CAM_FRONT photos, score ≥ 0.05, 32 KB; the model's
+    raw output, nothing filtered). `lib/evaluation/`: types, parser, IoU, class map, matching,
+    metrics — all pure.
+  - **F5-B — mode + summary.** `Review | Evaluate` in the top bar; predictions loaded next to the
+    dataset; `EvaluationPanel` (Precision / Recall with counts, this frame's outcomes, recall by
+    distance and by class, notes); "Min score" slider; "N missed" timeline badges.
+  - **F5-C — photo + list.** Camera cell draws labels dashed and model boxes solid in outcome
+    colours (generic `overlay` input of `Viewer2D`); `ResultList`; false alarms selectable through
+    the one `selectedObjectId`; pinned one-line explanation of the selected result; J / K / Z.
+  - **F5-D — 3D + finish.** 3D boxes take their outcome colour (`boxColors`) with a legend; states
+    of a missing / partial / malformed / late predictions file.
+  - **Edge-case review** after F5-D: four more fixes, see below.
+- **Done when (design doc §8) — all met, verified by driving the real app with Playwright** (F5-0 10
+  checks, F5-B 59, F5-C 47, F5-D 33, edge review 26, regression of pre-F5 behaviour 30, plus a
+  3D-click probe):
+  - Evaluate mode shows Precision 88% / Recall 52%; 0.40 → 100% / 41%; the slider updates the top
+    bar, panel, list, photo, 3D colours and timeline badges together.
+  - Selecting a miss highlights its 3D box and zooms the photo on its label; clicking in the photo or
+    the 3D view selects the same row (3D: 31 different boxes clicked — the 10 evaluated ones
+    highlighted their row with the same outcome, the 21 outside the camera read "Not evaluated").
+  - A false alarm highlights in the photo, nothing in 3D, and the panel gives the reason.
+  - Labels never show a score (F2-E intact); only model boxes do. The "approx." legend is always on.
+  - A label selection survives a mode or frame switch; a false-alarm selection is dropped.
+  - Predictions request fails → review unaffected, evaluate mode says why. HTTP 500 on the dataset →
+    the status is shown.
+  - Evaluate is blocked in practice mode; COCO has no mode switch.
+  - No page scroll and a one-line top bar at 1024 / 1100 / 1279 / 1280 in review, practice and
+    evaluate, and at 1440×900, 1536×700, 1920×1080 in evaluate.
+  - Unchanged: 2D ↔ 3D ↔ list sync on one `selectedObjectId`; deselect on empty space; the nuScenes
+    canvas is never re-created (also not by mode switches, slider moves or recolouring — checked on
+    the canvas element and by counting wire colours in the live three.js scene); the whole F4 review
+    flow; COCO.
+  - Tests **386 → 530** (`lib/evaluation` 139, `lib/data` 5). `tsc --noEmit` 0 errors. CI lint 0
+    errors (19 pre-existing warnings). Production build passes. `predict_nuscenes.py` run twice →
+    byte-identical file.
+- **Changes from the plan, and why:**
+  1. **Two numbers in the design doc's score-sweep table were wrong.** False alarms at min score 0.05
+     / 0.10 are **243 / 104**, not 220 / 98 (precision 34% / 53%, not 37% / 54%). The planning probe
+     dropped a prediction lying on *any* unscored label; the designed rule drops only one of the
+     label's own class. Re-measured independently; the tests lock the corrected values. The default
+     (0.25) and above were right. The design doc is left as written (Edge_F#5 Case 7).
+  2. **F5-0 became a small helper with tests** (`fetchJson`) instead of a one-line change, because
+     the predictions request needs the same check.
+  3. **More modules in `lib/evaluation` than the design listed** (`evaluate`, `outcomes`, `list`,
+     `describe`, `box-colors` next to the planned `overlay`): each piece of "what to show" that could
+     be a pure function was made one, so the components only lay things out. The type contract
+     between the overlay builder and `Viewer2D` lives in `lib/ui/image-overlay.ts`.
+  4. **"No entry in the file" is distinct from "an empty entry"** (`evaluateFrames`): the first is
+     not evaluated at all, the second is all misses. The design said "예측 없음, not 0"; the two-case
+     split is the implementation of it.
+  5. **Wording that does not blame the model.** "91 of 104 model boxes matched a label" (mockup:
+     "were right"), "labelled objects" (mockup: "real objects"); the model name is shown as written
+     in the file ("yolov8n").
+  6. **The selected miss / false alarm also shows its "companion" box** — the box the explanation
+     refers to, drawn in a neutral colour even when it is below the minimum score. Without it the
+     sentence "closest model box: person 0.15" pointed at nothing on screen.
+  7. **Outcome chips filter the list and the photo** (design: the list). Not the 3D view — it answers
+     "where", and hiding by outcome would remove the context.
+  8. **List rows drop the short id below 1400px** (full id in the tooltip): the mockup's truncated
+     class names at 240px.
+  9. **Panel density.** The frame row shows "not scored" as icon + number only, and paddings were
+     tightened, so that at 1536×700 (275px-tall panel) all three distance bands stay visible under
+     the pinned strip. Recall by class needs a scroll at that size (as the design predicted).
+  10. **Not scored and not evaluated share one grey in the 3D view** (legend: "not evaluated"); the
+      list and the panel tell them apart.
+  11. **The list's scroll-into-view logic moved from `ObjectList` into a shared hook** (unchanged
+      behaviour) — a file the design had not listed, touched because the result list needs the same,
+      twice-fixed logic.
+  12. **From the edge-case review (not in the design):** Reset in evaluate mode keeps review mode's
+      distance filter (Case 1); the panel states the score actually in effect when the slider is
+      below the file's minimum (Case 2); the selected row follows when the slider moves it (Case 3);
+      the top bar's left group wraps on phone widths (Case 4).
+  13. **Measured, not optimised.** Scoring all frames: 0.2–0.4 ms. A slider step: ≈ 105 ms in
+      evaluate mode vs ≈ 80 ms for the distance slider, on an idle baseline of ≈ 48 ms (production
+      build, software GL).
+- **Decisions kept from the design doc:** mode as page-level view state; predictions outside `Frame`
+  with ids `pred:<frame>:<index>`; IoU 0.3, same class, greedy by score; visibility 0–40% not
+  scored; `yolov8n.pt` at 1280 px, file down to score 0.05, slider default 0.25; `frameHasConfidence`
+  and `viewer-store` untouched (the slider is the existing `confidenceThreshold`); class chips never
+  change a number; every percentage shown with its counts and "small sample"; `null` → "—"; no new
+  shortcuts and no review writes in evaluate mode; practice and evaluate exclude each other; no new
+  library.
+- **Not done / open:**
+  - **The numbers are a demonstration, not a result**: 10 frames, one camera, one scene, the smallest
+    YOLO without fine-tuning. Do not quote them as model performance before F6 / F7.
+  - **Bicycle racks** (HANDOFF "to verify"): none of the 10 rack boxes or 19 bicycle boxes is in
+    CAM_FRONT, so no rule was needed or testable. Re-check with six cameras (F6).
+  - **No human verdict on predictions, no export of evaluation results, no mAP / PR curve, no model
+    comparison** — out of scope by design.
+  - **three.js idle cost on nuScenes** — unchanged, still its own item (the user chose a separate
+    session). It is the ≈ 48 ms baseline in the measurement above.
+  - Visibility is nuScenes' six-camera figure; an object hidden only from the front camera may still
+    be scored. Stated in the panel.
+  - Measurements were taken in headless software GL; frame rate on the user's laptop not measured.
+  - Windows shorter than ~700 px scroll 40 px (identical in review; pre-existing).
+  - COCO mode: still on hold.
+- **Edge refs:** Edge_F#5 Cases 1–7 + "measured and not changed" + "observed, accepted".
+
+<!-- KO (move to a localized file)
+## F5 — 카메라 탐지 평가 ✅ 완료 (2026-11-26; F5-0, F5-A ~ F5-D)
+- 설계 문서: `docs/plan-feature/F5_camera_detection_eval.md`(임시 승인: 결정 1 "검수 / 평가 모드 전환"은 사용자가
+  시안을 보고 선택, 결정 2~13은 추천안으로 만들고 캡처를 보며 조정). 시안과 단계별 캡처: `docs/plan-feature/assets/F5/`.
+- 목표: 2D 카메라 탐지 모델(YOLOv8n, 미리 실행)을 카메라 사진 위에서 nuScenes 정답과 비교해 채점하고, 놓친 물체가
+  **3D 공간의 어디에** 있는지와 거리에 따라 탐지율이 어떻게 달라지는지 보여준다. 로드맵의 두 번째 기둥이다.
+- 범위(만든 것):
+  - F5-0 불러오기 수정(별도 `fix:`): 요청이 실패하면 JSON 해석 오류가 아니라 HTTP 상태를 보여준다(F4에서 미룬 항목).
+  - F5-A 데이터와 로직(화면 변화 없음): `scripts/predict_nuscenes.py` → `predictions.json`(사진 10장에 예측 428개,
+    점수 0.05 이상, 32KB, 모델 출력 그대로). `lib/evaluation/`(타입, 파서, IoU, 클래스 대응, 짝짓기, 지표).
+  - F5-B 모드와 요약: 상단의 `Review | Evaluate`, 예측 파일 불러오기, 평가 패널, "Min score" 슬라이더, 타임라인의 "N missed".
+  - F5-C 사진과 목록: 정답은 점선·모델은 실선·색은 결과, 결과 목록, 헛짚음 선택(선택 상태는 하나 그대로),
+    선택한 결과의 이유 한 줄, J / K / Z.
+  - F5-D 3D와 마무리: 3D 박스를 결과 색으로 + 범례, 예측 파일이 없거나 일부만 있거나 깨졌거나 늦게 올 때의 화면.
+  - F5-D 뒤 엣지 케이스 검증: 수정 4건 추가.
+- 완료 기준(설계 문서 8장): 모두 충족. 실제 앱을 Playwright로 조작해 확인(F5-0 10항목, B 59, C 47, D 33, 엣지 26,
+  기존 동작 회귀 30, 3D 클릭 확인). 테스트 386 → 530개, tsc 오류 0개, CI 린트 오류 0개, 배포용 빌드 성공,
+  스크립트를 두 번 돌려 같은 파일이 나옴을 확인.
+- 계획과 달라진 점과 이유:
+  1. **설계 문서의 점수별 표에서 숫자 2개가 틀렸다.** 점수 기준 0.05 / 0.10의 헛짚음은 220 / 98이 아니라 **243 / 104**다
+     (Precision 34% / 53%). 사전 조사 스크립트가 채점 제외 규칙을 클래스와 무관하게 적용했고, 설계한 규칙은 같은
+     클래스만이다. 독립 계산으로 다시 확인했고 테스트가 올바른 값을 고정한다. 기본값 0.25 이상은 맞았다. 설계 문서는 그대로 둔다.
+  2. F5-0은 한 줄 수정이 아니라 작은 함수 + 테스트(`fetchJson`)가 됐다. 예측 파일 요청에도 같은 확인이 필요해서다.
+  3. `lib/evaluation`의 모듈이 설계보다 많다(`evaluate`, `outcomes`, `list`, `describe`, `box-colors`). "무엇을 보여줄지"를
+     순수 함수로 빼서 컴포넌트는 배치만 하게 했다. `Viewer2D`와의 약속은 `lib/ui/image-overlay.ts`의 타입이다.
+  4. "파일에 그 프레임이 없음"과 "예측이 0개"를 구분한다. 앞의 것은 평가하지 않고, 뒤의 것은 전부 놓침이다.
+  5. 모델을 탓하지 않는 문구로 바꿨다("matched a label", "labelled objects"). 모델 이름은 파일에 적힌 그대로.
+  6. 선택한 놓침 / 헛짚음에는 설명이 가리키는 "상대 박스"를 함께 그린다(점수가 기준보다 낮아도 회색으로).
+  7. 결과 칩은 목록과 사진을 함께 거른다(설계는 목록만). 3D는 거르지 않는다.
+  8. 1400px 미만에서 목록의 짧은 ID를 숨겼다(클래스 이름이 잘리던 문제).
+  9. 패널을 촘촘하게 했다(채점 제외는 아이콘과 숫자만, 여백 축소). 1536×700에서 거리별 막대 3줄이 보인다.
+  10. 3D에서 채점 제외와 평가하지 않음은 같은 회색이다. 목록과 패널에서는 구분한다.
+  11. 목록의 "선택한 행으로 스크롤" 코드를 `ObjectList`에서 공용 훅으로 옮겼다(동작 변화 없음).
+  12. 엣지 검증에서 추가: 평가 모드의 Reset이 검수 모드의 거리 필터를 지우지 않음(Case 1), 슬라이더가 파일의 최소
+      점수보다 낮으면 실제로 적용되는 점수를 표시(Case 2), 슬라이더로 행이 옮겨져도 선택한 행이 보임(Case 3),
+      휴대폰 폭에서 상단 바 왼쪽 묶음이 줄바꿈(Case 4).
+  13. 재고 최적화하지 않음: 전체 채점 0.2~0.4ms, 슬라이더 한 칸은 평가 모드 약 105ms / 거리 슬라이더 약 80ms /
+      가만히 있을 때 약 48ms(배포용 빌드, GPU 없는 환경).
+- 설계대로 유지: 모드는 page의 화면 설정, 예측은 `Frame` 밖 + `pred:` ID, IoU 0.3·같은 클래스·점수순, 가시성 0~40% 채점 제외,
+  입력 1280·저장 0.05 이상·기본 0.25, `frameHasConfidence`와 `viewer-store`는 그대로, 클래스 칩은 숫자를 바꾸지 않음,
+  모든 비율 옆에 개수와 "small sample", 분모 0이면 "—", 새 단축키 없음, 연습 모드와 평가 모드는 서로 막음, 새 라이브러리 없음.
+- 남은 것:
+  - **숫자는 시연이지 결과가 아니다.** 프레임 10개, 카메라 1대, 장면 1개, 추가 학습 없는 가장 작은 YOLO. F6 / F7 전에는
+    모델 성능으로 인용하지 않는다.
+  - 자전거 거치대: 앞 카메라에 잡히는 것이 0개라 규칙이 필요 없었고 검증할 수도 없었다. 카메라 6대(F6)에서 다시 본다.
+  - 예측에 대한 사람의 판정, 평가 결과 내보내기, mAP / PR 곡선, 모델 비교는 범위 밖.
+  - three.js 상시 비용은 그대로다(별도 세션). 위 측정의 바닥 48ms가 이것이다.
+  - 가시성은 카메라 6대 기준 값이다. 패널에 밝혀 두었다.
+  - 측정은 GPU 없는 환경에서 했다. 높이 700px 미만의 창은 40px 스크롤된다(검수 모드와 같음, 기존).
+  - COCO 모드: 계속 보류.
+- Edge refs: Edge_F#5 Case 1~7, "측정하고 바꾸지 않은 것", "관찰하고 그대로 둔 것".
+-->
+
+---
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -1189,8 +1354,18 @@ parsing (becomes necessary in F7 when the frame count grows).
   - *Tech upgrade (trigger met by measurement):* three.js spends ~0.4–0.55 s of JS per second on
     shader-program bookkeeping at idle on nuScenes (production build; COCO ~0.05 s). Find which
     material / object forces the re-evaluation, fix, record before / after. Do before F7.
-  - *Small fix:* the data loader does not check `response.ok`, so an HTTP error is reported as a
-    JSON parse error. Details: Edge_F#4 ("Found during F4, not caused by F4").
+    **Still open after F5 (2026-11-26):** the user chose to do it in a separate session. F5 measured
+    its effect as the idle baseline of every interaction (≈ 48 ms per two animation frames in
+    software GL; Edge_F#5 "Measured and NOT changed").
+  - ~~*Small fix:* the data loader does not check `response.ok`, so an HTTP error is reported as a
+    JSON parse error.~~ **Done in F5-0** (`lib/data/fetch-json.ts`).
+- **From F5 (2026-11-26):**
+  - *F6:* re-check bicycle racks once six cameras are in (none is in CAM_FRONT, so F5 needed no
+    rule); re-run `predict_nuscenes.py` per camera — the predictions file has one `camera` field and
+    frame-keyed entries, so its format must grow a camera level.
+  - *F6 / F7:* only then may the evaluation numbers be quoted (10 frames × 1 camera today).
+  - *Possible later:* a human verdict on predictions ("this false alarm is really a missing label")
+    and an export of evaluation results — would need a new review scope and UI.
 - **COCO mode: left as it is for now.** Whether it stays as a secondary tab or is retired is decided
   after the F3 redesign shows what that tab looks like in the new layout (user decision, 2026-11-25).
   **F3 is done and COCO sits unchanged in the new layout; the user has not decided yet** (captures:
@@ -1292,6 +1467,11 @@ F6·F7은 두 기둥이 쓰는 데이터를 넓힌다. 수정(F8)은 인터랙�
 - 2D 전용 라벨 유형(폴리곤, 마스크, 키포인트).
 
 ### 미정 / 보류
+- **F4에서 발견한 것 (2026-11-25):** three.js 상시 비용은 F5 뒤에도 그대로다(사용자가 별도 세션으로 정함. F5에서는
+  모든 조작의 바닥 비용 약 48ms로 측정됨). 불러오기의 `response.ok` 미확인은 **F5-0에서 고쳤다**(`lib/data/fetch-json.ts`).
+- **F5에서 넘긴 것 (2026-11-26):** F6에서 자전거 거치대를 다시 확인하고(앞 카메라에는 하나도 없어 규칙이 필요 없었다),
+  예측을 카메라별로 다시 돌린다(예측 파일 형식에 카메라 단계가 필요하다). 평가 숫자는 F6 / F7 이후에만 인용한다.
+  나중에 할 수 있는 것: 예측에 대한 사람의 판정과 평가 결과 내보내기.
 - **COCO 모드는 일단 그대로 둔다.** 보조 탭으로 남길지 정리할지는 F3 재설계 후 새 배치에서 그 탭이 어떻게
   보이는지 확인한 뒤 정한다(2026-11-25 사용자 결정). **F3이 끝났고 COCO는 새 화면 안에 그대로 있다. 아직
   결정하지 않았다**(캡처: `docs/plan-feature/assets/F3/2026-11-25_after/coco_*.jpg`).
