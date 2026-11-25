@@ -41,7 +41,7 @@
   <img id="img" alt="" />
 </div>
 <script>
-const SIZES = ['1536x700', '1440x900', '1280x720'];
+const SIZES = ['1536x700', '1280x720'];
 // key, 버튼 이름, 지금 화면 파일 접미사, 설명
 const STATES = [
   { k: 'A_unreviewed_zoom', name: 'A 검수 전 · 카메라 확대', before: 'incam',
@@ -62,13 +62,11 @@ const STATES = [
 // 저장소 용량 때문에 일부 조합만 남겼다.
 const HAVE = {
   '1536x700': ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
-  '1440x900': ['A', 'C', 'E', 'F'],
   '1280x720': ['A', 'C'],
 };
 const HAVE_BEFORE = {
   '1536x700': ['incam', 'outcam', 'frame9_car'],
-  '1440x900': ['incam', 'frame9_car'],
-  '1280x720': ['incam', 'frame9_car'],
+  '1280x720': ['incam'],
 };
 let size = SIZES[0], state = STATES[0], showBefore = false;
 const $ = (id) => document.getElementById(id);

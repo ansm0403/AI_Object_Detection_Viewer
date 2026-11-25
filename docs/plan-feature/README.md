@@ -34,8 +34,8 @@ Post-MVP 기능을 **구현하기 전에** 쓰는 설계 문서 모음이다. �
 | # | 기능 | 설계 문서 | 상태 |
 |---|---|---|---|
 | F3 | 스크롤 없는 작업 화면 | [F3_workspace_layout.md](F3_workspace_layout.md) | **구현 완료 (2026-11-25).** 결과와 계획 대비 달라진 점은 체크리스트 F3 항목. 시안과 캡처는 [assets/F3/](assets/F3/README.md) |
-| F4 | 3D 박스 검수 | [F4_box_review.md](F4_box_review.md) | **임시 승인 (2026-11-25).** 추천안으로 진행하며 단계마다 화면을 보고 조정. 시안은 [assets/F4/](assets/F4/README.md) |
-| F5 | 카메라 탐지 평가 | 아직 없음 | F4가 끝난 뒤 작성 |
+| F4 | 3D 박스 검수 | [F4_box_review.md](F4_box_review.md) | **구현 완료 (2026-11-25).** 결과와 계획 대비 달라진 점은 체크리스트 F4 항목, 경계 사례는 `docs/edgecases/Edge_F#4.md`. 시안과 단계별 캡처는 [assets/F4/](assets/F4/README.md) |
+| F5 | 카메라 탐지 평가 | 아직 없음 | 다음 세션에서 작성 |
 | F6 | 카메라 6대 | 아직 없음 | |
 | F7 | 장면 탐색 | 아직 없음 | |
 | F8 (도전) | 위에서 본 화면에서 3D 박스 수정 | 아직 없음 | |

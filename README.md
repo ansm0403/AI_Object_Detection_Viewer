@@ -151,6 +151,27 @@ COCO 프레임은 2D bbox에서 *추정한* 3D를, nuScenes 프레임은 실제 
 - **카메라 Follow 모드 + 프레임 간 box tween** — 선택 객체를 중심에 두는 옵트인 카메라 모드,
   키프레임 사이를 lerp(위치)/slerp(회전)로 부드럽게 보간
 
+### nuScenes — 3D 박스 검수
+
+실무 라벨링 도구의 검수 흐름(판정 → 사유 → 이어서 하기 → 내보내기)을 1인용으로 재현한 기능입니다.
+nuScenes의 실측 3D 박스에만 동작하며, 3D가 추정값인 COCO에는 검수 UI가 없습니다.
+
+- **판정과 사유** — 박스마다 승인 / 반려 / 판단 불가를 남깁니다. 반려에는 사유(클래스·크기·위치·방향·
+  객체 아님·기타, 여러 개 선택)와 메모를 붙일 수 있습니다. 같은 객체라도 박스는 프레임마다 따로
+  그려진 것이므로 판정의 단위는 **(프레임, 객체)** 쌍입니다
+- **단축키와 대기열** — `A` `R` `U` 판정, `J` `K` 이동, `1`~`6` 사유, `N` 다음 프레임. 승인·판단 불가는
+  다음 미검수 박스로 자동 이동하고 반려는 사유를 고르도록 머뭅니다. 목록은 장면 순서 / LiDAR 점 적은
+  순 / 카메라에 보이는 것 먼저로 정렬할 수 있습니다
+- **판단 근거** — 박스 안 LiDAR 점 개수와 가려짐 단계(nuScenes가 기록한 값)를 버튼 위에 보여 주고,
+  카메라 칸은 선택한 박스 주변을 확대해 **3D 박스를 사진에 투영한 선**(앞면 표시)을 그립니다.
+  앞 카메라에 보이지 않는 박스는 그렇다고 안내합니다
+- **저장과 내보내기** — 판정은 브라우저(localStorage)에 저장되어 새로고침 후에도 이어집니다.
+  검수 결과는 JSON / CSV로 내려받을 수 있습니다. 저장이 안 되는 환경에서는 화면에 표시합니다
+- **연습 모드** — nuScenes 정답은 품질이 높아 대부분 "승인"입니다. 도구가 오류를 잡아내는지 보기 위해,
+  박스 일부(프레임당 약 10%)를 정해진 시드로 일부러 어긋나게 만든 연습용 데이터와 채점(찾음 / 놓침 /
+  헛짚음)을 제공합니다. 원본 파일은 바뀌지 않고, 켜져 있는 동안 화면에는 `Practice · labels modified`가
+  표시되며("Measured"로 표시하지 않음) 판정도 원본 기록과 따로 저장됩니다
+
 ### 3D 뷰어 인터랙션
 
 - **점구름 깊이 색상 인코딩** — 각 점을 z(깊이)로 색칠해 평면 회색 덩어리가 아닌 입체로 읽힘
@@ -206,7 +227,7 @@ COCO를 대체하지 않고 **데이터셋 스위처로 공존**시켜, "추정 
 | 2D 오버레이 | SVG (`viewBox` + `<rect>`) | bbox 좌표를 산술 없이 매핑, 브라우저가 스케일링 처리 |
 | 3D 데이터 | nuScenes-mini, COCO val2017 | 실측 3D(nuScenes)와 추정 3D(COCO)를 데이터셋 스위처로 공존·비교 |
 | 데이터 파이프라인 | Python 3.13 (stdlib만) | 오프라인 prep 스크립트가 nuScenes 관계형 테이블 → 정적 JSON으로 평탄화, `.pcd.bin` LiDAR를 `struct`로 디코드 (devkit 미설치) |
-| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 단위 + 통합 테스트 **213개** |
+| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 단위 + 통합 테스트 **386개** |
 | 모노레포 | Nx 22.7 | 단일 워크스페이스에서 client/server 분리 (server는 현재 범위 외) |
 | 배포 | Vercel | Next.js 공식, GitHub 연동 자동 배포. 런타임 백엔드 없이 정적 서빙 유지 |
 
@@ -238,7 +259,7 @@ threshold 오버레이도 자유롭게 그릴 수 있었습니다.
 
 COCO/nuScenes 파싱, 2D→3D·3D→2D 좌표 변환, 셀렉터는 모두 `lib/` 아래의 순수 함수입니다.
 React 컴포넌트와 Zustand store는 이 함수들의 호출자일 뿐, 도메인 로직을 직접 들고 있지 않습니다.
-이 경계 덕분에 213개 테스트의 대부분이 React 환경 없이도 빠르게 돌아갑니다.
+이 경계 덕분에 386개 테스트의 대부분이 React 환경 없이도 빠르게 돌아갑니다.
 
 ### 5. nuScenes 선택 (KITTI / Waymo 대신)
 
@@ -282,7 +303,7 @@ npm install
 npx nx dev ai_detection_viewer_client
 # → http://localhost:3000
 
-# 3. 테스트 (Vitest, 213개)
+# 3. 테스트 (Vitest, 386개)
 npx nx test ai_detection_viewer_client
 # 또는 앱 디렉토리에서
 cd apps/ai_detection_viewer_client && npm test
@@ -313,6 +334,7 @@ apps/ai_detection_viewer_client/
 │   ├── app/                # Next.js App Router
 │   ├── components/
 │   │   ├── workspace/      # 스크롤 없는 화면 틀 (영역 배치만) + 공통 패널 모양
+│   │   ├── review/         # 3D 박스 검수 UI (판정 버튼, 근거 줄, 진행률, 내보내기, 연습 채점)
 │   │   ├── viewer-2d/      # SVG 오버레이 이미지 뷰어
 │   │   ├── viewer-3d/      # R3F 캔버스, 포인트 클라우드, 3D bbox, Html 라벨
 │   │   ├── object-list/    # 비공간 선택 경로
@@ -328,10 +350,12 @@ apps/ai_detection_viewer_client/
 │   │   ├── geometry/       # 2D→3D 추정, 좌표변환(global→ego→three), 3D→2D 투영,
 │   │   │                   #   카메라 framing, 깊이 색상, 프레임 보간(lerp/slerp)
 │   │   ├── sequence/       # 자동재생 프레임 진행 (순수 nextFrameIndex)
+│   │   ├── review/         # 검수 로직 (순수 함수): 기록 전이, 진행률, 대기열, 단축키 해석,
+│   │   │                   #   내보내기(JSON/CSV), 저장값 검증, 연습용 변형과 채점
 │   │   ├── selectors/      # 가시 detection / 거리 필터 / 히스토그램 / 클래스 카운트
 │   │   ├── ui/             # 클래스별 색상 / 거리 상수 / 짧은 ID 표시
 │   │   └── types/          # Frame, Detection2D/3D, Point3D, source 플래그
-│   ├── store/              # Zustand store (UI 상태만)
+│   ├── store/              # Zustand store: viewer-store(UI 상태만) + review-store(검수 기록, 저장됨)
 │   └── ...
 ├── scripts/
 │   ├── generate_predictions.py   # COCO val2017 → YOLOv8n 추론 (confidence 채움)
@@ -360,6 +384,14 @@ COCO에는 깊이(depth) 정보가 없으므로, COCO 프레임의 3D 좌표는 
 현재 nuScenes 샘플은 `scene-0916` 10 키프레임을 CAM_FRONT 한 대 기준으로만 투영합니다.
 다른 scene은 prep 스크립트의 `--scene-index`로 교체할 수 있지만, 멀티카메라(6-up)·radar는
 범위 밖입니다.
+
+### 2-1. 검수는 1인용이고, 기록은 브라우저에만 있습니다
+
+백엔드가 없으므로 검수 기록은 그 브라우저의 localStorage에만 저장됩니다. 다른 기기나 다른 사람과
+공유되지 않으며, 보관하려면 JSON / CSV로 내보내야 합니다. 작업 배정, 권한, 여러 사람의 동시 검수는
+범위 밖입니다. 또 앞 카메라 한 대뿐이라 박스의 약 3분의 2는 사진과 대조할 수 없습니다 —
+이런 박스는 3D 뷰와 LiDAR 점 개수로만 판단하고, 알 수 없으면 "판단 불가"로 남기도록 했습니다.
+화면에 그리는 LiDAR 점은 솎아낸 것이어서(0.6m 간격) 작은 물체는 박스 안에 점이 몇 개만 보입니다.
 
 ### 3. 자동재생 중 박스는 보간, LiDAR 점구름은 스냅
 

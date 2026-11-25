@@ -334,6 +334,27 @@ A small, simple state management library for React. Hook-based, no boilerplate.
 The principle that one piece of data lives in exactly one place.
 In this project: `selectedObjectId` is the only place object selection state lives.
 
+**persist (Zustand middleware, 저장)** *(F4)*
+An add-on that saves a store's state to browser storage and reads it back later, so data survives a
+reload. Analogy: an auto-save slot in a game. Here only `review-store` is persisted (key
+`ai-detection-viewer.review` in localStorage); the viewer store (selection, filters) is not.
+
+**localStorage**
+A small key → text store every browser gives each site (about 5 MB, kept until cleared, shared by
+all tabs of the site, synchronous). Enough for review records (~150 bytes each). It can be blocked or
+full — the app then shows "Not saved" and keeps working (Edge_F#4 Cases 2, 7).
+
+**Hydration / hydration mismatch (하이드레이션 불일치)** *(F4)*
+Next.js first sends HTML rendered on the server, then React "hydrates" it in the browser by rendering
+again and attaching to that HTML. If the browser's first render differs from the server's (e.g.
+because it already read saved data the server could not see) React reports a mismatch. F4 avoids it
+by loading saved reviews only AFTER the first render (`skipHydration` + `persist.rehydrate()` in an
+effect), so both first renders start from the same empty state.
+
+**`storage` event (탭 간 동기화)** *(F4)*
+The browser tells every OTHER tab of a site when one tab writes to localStorage. The page listens for
+it and re-reads the reviews, so two open tabs cannot overwrite each other's work (Edge_F#4 Case 4).
+
 ## Project-Specific Terms
 
 **Estimated 3D**
@@ -377,3 +398,76 @@ The no-scroll, full-viewport layout introduced in F3 (`components/workspace/Work
 fixed zones (top bar, filter bar, list, 3D, camera, details, timeline) whose sizes are decided by the
 shell, with only the list and details panels scrolling inside. Real data-labelling tools are laid out
 this way so the user never scrolls away from the view they are checking.
+
+## Review Terms (F4 — 3D box review)
+
+**Review / QA of labels (라벨 검수)** *(F4)*
+Checking that human-made annotations are right before they are used to train or score a model.
+Analogy from the F5 hand-off: the photo is the exam question, the model's prediction the answer
+sheet, the annotation the answer key — reviewing is proofreading the answer key. Tools such as CVAT
+and Label Studio have a review stage for this.
+
+**Verdict (판정)** *(F4)*
+The reviewer's decision on one box: `approved` (right), `rejected` (wrong — with reasons) or `unsure`
+(looked at it, but this view cannot settle it). A box with no verdict is "not reviewed", which is not
+a verdict. `unsure` counts as reviewed and is kept apart so it can be revisited with more cameras (F6).
+
+**Reject reason (반려 사유)** *(F4)*
+Why a box is wrong: wrong class / size / position / heading, not an object, other. Several can apply
+to one box. The codes (`wrong_size` …) are what is stored and exported; number keys 1–6 toggle them.
+
+**Review unit / review key (검수 단위)** *(F4)*
+One box in one frame. The object id ([[track id / instance token]]) is the same in every frame, but
+each frame's box is drawn separately — frame 3 can be right and frame 7 wrong — so a review is
+identified by the pair (frame id, object id). The dataset's own per-box id (`sample_annotation.token`)
+travels along as `annotationToken` in exports.
+
+**Review queue (대기열)** *(F4)*
+The boxes to go through, in order: the object list's order restricted to the boxes that pass the
+filters. `J` / `K` walk it; after Approve or Unsure the selection moves to the next box in it that has
+no verdict. Three orders: scene order, fewest LiDAR points first, in camera first.
+
+**LiDAR point count (`num_lidar_pts`, 박스 안 LiDAR 점 개수)** *(F4)*
+How many LiDAR points fell inside a box, as counted by nuScenes on the original sweep of that frame
+(NOT on the thinned cloud this app draws). 0 does not mean the box is wrong: annotators carry a box
+through frames where the sensor barely saw the object. It means the box cannot be confirmed from the
+points — "weak evidence" (≤ 4 points here) — so it is worth looking at first. Of the 583 sample boxes,
+72 have 0 points and 164 have 1–4.
+
+**Visibility (nuScenes, 가려짐 단계)** *(F4)*
+nuScenes' record of how much of an object is visible, in four bins: 0–40 %, 40–60 %, 60–80 %,
+80–100 %. Per the nuScenes schema it is "the fraction of annotation visible in all 6 images" — across
+the six cameras together, not the one camera this app shows. F5 will use it to leave hidden objects
+out of the evaluation.
+
+**Projected 3D box (투영한 3D 박스)** *(F4)*
+The 3D box drawn onto the photo: its 8 corners are each projected to a pixel
+([[Projection (3D→2D, 투영)]]) and joined by the box's 12 edges, with the front (heading) face marked.
+Unlike the bounding rectangle used before ([[Projected 2D box (AABB of corners)]]) it shows whether
+the box's depth and orientation fit the object. Drawn in the camera cell's zoom view.
+
+**Camera zoom (카메라 확대)** *(F4)*
+The camera cell cropped to the area around the selected box (`zoomRegion`), because a distant object
+is only ~14×24 px in the full view. The crop keeps the photo's aspect ratio. It enlarges, it does not
+sharpen: the source photo is 1600×900.
+
+**Practice set / practice mode (연습용 데이터)** *(F4)*
+The real scene with a few boxes deliberately made wrong (about 10 % per frame: moved, resized, turned,
+or given another class), so that a reviewer — and the tool — can be tested against a known answer key.
+Built in memory from the original data each time; the file is never changed, the screen always says
+"Practice · labels modified", and practice verdicts are stored separately.
+
+**Seed (시드)** *(F4)*
+The starting number of a pseudo-random generator. The same seed always produces the same sequence, so
+"random" choices become repeatable — the practice set changes the same boxes in the same way every
+time (seed 42), which makes it testable.
+
+**Found / Missed / False alarm (찾음 / 놓침 / 헛짚음)** *(F4)*
+How a practice review is scored: a planted error the reviewer rejected is *found*; one the reviewer
+approved is *missed*; a rejected box that was not planted is a *false alarm*. Same structure as scoring
+a detector in F5: true positive / false negative / false positive.
+
+**IME / input method (입력기)** *(F4)*
+The system component that turns key presses into non-Latin text (e.g. Hangul). While it is active the
+same physical key reports a different character (`key: "ㅁ"` instead of `"a"`), so shortcuts fall back
+to the physical key position (`code: "KeyA"`) — Edge_F#4 Case 5.

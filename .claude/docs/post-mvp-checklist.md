@@ -926,6 +926,157 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 
 ---
 
+## F4 — 3D Box Review ✅ Done (2026-11-25; F4-A … F4-F)
+- **Design doc:** `docs/plan-feature/F4_box_review.md` (provisionally approved: decision 1 chosen by
+  the user, decisions 2–16 built as recommended and adjusted from captures). Mockup + per-step
+  captures: `docs/plan-feature/assets/F4/` (`compare.html`, `steps.html`).
+- **Goal:** turn the read-only nuScenes view into a review tool — approve / reject / mark unsure each
+  measured 3D box, record why, resume later, export the result.
+- **Scope (as built):**
+  - **F4-A — data + logic (no visual change).** `scripts/prep_nuscenes.py` copies three more raw
+    values per box (`annotationToken`, `numLidarPts`, `visibility`; prepped format 1.0 → 1.1) and
+    `nuscenes.json` was regenerated (verified identical apart from the new fields, LiDAR arrays and
+    images included). Parser carries them as optional `Detection3D.annotation`. New `lib/review/`
+    (records, progress, queue, export, stored-data validation) and `store/review-store.ts`
+    (persisted).
+  - **F4-B — verdict UI.** `ReviewControls` pinned above the details scroll area (the panel is titled
+    "Review" on nuScenes), reject reasons + note, verdict icon + LiDAR evidence bars per list row,
+    overall progress in the top bar, "reviewed/total" timeline badges; verdicts survive a reload.
+  - **F4-C — queue + shortcuts.** List order (scene / fewest LiDAR points / in camera first), J K,
+    A R U, C, 1–6, N; auto-advance after Approve / Unsure; filtered-out boxes skipped.
+  - **F4-D — camera zoom + evidence.** Full / Zoom (Z): the camera cell crops to the selected box and
+    draws the projected 3D box (12 edges, front face marked); notice for boxes outside the camera;
+    evidence strip (LiDAR points, visibility, in camera) above the buttons.
+  - **F4-E — export + reset.** JSON / CSV download built by pure functions; two-click reset;
+    "Not saved" when browser storage fails.
+  - **F4-F — practice mode.** Seeded, deliberate box errors on a copy of the raw data + scoring
+    (found / missed / false alarms); own review scope; labelled "Practice · labels modified".
+  - **Edge-case review** after F4-F (the user's request): five more fixes, see below.
+- **Done when (design doc §8) — all met, verified by driving the real app with Playwright**
+  (mouse flow 40 checks, keyboard 37, zoom / evidence 35, export / storage 31, practice 31, edge
+  re-check 17, outdated-script regression 11):
+  - Verdicts update list, top bar and timeline at once; the same object is reviewed per frame.
+  - Reasons (several per box) and note; everything is restored after a reload; reset clears only the
+    current scope; storage full / blocked → app keeps working and says "Not saved".
+  - A whole frame can be reviewed with the keyboard alone; typing in the note never triggers a
+    shortcut; no verdict during playback; filtered-out boxes are skipped.
+  - Zoom shows the projected 3D box; a box outside the camera shows the notice; weak evidence
+    (≤ 4 points) is marked in the list and the strip.
+  - Exported summary equals the on-screen progress.
+  - Practice: never "Measured" on screen; same seed → same errors; practice verdicts never mix with
+    the real ones; score matches the verdicts.
+  - Unchanged: no page scroll at 1536×700 / 1440×900 / 1280×720 (and 1024 / 1100 after the edge
+    fix) including the rejected state; 2D ↔ 3D ↔ list sync on one `selectedObjectId`; deselect on
+    empty space; nuScenes camera persistence (canvas never remounted by review actions); COCO renders
+    as after F3.
+  - Tests **213 → 386** (`lib/review` 132, `review-store` 19, parser +5 +1, projection +8,
+    camera-zoom 8). `tsc --noEmit` 0 errors. Production build passes.
+- **Changes from the plan, and why:**
+  1. **A third verdict, "unsure", and the practice mode** were not in the HANDOFF outline; both were
+     settled in the design doc (practice: the user's choice for "almost nothing to review"; unsure:
+     about two thirds of the boxes are outside the single camera, so without it the reviewer must
+     guess or can never finish a frame).
+  2. **`visibility` is exported as nuScenes' own level names** (`v0-40` …), not 1–4 — the script's
+     rule is "copy raw values".
+  3. **A safe-storage wrapper around `persist`.** Reading zustand's source showed a failed `setItem`
+     escapes from `set()` and that a blocked `localStorage` leaves the store without its `persist`
+     API (Edge_F#4 Case 2). The design doc had this as "to verify".
+  4. **The note is kept for "unsure" too** (a place to say why it could not be judged); approving
+     clears reasons and note.
+  5. **Evidence moved from rows inside "Selected" to a strip above the buttons.** At 1536×700 a
+     rejected box left one line of "Selected" visible; the facts needed for the decision now never
+     scroll away. Consequently the **Confidence row was NOT removed** — F2-E's display is untouched.
+  6. **The projected 3D box is drawn only when zoomed.** In the full view the box is ~14×24 px and
+     the lines merge; the full view stays exactly as before.
+  7. **Zoom is on by default** (not specified in the design).
+  8. **Buttons drop focus after a mouse click; an open Export menu blocks shortcuts; CSV gets a BOM
+     at download** — found while building (a verdict moves the selection, so Space would re-fire it
+     on the next box; Excel garbles UTF-8 without a BOM).
+  9. **Practice errors are placed by camera visibility** (≥ half in camera, class errors only in
+     camera, heading errors only on long boxes). The first version put 2 of 13 errors in the camera —
+     most were undiscoverable in the thinned 3D view. Costs one extra parse when entering practice
+     (~0.55 s to switch, measured).
+  10. **N follows the filters** (design: "next frame with unreviewed boxes"). Without it N bounced
+      between frames whose remaining boxes were hidden, and the panel claimed "Every box is reviewed"
+      (Edge_F#4 Case 6).
+  11. **Not in the design, from the edge-case review:** cross-tab sync through the `storage` event
+      (Case 4), shortcuts under a Korean input method via `event.code` (Case 5), "Not saved" clears
+      after a successful save (Case 7), top-bar width budget below 1280px (Case 3).
+  12. **A pre-existing list-scroll bug was fixed** because J / K depend on it (Case 1).
+  13. **An optimisation was tried and reverted.** Memoising `Viewer3D` looked justified on the dev
+      server (~110 ms per keystroke in the note); the production-build CPU profile showed ~2 ms of
+      application JS per keystroke. No measurement, no change (HANDOFF 3.7).
+- **Decisions kept from the design doc:** review key = (frame id, object id), box token only in the
+  export; reasons multi-select and optional; separate persisted store with `skipHydration`; queue =
+  filtered boxes, progress denominator = all boxes; Reject stays / Approve advances / frame never
+  changes by itself; all boxes reviewable (not only in-camera); export = reviewed boxes + summary;
+  COCO has no review UI; the 3D view is unchanged (no verdict colours, no auto-focus).
+- **Not done / open:**
+  - **three.js idle cost on nuScenes — found, not caused by F4, deferred.** Production CPU profile:
+    ~0.4–0.55 s of JS per second in shader-program bookkeeping at idle (COCO ~0.05 s). A separate
+    measured item (roadmap: tech upgrades are trigger-based); should be done before F7 grows the
+    scene.
+  - **Loader reports a JSON parse error on an HTTP failure** (no `response.ok` check) — pre-F4, a
+    one-line `fix:`; left out of this feature by the user's decision to wrap up first.
+  - At 1536×700 the practice score and "Selected" need scrolling inside the panel while a box is
+    rejected. Accepted.
+  - 3D inspection is manual (Follow + wheel). Revisit if review proves awkward (design decision 15).
+  - Measurements were taken in headless software GL; frame rate on the user's laptop not measured.
+  - COCO mode: still on hold (unchanged by F4).
+- **Edge refs:** Edge_F#4 Cases 1–7 + "measured and not changed" + "found, deferred".
+
+<!-- KO (move to a localized file)
+## F4 — 3D 박스 검수 ✅ 완료 (2026-11-25; F4-A ~ F4-F)
+- 설계 문서: `docs/plan-feature/F4_box_review.md`(임시 승인: 결정 1은 사용자가 선택, 결정 2~16은 추천안으로 만들고
+  캡처를 보며 조정). 시안과 단계별 캡처: `docs/plan-feature/assets/F4/`(`compare.html`, `steps.html`).
+- 목표: 읽기 전용이던 nuScenes 화면을 검수 도구로. 실측 3D 박스를 승인 / 반려 / 판단 불가로 판정하고, 사유를 남기고,
+  이어서 하고, 결과를 내보낸다.
+- 범위(만든 것):
+  - F4-A 데이터와 로직(화면 변화 없음): 준비 스크립트가 박스마다 값 3개(박스 고유 ID, LiDAR 점 개수, 가려짐 단계)를
+    더 복사(포맷 1.1). `nuscenes.json` 재생성(새 값 외에는 이전과 같음을 확인). `lib/review/`와 저장되는 `review-store`.
+  - F4-B 판정 화면: 정보 패널 맨 위에 고정된 버튼, 사유와 메모, 목록 행의 상태 아이콘과 LiDAR 막대, 상단 진행률,
+    타임라인 배지. 새로고침 후에도 유지.
+  - F4-C 대기열과 단축키: 정렬 3가지, J K, A R U, C, 1~6, N. 승인·판단 불가 뒤 자동 이동. 필터로 가려진 박스는 건너뜀.
+  - F4-D 카메라 확대와 근거: Full / Zoom(Z), 투영한 3D 박스(모서리 12개, 앞면 표시), 카메라 밖 안내, 버튼 위 근거 한 줄.
+  - F4-E 내보내기와 초기화: JSON / CSV, 두 번 눌러 초기화, 저장 실패 시 "Not saved".
+  - F4-F 연습 모드: 시드로 정해진 변형 + 채점. 기록은 별도 범위, 화면에는 "Practice · labels modified".
+  - F4-F 뒤 엣지 케이스 검증(사용자 요청): 수정 5건 추가.
+- 완료 기준(설계 문서 8장): 모두 충족. 실제 앱을 Playwright로 조작해 확인(마우스 40, 키보드 37, 확대·근거 35,
+  내보내기·저장 31, 연습 31, 엣지 재확인 17, 회귀 11항목). 테스트 213 → 386개, tsc 오류 0개, 배포용 빌드 성공.
+- 계획과 달라진 점과 이유:
+  1. "판단 불가" 판정과 연습 모드는 HANDOFF 개요에 없던 것. 설계 단계에서 정함(연습 모드는 사용자 선택, 판단 불가는
+     박스의 약 3분의 2가 카메라 밖이라 필요).
+  2. 가려짐 단계는 1~4가 아니라 nuScenes의 이름 그대로 내보냄(스크립트 원칙: 원본 값 복사).
+  3. `persist`를 감싸는 안전한 저장소 래퍼 추가. 저장 실패가 판정 동작을 죽일 수 있었음(Edge_F#4 Case 2).
+  4. 메모는 판단 불가에서도 유지. 승인하면 사유와 메모가 지워짐.
+  5. 근거 표시를 "Selected" 안이 아니라 버튼 위 한 줄로 옮김. 1536×700 반려 상태에서 가려지던 문제 때문.
+     그래서 Confidence 줄은 빼지 않음(F2-E 표시 유지).
+  6. 투영한 3D 박스는 확대했을 때만 그림. 전체 보기에서는 14×24px라 선이 뭉침.
+  7. 확대가 기본값(설계에 정하지 않았던 것).
+  8. 마우스로 누른 버튼은 포커스를 뺌, Export 메뉴가 열려 있으면 단축키 차단, CSV에 BOM 추가.
+  9. 연습 모드의 오류를 카메라에 보이는지에 따라 배치(절반 이상은 카메라에 보이는 박스, 클래스 오류는 카메라에
+     보이는 박스에만, 방향 오류는 긴 박스에만). 처음 구현은 13개 중 2개만 카메라에 보여 찾기 어려웠음.
+  10. N이 필터를 따르게 함. 그렇지 않으면 프레임 사이를 오가고 "Every box is reviewed"라고 잘못 말함(Case 6).
+  11. 엣지 검증에서 추가: 탭 간 동기화(Case 4), 한글 입력 상태의 단축키(Case 5), 저장 성공 시 "Not saved" 해제(Case 7),
+      1280px 미만의 상단 바 폭(Case 3).
+  12. 기존 목록 스크롤 버그를 고침. J / K가 여기에 의존(Case 1).
+  13. 최적화 하나를 넣었다가 되돌림. 개발 서버에서는 글자당 110ms였지만 배포용 빌드에서는 약 2ms.
+- 설계대로 유지: 키는 (프레임 ID, 객체 ID), 사유는 여러 개·선택 사항, 별도 저장 store, 대기열은 필터 통과 박스·진행률
+  분모는 전체, 반려는 머묾·승인은 이동·프레임은 자동으로 안 넘어감, 모든 박스가 검수 대상, 내보내기는 검수한 박스 + 요약,
+  COCO에는 검수 UI 없음, 3D 뷰는 그대로.
+- 남은 것:
+  - nuScenes에서 three.js가 가만히 있어도 쓰는 비용(F4가 만든 것이 아님, 보류). 배포용 빌드 기준 1초에 0.4~0.55초의
+    JS 시간(COCO는 약 0.05초). 별도의 측정 항목으로, F7 전에 다룰 것.
+  - 데이터 요청 실패 시 오류 문구가 JSON 해석 오류로 나옴(F4 이전부터, 한 줄짜리 `fix:`). 사용자 결정으로 이번에는 넣지 않음.
+  - 1536×700에서 반려 상태일 때 연습 채점 칸과 "Selected"는 패널 안에서 스크롤해야 보임(수용).
+  - 3D에서 자세히 보려면 직접 확대해야 함(결정 15). 써 보고 불편하면 다시 본다.
+  - 측정은 GPU 없는 환경에서 했음. 사용자 노트북에서의 프레임 수는 재지 않음.
+  - COCO 모드: 계속 보류.
+- Edge refs: Edge_F#4 Case 1~7, "측정하고 바꾸지 않은 것", "발견했으나 보류".
+-->
+
+---
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -937,7 +1088,8 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 > **Design docs:** the pre-implementation design for each feature is written in
 > `docs/plan-feature/F#_*.md` (index: `docs/plan-feature/README.md`), one doc per feature, written
 > just before that feature starts. **F3 is done** (2026-11-25, see the F3 entry above; design doc
-> `F3_workspace_layout.md`). Next: F4 — its design doc is written at the start of the F4 session.
+> `F3_workspace_layout.md`). **F4 is done** (2026-11-25, see the F4 entry above; design doc
+> `F4_box_review.md`). Next: F5 — its design doc is written at the start of the F5 session.
 > Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
 
 ### Why change direction (the gap this closes)
@@ -1033,6 +1185,12 @@ parsing (becomes necessary in F7 when the frame count grows).
 - 2D-only label types (polygons, masks, keypoints).
 
 ### Open / deferred
+- **Found during F4, not part of any feature (2026-11-25):**
+  - *Tech upgrade (trigger met by measurement):* three.js spends ~0.4–0.55 s of JS per second on
+    shader-program bookkeeping at idle on nuScenes (production build; COCO ~0.05 s). Find which
+    material / object forces the re-evaluation, fix, record before / after. Do before F7.
+  - *Small fix:* the data loader does not check `response.ok`, so an HTTP error is reported as a
+    JSON parse error. Details: Edge_F#4 ("Found during F4, not caused by F4").
 - **COCO mode: left as it is for now.** Whether it stays as a secondary tab or is retired is decided
   after the F3 redesign shows what that tab looks like in the new layout (user decision, 2026-11-25).
   **F3 is done and COCO sits unchanged in the new layout; the user has not decided yet** (captures:

@@ -48,8 +48,20 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── WorkspaceShell.tsx  # zone layout only (no state): topBar, filterBar, list, main, camera, details, timeline slots + cameraAspect; exports TIMELINE_ROW_HEIGHT_CLASS
 │   │   │   ├── Panel.tsx           # PANEL_CLASS, SECTION_TITLE_CLASS, PanelTitle, PanelHeader (32px title row), ViewerLabel (viewer corner tag)
 │   │   │   └── index.ts            # barrel
+│   │   ├── review/         # ✅ F4 — 3D box review UI (see "Review (F4)" below). Presentation only; all logic is in lib/review
+│   │   │   ├── ReviewControls.tsx     # verdict buttons (Approve/Reject/Unsure) + reject reasons + note + queue-done banner; sits ABOVE the details scroll area
+│   │   │   ├── EvidenceStrip.tsx      # one line above the buttons: LiDAR point count, visibility, in camera
+│   │   │   ├── ReviewProgress.tsx     # top bar: reviewed / total + bar; "Not saved" when storage fails
+│   │   │   ├── QueueBar.tsx           # under the list title: order dropdown + "N to review"
+│   │   │   ├── ExportMenu.tsx         # top bar: Download JSON / CSV, two-click Reset
+│   │   │   ├── PracticeScoreCard.tsx  # practice mode: found / missed / false alarms, Reveal answers
+│   │   │   ├── icons.tsx              # StatusIcon (verdict) + EvidenceBars (LiDAR points) for list rows
+│   │   │   ├── labels.ts              # UI wording for verdicts / reasons / block messages
+│   │   │   ├── download.ts            # downloadTextFile (Blob + <a download>), UTF8_BOM
+│   │   │   ├── useReviewShortcuts.ts  # window keydown → resolveShortcut → page handler
+│   │   │   └── index.ts               # barrel
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
-│   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?, visibleIds?, label? (F2-E: bbox label = class only on measured frames; F3: fills its cell, corner tag)
+│   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?, visibleIds?, label?, zoom?, onToggleZoom?, zoomShortcut? (F2-E: bbox label = class only on measured frames; F3: fills its cell, corner tag; F4: Full/Zoom + projected 3D box, see "Review (F4)")
 │   │   │   └── index.ts        # barrel
 │   │   ├── viewer-3d/      # ✅ Step 4, 5 — R3F canvas, point cloud, 3D bboxes, selection sync
 │   │   │   ├── Viewer3D.tsx    # props: frame, selectedId?, onSelect?, label?; hosts Canvas (F3: fills its cell, resized not remounted)
@@ -60,7 +72,7 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── HintBox.tsx     # ✅ Step 9.5 — corner mouse-controls overlay (plain HTML sibling of Canvas; English since F3)
 │   │   │   └── index.ts        # barrel
 │   │   ├── object-list/    # ✅ Step 6 — detection list panel; selection sync with 2D/3D
-│   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds? (F3: lists every 3D box; measured rows show in-camera icon + distance; 6-char display id)
+│   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds?, verdicts?, boxes?, orderKey?, toolbar? (F3: lists every 3D box; measured rows show in-camera icon + distance; 6-char display id. F4: LiDAR evidence bars + verdict icon per row, order supplied by the page, toolbar slot)
 │   │   │   └── index.ts        # barrel
 │   │   ├── filters/        # ✅ Step 7 — confidence slider + class toggles
 │   │   │   ├── Filters.tsx           # props: classes, threshold, visibleClasses, filterMode, maxDistance, callbacks
@@ -69,13 +81,13 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
 │   │   ├── timeline/       # ✅ Step 8 — horizontal thumbnail strip
-│   │   │   ├── Timeline.tsx     # props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only). F3: one 84px row (title + Play/Reset/Follow left, 96×56 thumbnails right); badge = detections3D count
+│   │   │   ├── Timeline.tsx     # (F4: optional reviewCounts → thumbnail badge "reviewed/total") props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only). F3: one 84px row (title + Play/Reset/Follow left, 96×56 thumbnails right); badge = detections3D count
 │   │   │   └── index.ts         # barrel
 │   │   ├── header/         # ✅ Step 9.5 Phase 2 — app title + frame meta line
-│   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount, datasetId, onSelectDataset, source?. F3: flush 44px app bar; meta hidden when frameCount is 0 (loading/error)
+│   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount, datasetId, onSelectDataset, source?, children?, practiceActive?, practiceRequested?, onTogglePractice?. F3: flush 44px app bar; meta hidden when frameCount is 0 (loading/error). F4: `children` slot at the right (review progress + Export); Practice toggle + "Practice · labels modified" badge; below 1280px the "N detections" text yields when children are present
 │   │   │   └── index.ts
 │   │   ├── analytics/      # ✅ Step 9.5 Phase 3 — right-rail analytics container
-│   │   │   ├── AnalyticsPanel.tsx  # composes Inspector + charts
+│   │   │   ├── AnalyticsPanel.tsx  # composes Inspector + charts. F4: optional title / headerRight / controls (above the scroll area) / bodyTop (top of the scroll area) slots — the page turns it into the "Review" panel on nuScenes; the panel itself knows nothing about reviews
 │   │   │   └── index.ts
 │   │   ├── charts/         # ✅ Step 9.5 Phase 3 — pure SVG / CSS charts (no Recharts)
 │   │   │   ├── ConfidenceHistogram.tsx  # SVG bars + slider-threshold overlay
@@ -99,8 +111,10 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── depth-color.test.ts          # 15 tests (endpoints, monotonic, clamp, degenerate, range)
 │   │   │   ├── transforms.ts                # ✅ F2 — global→ego + axis convention z-up→y-up (THREE Quaternion/Matrix4)
 │   │   │   ├── transforms.test.ts           # 13 tests — global→ego yaw, axis flip, quaternion order/absent, size reorder
-│   │   │   ├── projection.ts                # ✅ F2 — ego→camera + intrinsic; 8-corner AABB; behind-camera/off-screen cull
-│   │   │   ├── projection.test.ts           # 10 tests — known 3D→pixel, behind-camera null, off-screen clamp
+│   │   │   ├── projection.ts                # ✅ F2 — ego→camera + intrinsic; 8-corner AABB; behind-camera/off-screen cull. F4: projectBoxCorners (8 corner pixels, order kept) + BOX_EDGES / BOX_FRONT_FACE; the corner ORDER of boxCornersEgo is now a contract (index = 4·ix + 2·iy + iz; corners 4–7 = front)
+│   │   │   ├── projection.test.ts           # 18 tests — known 3D→pixel, behind-camera null, off-screen clamp; F4: corner order, edge table, front face, corners ↔ bbox agreement
+│   │   │   ├── camera-zoom.ts               # ✅ F4 — zoomRegion(bbox, imageW, imageH): the image region to show when zooming on one box (image aspect kept, clamped inside the image)
+│   │   │   ├── camera-zoom.test.ts          # 8 tests — aspect, containment, 2.4× height, wide boxes, min size, edges, whole-image fallbacks
 │   │   │   ├── camera-framing.ts            # ✅ F2-A frameBoxesForCamera() (fit camera to box cloud) + ✅ F2-D-1 selectFollowTarget() (selected box center | null)
 │   │   │   ├── camera-framing.test.ts       # 9 tests — framing (center/behind+above/ground-cap/wider→farther) + selectFollowTarget (found/null/absent/empty)
 │   │   │   ├── interpolation.ts             # ✅ F2-D-2 — pure lerpVec3 (position) + slerpQuat (rotation) for inter-frame box tween
@@ -109,7 +123,7 @@ apps/ai_detection_viewer_client/
 │   │   │   └── index.ts                     # barrel
 │   │   ├── nuscenes/       # ✅ F2 (parser+types) — prepped nuScenes static JSON → internal Frame[]
 │   │   │   ├── parser.ts                     # ✅ parseNuScenes: prepped JSON → Frame[] (NOT raw relational tables)
-│   │   │   ├── parser.test.ts                # 10 tests — id share (Rule #1), source/confidence, behind-camera 2D drop, defensive
+│   │   │   ├── parser.test.ts                # 23 tests — id share (Rule #1), source/confidence, behind-camera 2D drop, defensive, LiDAR; F4: annotation info (token / LiDAR points / visibility, optional + per-field tolerant), projected corners
 │   │   │   ├── types.ts                      # ✅ prepped-JSON schema (nuScenes-native: quat [w,x,y,z], size [w,l,h], global)
 │   │   │   └── index.ts                      # barrel
 │   │   ├── selectors/      # ✅ Step 7 — pure store derivations
@@ -129,14 +143,30 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── distance.ts                  # ✅ F2-A — DISTANCE_MAX / DISTANCE_STEP (distance-filter slider + store default)
 │   │   │   ├── display-id.ts                # ✅ F3 — displayId(id): first 6 chars of a long id (nuScenes token), short ids (COCO) unchanged. Display only (Rule #1)
 │   │   │   └── display-id.test.ts           # 5 tests — 32-char → 6, COCO unchanged, ≤8 kept, >8 shortened, empty
+│   │   ├── review/         # ✅ F4 — review logic, all pure (no React / Zustand / DOM). See "Review (F4)" below
+│   │   │   ├── types.ts          # Verdict, RejectReason (+ REJECT_REASONS order = keys 1–6), ReviewRecord, ReviewMap, ReviewScope
+│   │   │   ├── records.ts        # reviewKey, getReview, withVerdict / withReasonToggled / withNote / withoutReview (return the SAME map on a no-op)
+│   │   │   ├── progress.ts       # countFrameReviews, summarizeProgress, verdictsOfFrame (walk the data's boxes; stale records ignored)
+│   │   │   ├── queue.ts          # orderBoxes (scene / evidence / camera), buildQueue (filtered), stepInQueue, nextUnreviewed, nextFrameWithUnreviewed (filter-aware)
+│   │   │   ├── evidence.ts       # evidenceLevel / isWeakEvidence from the LiDAR point count (WEAK_EVIDENCE_MAX_POINTS = 4)
+│   │   │   ├── availability.ts   # getReviewBlock: playing / no-selection / not-in-frame / hidden
+│   │   │   ├── shortcuts.ts      # resolveShortcut(event) → ReviewAction | null; isTypingTarget; SHORTCUT_KEYS
+│   │   │   ├── export.ts         # buildReviewExport, reviewExportToJson / ToCsv, reviewExportFilename
+│   │   │   ├── persisted.ts      # sanitizeReviews: validate what was read back from storage
+│   │   │   ├── practice.ts       # makePracticeSet (seeded box errors on the RAW prepped data) + scorePractice
+│   │   │   ├── test-helpers.ts   # makeBox / makeFrame builders for the tests below
+│   │   │   ├── *.test.ts         # records 16, progress 7, queue 30, evidence 10 (evidence + availability + verdictsOfFrame), shortcuts 19, export 17, persisted 9, practice 24
+│   │   │   └── index.ts          # barrel
 │   │   ├── sequence/       # ✅ F2-C — keyframe-sequence playback logic (pure; no React/Three.js)
 │   │   │   ├── autoplay.ts                   # nextFrameIndex(index, count, {loop}) + AUTOPLAY_INTERVAL_MS (~2 Hz)
 │   │   │   ├── autoplay.test.ts              # 8 tests — advance, loop-wrap, stop-at-end, not-found→0, single/empty/stale
 │   │   │   └── index.ts                      # barrel
 │   │   └── types/          # Frame, Detection2D, Detection3D, Point3D
-│   └── store/          # ✅ Step 3 — Zustand store (UI state only)
-│       ├── viewer-store.ts
+│   └── store/          # ✅ Step 3 — Zustand stores
+│       ├── viewer-store.ts        # UI state only (selection, filters). Never persisted
 │       ├── viewer-store.test.ts
+│       ├── review-store.ts        # ✅ F4 — review records, persisted to localStorage (zustand `persist`, skipHydration, safe storage wrapper)
+│       ├── review-store.test.ts   # 19 tests — actions, scope isolation, no-op = no notify, save/load/validate, storage full / blocked / recovered
 │       └── index.ts        # barrel
 ├── tests/
 │   └── integration/        # ✅ Step 5, 8 — cross-module contract tests
@@ -147,7 +177,7 @@ apps/ai_detection_viewer_client/
 │       ├── sample.json
 │       ├── frame_001.jpg ~ frame_010.jpg
 │       └── nuscenes/       # ✅ F2 — offline-generated (scripts/prep_nuscenes.py)
-│           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes + ~6.5k LiDAR pts/frame); NuScenesPrepped schema. Compact (no indent) — the inline lidar.points arrays dominate size (~1.4 MB).
+│           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes + ~6.5k LiDAR pts/frame); NuScenesPrepped schema. Compact (no indent) — the inline lidar.points arrays dominate size (~1.5 MB). Format 1.1 since F4: each annotation also carries annotationToken / numLidarPts / visibility.
 │           └── cam_front/       # 10 CAM_FRONT keyframe jpgs
 └── vitest.config.ts        # include: src/**/*.test.ts + tests/**/*.test.ts
 
@@ -158,6 +188,8 @@ scripts/                    # ✅ F2 — offline, build-time only (repo root, li
                             #   F2-B: also decodes LIDAR_TOP .pcd.bin (struct, 5×float32/pt) and
                             #   voxel-grid decimates it. Copies RAW values only, no coordinate math
                             #   (Rule #3; decimation is subsampling, not a transform). NOT a runtime backend.
+                            #   F4: also copies per-box annotationToken / numLidarPts / visibility level (format 1.1).
+                            #   Re-running is deterministic (verified: output identical apart from the new fields).
 ```
 
 Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
@@ -187,6 +219,10 @@ type Detection2D = {
   class: string;
   confidence: number;
   bbox: { x: number; y: number; width: number; height: number };
+  // (F4) Pixel positions of the 3D box's 8 corners in this image, in the corner
+  // order of `boxCornersEgo` (4–7 = front face). Only on PROJECTED 2D boxes
+  // (nuScenes); `bbox` is then the rectangle around these points. Not clamped.
+  corners?: [number, number][];
 };
 
 type Detection3D = {
@@ -201,6 +237,14 @@ type Detection3D = {
     // valid and F1 tests don't break. Three.js + nuScenes are quaternion-native
     // (nuScenes stores [w,x,y,z]; the parser reorders). See domain-glossary.
     rotation?: [number, number, number, number];
+  };
+  // (F4) Facts the DATASET records about this box's annotation — what a reviewer
+  // needs besides geometry. nuScenes only; every field optional (format-1.0
+  // sample files lack them; a wrong-typed value drops only that field).
+  annotation?: {
+    token?: string;        // sample_annotation.token — unique per box per frame (`id` repeats across frames)
+    lidarPoints?: number;  // num_lidar_pts — counted by nuScenes on the ORIGINAL sweep, not our decimated cloud
+    visibility?: 'v0-40' | 'v40-60' | 'v60-80' | 'v80-100';  // nuScenes bins, across all 6 cameras
   };
 };
 
@@ -237,6 +281,8 @@ Zustand store (selection / filters)
 ```
 
 The Zustand store holds UI state only. Frame data lives in React state at the page level.
+(F4 adds a SECOND store, `review-store`, for review records — the only persisted state. It holds no
+selection: see "Review (F4)".)
 
 ## Zustand Store Schema
 
@@ -480,6 +526,8 @@ Wide (lg, ≥1024px): full viewport, the page never scrolls (lg:h-screen, min-h 
 - **Viewer labels follow provenance** (Rule #6): `Frame.source === 'nuscenes-measured'` →
   "LiDAR · measured 3D" / "CAM_FRONT"; otherwise "3D · estimated from 2D" / "Image". "CAM_FRONT" is
   fixed because `scripts/prep_nuscenes.py` exports that camera only (until F6).
+- **(F4 filled its spots — see "Review (F4)" below. Still reserved: F5 summary in the details panel
+  and a confidence slider in the filter bar; F6 cameras in the camera cell.)**
 - **Reserved spots for later features** (F3 design doc §12): F4 review buttons at the top of the
   details panel and progress in the top bar, review status at the right of each list row; F5 summary
   in the details panel and a confidence slider in the filter bar; F6 cameras in the camera cell.
@@ -504,6 +552,159 @@ F3(2026-11-25)부터 `page.tsx`는 모든 것을 `components/workspace/Workspace
   아니면 "3D · estimated from 2D" / "Image".
 - 뒤 기능 자리: F4 검수 버튼은 정보 패널 맨 위, 진행률은 상단 바, 검수 상태는 목록 행 오른쪽. F5 요약은 정보 패널,
   confidence 슬라이더는 필터 바. F6 카메라는 카메라 칸.
+-->
+
+## Review (F4) — current
+
+F4 (2026-11-25) turns the nuScenes view into a review tool: every measured 3D box can be approved,
+rejected (with reasons) or marked unsure; the records are saved in the browser and exported. COCO is
+untouched — its 3D is estimated, so there is nothing to approve or reject (Rule #6) — and renders
+exactly as after F3. Design: `docs/plan-feature/F4_box_review.md`; edge cases: `Edge_F#4.md`.
+
+### Data flow
+
+```
+selectedFrameId + selectedObjectId   (viewer-store — the ONLY selection state, Rule #2)
+        │  page derives the target of every review action from these two
+        ▼
+review-store.reviews[scope]["frameId/objectId"] = ReviewRecord      (persisted)
+        │
+        ├─ summarizeProgress(frames, reviews) ──▶ Header progress, Timeline badges, panel "Frame n · x/y"
+        ├─ verdictsOfFrame(frame, reviews) ─────▶ ObjectList row icons
+        ├─ orderBoxes → buildQueue(visibleIds) ─▶ list order, J / K, "N to review"
+        ├─ nextUnreviewed / nextFrameWithUnreviewed ─▶ auto-advance, N
+        └─ buildReviewExport ──▶ JSON / CSV download
+```
+
+- **Review unit = one box in one frame.** The object id (`instance` token) repeats across frames,
+  but each frame's box is drawn separately, so the key is the pair `reviewKey(frameId, objectId)`.
+  Both ids are stored inside the record too; nothing ever splits a key.
+- **No "box under review" state.** The store's actions take the target as arguments; the page always
+  passes the current selection. Nothing derived (progress, queue, next box) is stored.
+- **Scopes.** `'nuscenes'` = verdicts on the real annotations; `'nuscenes-practice'` = verdicts on
+  the practice set. Separate maps — they never mix.
+
+### review-store
+
+```ts
+type ReviewStore = {
+  reviews: Record<'nuscenes' | 'nuscenes-practice', Record<string, ReviewRecord>>;
+  storageFailed: boolean;   // true while saving is failing; NOT persisted
+  setVerdict(scope, frameId, objectId, verdict, now?): void;
+  toggleReason(scope, frameId, objectId, reason): void;   // rejected boxes only
+  setNote(scope, frameId, objectId, note): void;          // rejected / unsure boxes only
+  clearReview(scope, frameId, objectId): void;
+  resetScope(scope): void;
+};
+```
+
+| Concern | Behaviour |
+|---|---|
+| Transitions | Pure functions in `lib/review/records.ts`; a no-op returns the same map → no subscriber notification |
+| Verdict change | Reasons survive only while `rejected`; the note survives for `rejected` and `unsure`; `approved` clears both. Same verdict again = no-op (timestamp kept) |
+| Persistence | zustand `persist`, key `ai-detection-viewer.review`, `partialize` → `reviews` only, `skipHydration: true` |
+| Loading | `page.tsx` calls `persist.rehydrate()` in an effect after mount → server HTML and first client render both start empty (no hydration mismatch) |
+| Stored data | Treated as outside input: `merge` runs `sanitizeReviews` (drops records with bad ids / verdict, repairs soft fields, rebuilds keys) |
+| Storage failure | `createSafeStorage` wraps the backend: nothing throws into an action; `storageFailed` goes true on a failed read/write and back to false on the next successful write (Edge_F#4 Cases 2, 7) |
+| Other tabs | `page.tsx` rehydrates on the `storage` event so an older tab cannot overwrite newer records (Edge_F#4 Case 4) |
+| Stale records | A record whose box is not in the loaded data is ignored by progress / export; it is deleted only by Reset |
+
+### What blocks a verdict (`getReviewBlock`)
+
+`playing` (boxes are at interpolated poses, Rule #6) → `no-selection` → `not-in-frame` (the tracked
+selection has no box in this frame) → `hidden` (filtered out, so not drawn in 3D). Buttons are
+disabled and the reason is shown; the page handlers re-check the same value.
+
+### Queue, auto-advance, shortcuts
+
+- **Order** (`QueueOrder`, page-level view state, reset on dataset switch): `scene` (dataset order),
+  `evidence` (fewest LiDAR points first; unknown counts last), `camera` (in-camera first). Stable sorts.
+- **Queue** = the ordered boxes that pass the filters. The list still shows every box (hidden ones
+  dimmed); J / K and auto-advance walk the queue only.
+- **Auto-advance:** Approve and Unsure select `nextUnreviewed` (wraps within the frame, never returns
+  the current box); Reject stays (reasons). The frame never changes on its own.
+- **N** = `nextFrameWithUnreviewed` with the SAME filter rule as the queue (Edge_F#4 Case 6), then
+  selects that frame's first unreviewed box and stops playback.
+- **Shortcuts** (`resolveShortcut`, pure): `A` `R` `U` verdicts, `C` clear, `J` `K` step, `1`–`6`
+  reasons, `N` next frame, `Z` camera zoom. Not while typing (`isTypingTarget`), not with
+  Ctrl / Meta / Alt; only J / K auto-repeat. With a non-Latin input method (`key` = "ㅁ" / "Process")
+  the physical key (`code`) decides (Edge_F#4 Case 5). An open `ExportMenu` stops key events before
+  they reach the shortcut listener.
+- **Focus rule:** verdict / reason / clear / zoom buttons blur after a MOUSE click (`event.detail > 0`),
+  because a verdict moves the selection and Space would re-fire the button on the next box.
+
+### Camera cell (Viewer2D) in review
+
+- `zoom` (page state, default on) + a selected box that is in the image → the SVG `viewBox` becomes
+  `zoomRegion(bbox)` and the selected box is drawn as its **projected 3D box**: 8 white edges, the
+  front face in sky with diagonals (`Detection2D.corners`, `BOX_EDGES`, `BOX_FRONT_FACE`). Other boxes
+  become faint, label-less, still clickable rectangles. Zoom strokes use `non-scaling-stroke`.
+- Full view, no selection, or a filtered-out selection → the pre-F4 rendering, unchanged.
+- Selected box exists in 3D but not in this image → notice "Selected box is outside {label} · check
+  it in the 3D view". Only on viewers that have the zoom toggle (nuScenes).
+- Limit: the photo is 1600×900; a distant object is enlarged, not sharpened.
+
+### Evidence strip
+
+Above the verdict buttons, always visible: LiDAR point count (amber + "weak" at ≤ 4), visibility bin,
+"In camera" / "Not in camera". All three are the dataset's records; tooltips state that the LiDAR count
+is nuScenes' count on the original sweep and that visibility is across all 6 cameras (wording checked
+against the nuScenes schema docs).
+
+### Export
+
+`buildReviewExport(frames, reviews, { scope, exportedAt })` → `{ format: 'ai-detection-viewer/review@1',
+exportedAt, dataset, practice, summary, reviews[] }`; rows = reviewed boxes only, frame order then box
+order, each with `frameIndex`, `frameId`, `objectId`, `annotationToken`, `class`, `verdict`, `reasons`,
+`note`, `reviewedAt`. CSV: RFC 4180 quoting, CRLF, reasons joined by `;`, a leading `'` on a note a
+spreadsheet would run as a formula; a UTF-8 BOM is added at download time. File name:
+`review_<scope>_<YYYYMMDD-HHmm>.<ext>`.
+
+### Practice mode (F4-F)
+
+- `makePracticeSet(raw, { seed, inCamera })` modifies ~10% of each frame's boxes in the RAW prepped
+  data (position 1.0–1.6 m, size ×1.45–1.7 or ×0.55–0.65 with the bottom kept, heading ±30–60°,
+  class swap) and returns the modified copy + the answer key. The parser then runs as usual, so the
+  3D box, its projection and the 2D rectangle agree, and ids are unchanged (Rule #1). The sample file
+  is never written.
+- Fairness rules: candidates need ≥ 5 LiDAR points or to be in the camera; at least half of a frame's
+  errors go to in-camera boxes; class errors only in the camera; heading errors only on boxes ≥ 2 m
+  and ≥ 1.5× elongated. Deterministic per seed (per-frame generator).
+- **Honesty (Rule #6).** `page.tsx` keeps `plantedErrors` (set together with `frames`) as the truth of
+  what is on screen; badge ("Practice · labels modified", never "Measured"), the 3D tag, the review
+  scope and the export flag key on it, not on the toggle.
+- `scorePractice` → found / foundWithReason / missed / pending / falseAlarms, per frame and overall.
+
+### Width budget of the top bar
+
+The bar is a fixed 44px slot and must stay on one line from 1024px. Below 1280px (`xl`) the
+"· N detections" text (when review content is present) and the "N rejected / N unsure" texts are
+hidden (Edge_F#4 Case 3). Anything added to the bar must be checked at 1024px.
+
+<!-- KO (move to a localized file)
+## 검수 (F4) — 현재
+
+F4(2026-11-25)부터 nuScenes 화면은 검수 도구다. 실측 3D 박스를 승인 / 반려(사유) / 판단 불가로 판정하고,
+기록은 브라우저에 저장되며 내보낼 수 있다. COCO는 3D가 추정값이라 검수 대상이 아니며 F3 때와 같다.
+
+- 검수 단위는 "한 프레임의 박스 하나". 키는 (프레임 ID, 객체 ID) 쌍. "검수 중인 박스" 상태는 없고, 항상
+  `selectedFrameId` + `selectedObjectId`에서 대상을 정한다(규칙 #2). 진행률·대기열·다음 박스는 저장하지 않고 계산한다.
+- 범위(scope): `nuscenes`(원본) / `nuscenes-practice`(연습). 서로 섞이지 않는다.
+- review-store: 전이는 `lib/review/records.ts`의 순수 함수. zustand `persist`로 localStorage에 저장하되
+  화면이 뜬 뒤 불러온다(hydration 불일치 방지). 불러온 값은 검증한다. 저장소 접근을 감싸 실패가 판정을
+  죽이지 않게 하고 `storageFailed`로 알린다. 다른 탭이 저장하면 다시 읽는다.
+- 판정 불가 조건: 재생 중 → 선택 없음 → 이 프레임에 없음 → 필터로 가려짐.
+- 대기열: 정렬(장면 순서 / LiDAR 점 적은 순 / 카메라에 보이는 것 먼저) 후 필터를 통과한 박스. 승인·판단 불가는
+  다음 미검수로 자동 이동, 반려는 머묾. `N`은 대기열과 같은 필터 규칙으로 다음 프레임을 찾는다.
+- 단축키: A R U 판정, C 지우기, J K 이동, 1~6 사유, N 다음 프레임, Z 카메라 확대. 입력 중·조합키는 무시,
+  J K만 반복. 한글 입력 상태에서는 물리 키로 판단.
+- 카메라 칸: 확대(기본) + 선택한 박스가 사진에 있으면 그 주변으로 확대하고 3D 박스를 투영한 선을 그린다.
+  사진에 없으면 안내 문구. 전체 보기는 F4 이전과 같다.
+- 근거 줄: LiDAR 점 개수(4개 이하면 weak), 가려짐 단계, 카메라에 보이는지. 모두 nuScenes의 기록이다.
+- 내보내기: 검수한 박스만, 요약 포함. JSON / CSV.
+- 연습 모드: 원본 JSON 단계에서 프레임당 약 10%의 박스를 시드에 따라 어긋나게 한다. 원본 파일은 바뀌지 않는다.
+  화면의 표시(배지, 3D 이름표, 범위, 내보내기)는 토글이 아니라 실제로 불러온 데이터에 따라 정해진다.
+- 상단 바는 1024px부터 한 줄이어야 한다. 1280px 미만에서는 일부 글자를 숨긴다.
 -->
 
 ### Layout (after Step 9.5) — superseded by F3
@@ -781,7 +982,8 @@ Tests follow the same layer boundaries as "Separation of Concerns". Each layer h
 | `lib/coco/`      | Unit                      | COCO JSON → `Frame[]` conversion correctness and edge cases     |
 | `lib/geometry/`  | Unit                      | 2D bbox → 3D bbox / point cloud math correctness                |
 | `lib/selectors/` | Unit                      | Filter semantics; locked invariants (e.g. permissive-empty)     |
-| `store/`         | Unit                      | Actions update state correctly; selectors return expected data  |
+| `lib/review/`    | Unit                      | (F4) Record transitions, progress, queue / next box, shortcuts key map, export text, stored-data validation, practice set determinism + scoring |
+| `store/`         | Unit                      | Actions update state correctly; selectors return expected data. (F4) `review-store`: built per test with an in-memory storage backend (`createReviewStore(backend)`) — save / load / validate / storage failure |
 | `components/`    | (MVP) none                | Rendering is verified manually. Only extracted pure functions are tested |
 | Integration      | Starting Step 5           | store + 2D + 3D respond to the same `selectedObjectId`          |
 
