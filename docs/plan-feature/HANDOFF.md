@@ -35,7 +35,7 @@
 | 끝난 기능 | MVP(Step 1~11), F1, F2(A~E), **F3(A~D)** |
 | 방향 합의 | 끝남. 로드맵이 `post-mvp-checklist.md`에 있음 |
 | F3 | **구현 완료 (2026-11-25).** 결과와 계획 대비 달라진 점은 `post-mvp-checklist.md`의 F3 항목, 경계 사례는 `docs/edgecases/Edge_F#3.md`, 시안과 캡처는 `docs/plan-feature/assets/F3/` |
-| F4 설계 문서 | **없음. 다음 세션의 첫 작업** |
+| F4 설계 문서 | **임시 승인 (2026-11-25):** [F4_box_review.md](F4_box_review.md). 추천안으로 진행하며 단계마다 화면을 보고 조정. 시안은 `assets/F4/compare.html`. 구현은 브랜치 `feat/f4-box-review`에서 진행 중 |
 | F5~F8 설계 문서 | 없음. 각 기능을 시작하는 세션에서 쓴다 |
 | 테스트 | 213개 통과, `tsc --noEmit` 오류 0개 (F3 종료 시점) |
 
