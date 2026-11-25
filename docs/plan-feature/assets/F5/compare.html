@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>F5 시안 비교</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #050506; color: #e4e4e7;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 5; background: #111113; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row + .row { margin-top: 8px; }
+  .lbl { font-size: 12px; color: #71717a; width: 64px; }
+  button { font: inherit; font-size: 13px; color: #d4d4d8; background: #1f1f23; border: 1px solid #3f3f46;
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: #71717a; }
+  button.on { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
+  button.before.on { background: #3f3f46; border-color: #a1a1aa; color: #fff; }
+  button:disabled { opacity: .3; cursor: default; }
+  kbd { font: 600 11px ui-monospace, monospace; border: 1px solid #52525b; border-radius: 3px; padding: 0 4px; color: #a1a1aa; }
+  .note { margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #d4d4d8; max-width: 1180px; }
+  .note b { color: #fff; }
+  .hint { font-size: 12px; color: #71717a; margin-left: 10px; }
+  .stage { padding: 16px; overflow-x: auto; }
+  .tag { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .tag.mock { background: #0c4a6e; color: #bae6fd; }
+  .tag.now { background: #3f3f46; color: #fff; }
+  img { display: block; border: 1px solid #27272a; cursor: pointer; }
+  .legend { margin: 8px 0 0; font-size: 13px; color: #a1a1aa; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 999px; margin: 0 4px 0 12px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="row"><span class="lbl">창 크기</span><span id="sizes"></span>
+    <span class="hint">사용자 노트북 창은 약 1536×700 · 이미지는 실제 크기(1:1) · 모두 프레임 6</span></div>
+  <div class="row"><span class="lbl">화면</span><button id="before" class="before">지금 (F4 완료 화면) <kbd>B</kbd></button><span id="states"></span>
+    <span class="hint">이미지를 클릭하거나 <kbd>Space</kbd>를 누르면 지금 ↔ 시안이 같은 자리에서 바뀝니다</span></div>
+  <p class="legend">색의 뜻:<i style="background:#34d399"></i>찾음(Found) <i style="background:#fb7185"></i>놓침(Missed) <i style="background:#fbbf24"></i>헛짚음(False alarm) <i style="background:#71717a"></i>채점 제외 / 평가 안 함 &nbsp;·&nbsp; 사진 위 <b>실선 = 모델(YOLO)이 그린 박스</b>, <b>점선 = 정답(라벨) 박스</b></p>
+  <p class="note" id="note"></p>
+</div>
+<div class="stage">
+  <span class="tag" id="tag"></span>
+  <img id="img" alt="" />
+</div>
+<script>
+const SIZES = ['1536x700', '1024x768'];
+// key, 버튼 이름, 지금 화면 파일 접미사, 설명
+const STATES = [
+  { k: 'A1_missed_zoom', name: 'A1 추천안 · 놓친 오토바이', before: 'missed_zoom',
+    note: '<b>추천안: 상단의 "Review | Evaluate" 전환(평가 모드).</b> 같은 화면 틀을 그대로 쓰고 칸마다 역할만 바뀝니다. ① <b>상단 바</b>: 전환 버튼이 생기고, 오른쪽은 검수 진행률 대신 모델 이름과 전체 점수가 나옵니다. ② <b>필터 바</b>: 거리 슬라이더 자리에 <b>최소 점수(Min score) 슬라이더</b>가 돌아옵니다. ③ <b>왼쪽 목록</b>: 이 프레임의 채점 결과입니다(놓침 → 헛짚음 → 찾음 → 채점 제외 순). ④ <b>3D 뷰</b>: 박스 색이 클래스가 아니라 <b>결과</b>를 뜻합니다. 회색은 앞 카메라에 안 보여 평가하지 않은 박스입니다. ⑤ <b>카메라 칸</b>: 선택한 "놓친 오토바이"(24m)의 정답 박스가 빨간 점선으로 보입니다. 모델 박스(실선)가 겹쳐 있지 않습니다. ⑥ <b>오른쪽 아래</b>: 선택한 결과 한 줄 + 전체 점수 + 거리별 탐지율. ⑦ <b>타임라인</b>: 프레임마다 놓친 개수.' },
+  { k: 'A2_missed_full', name: 'A2 같은 상태 · 사진 전체', before: 'missed_full',
+    note: 'A1과 같은 상태에서 카메라만 <b>전체 보기</b>입니다. 사진 한 장에 찾음(초록), 놓침(빨강 점선), 헛짚음(노랑)이 한꺼번에 보입니다. 가운데의 빨간 점선 묶음이 <b>주차된 오토바이들</b>이고, 모델은 이것을 하나도 찾지 못했습니다(10개 프레임 전체에서 40개 중 0개).' },
+  { k: 'A3_found_zoom', name: 'A3 찾은 보행자', before: 'found_zoom',
+    note: '<b>찾음(Found)</b>인 보행자(27m)를 선택한 화면입니다. 카메라 칸에 <b>정답 박스(점선)와 모델 박스(실선)가 겹쳐</b> 보입니다. 정답 박스가 사람보다 헐렁한 것이 보이는데, 정답 박스가 3D 상자를 사진에 비춘 근사치이기 때문입니다(화면 아래 범례에 "approx."로 표시). 패널의 "overlap (IoU) 0.78"이 두 박스가 겹친 정도입니다.' },
+  { k: 'A4_falsealarm_zoom', name: 'A4 헛짚음', before: 'none',
+    note: '<b>헛짚음(False alarm)</b>을 선택한 화면입니다. 모델이 "사람, 점수 0.35"라고 했지만 그 자리의 정답은 <b>오토바이</b>입니다(클래스를 틀림). 모델의 2D 박스에는 3D 위치가 없으므로 <b>3D 뷰에는 선택 표시가 없고</b>, 패널이 그 사실을 알려줍니다. 지금 화면(B)은 아무것도 선택하지 않은 상태입니다.' },
+  { k: 'B1_tab_missed_zoom', name: 'B1 대안 · 패널 안의 탭', before: 'missed_zoom',
+    note: '<b>대안: 오른쪽 아래 패널에만 "Review | Evaluation" 탭을 두는 방식.</b> 상단 바, 목록, 3D 뷰는 검수 화면 그대로이고 패널 내용과 카메라 칸만 바뀝니다. 만들 것이 적고 화면이 덜 바뀝니다. 대신 ① 목록에 <b>헛짚음을 넣을 자리가 없어</b> 사진에서만 찾아야 하고, ② 3D 뷰가 클래스 색 그대로라 <b>"놓친 객체가 3D 어디에 있나"가 보이지 않으며</b>, ③ 목록의 검수 아이콘과 평가 결과가 한 화면에 섞입니다. A1과 번갈아 보세요.' },
+];
+const HAVE = { '1536x700': ['A1', 'A2', 'A3', 'A4', 'B1'], '1024x768': ['A1'] };
+const HAVE_BEFORE = { '1536x700': ['missed_zoom', 'missed_full', 'found_zoom', 'none'], '1024x768': ['missed_zoom'] };
+let size = SIZES[0], state = STATES[0], showBefore = false;
+const $ = (id) => document.getElementById(id);
+const has = (s, sz) => HAVE[sz].includes(s.k.slice(0, 2));
+
+function render() {
+  $('sizes').innerHTML = '';
+  SIZES.forEach((sz) => {
+    const b = document.createElement('button');
+    b.textContent = sz.replace('x', '×'); b.className = sz === size ? 'on' : '';
+    b.onclick = () => { size = sz; if (!has(state, size)) state = STATES[0]; render(); };
+    $('sizes').appendChild(b); $('sizes').append(' ');
+  });
+  $('states').innerHTML = '';
+  STATES.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `${s.name} <kbd>${i + 1}</kbd>`; b.className = !showBefore && s === state ? 'on' : '';
+    b.disabled = !has(s, size);
+    b.onclick = () => { state = s; showBefore = false; render(); };
+    $('states').append(' '); $('states').appendChild(b);
+  });
+  const beforeOk = HAVE_BEFORE[size].includes(state.before);
+  $('before').className = 'before' + (showBefore ? ' on' : '');
+  $('before').disabled = !beforeOk;
+  if (showBefore && !beforeOk) showBefore = false;
+  $('img').src = showBefore
+    ? `2026-11-25_before/nuscenes_frame6_${state.before}_${size}.jpg`
+    : `2026-11-25_mockup/${state.k}_${size}.jpg`;
+  $('tag').textContent = showBefore ? '지금 (F4 완료 화면)' : `시안 ${state.name}`;
+  $('tag').className = 'tag ' + (showBefore ? 'now' : 'mock');
+  $('note').innerHTML = state.note + (size === '1024x768' ? ' <b>(1024×768: 약속한 최소 폭에서 상단 바가 한 줄에 들어가는지 본 화면입니다. 목록의 클래스 이름이 잘리는 것은 구현에서 칸 폭을 조정해 해결합니다.)</b>' : '');
+}
+const flip = () => { showBefore = !showBefore; render(); };
+$('before').onclick = flip;
+$('img').onclick = flip;
+addEventListener('keydown', (e) => {
+  if (e.key === ' ' || e.key === 'b' || e.key === 'B') { e.preventDefault(); flip(); return; }
+  const n = Number(e.key);
+  if (n >= 1 && n <= STATES.length && has(STATES[n - 1], size)) { state = STATES[n - 1]; showBefore = false; render(); }
+});
+render();
+</script>
+</body>
+</html>
