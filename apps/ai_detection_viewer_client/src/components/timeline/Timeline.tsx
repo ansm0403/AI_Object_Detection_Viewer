@@ -1,6 +1,7 @@
 'use client';
 
 import type { Frame } from '@/lib/types';
+import type { ReviewCounts } from '@/lib/review';
 import { PANEL_CLASS, PanelTitle } from '@/components/workspace';
 
 type TimelineProps = {
@@ -23,6 +24,10 @@ type TimelineProps = {
   // independent so "return to frame 1" carries no sequence meaning; when the
   // callback is omitted the button is not rendered.
   onReset?: () => void;
+  // (F4) Review counts per frame id. When passed, each thumbnail badge reads
+  // "reviewed/total" instead of the bare box count, so finished and untouched
+  // frames can be told apart at a glance. Omitted on COCO (not reviewed).
+  reviewCounts?: Map<string, ReviewCounts>;
 };
 
 export function Timeline({
@@ -34,6 +39,7 @@ export function Timeline({
   cameraMode = 'fixed',
   onToggleCameraMode,
   onReset,
+  reviewCounts,
 }: TimelineProps) {
   if (frames.length === 0) return null;
 
@@ -149,9 +155,10 @@ export function Timeline({
                 {/* Object-count badge — always shown including 0. Counts 3D
                     boxes, the same basis as the header and the object list
                     (F3 decision 4). */}
-                <span className="absolute top-1 right-1 px-1.5 py-0.5 text-[10px] tabular-nums rounded bg-zinc-950/80 text-zinc-300 ring-1 ring-zinc-800">
-                  {frame.detections3D.length}
-                </span>
+                <CountBadge
+                  total={frame.detections3D.length}
+                  reviewed={reviewCounts?.get(frame.id)?.reviewed}
+                />
                 <span
                   className={[
                     'absolute bottom-0 left-0 right-0 px-1 py-0.5',
@@ -169,5 +176,30 @@ export function Timeline({
         })}
       </ul>
     </div>
+  );
+}
+
+// Thumbnail badge. Without review data: the 3D box count (same basis as the
+// header and the object list, F3 decision 4). With review data (F4):
+// "reviewed/total" — green once anything is reviewed, and a filled green badge
+// when the whole frame is done.
+function CountBadge({ total, reviewed }: { total: number; reviewed: number | undefined }) {
+  const base = 'absolute top-1 right-1 px-1.5 py-0.5 text-[10px] tabular-nums rounded ring-1';
+  if (reviewed === undefined) {
+    return <span className={`${base} bg-zinc-950/80 text-zinc-300 ring-zinc-800`}>{total}</span>;
+  }
+  const done = total > 0 && reviewed >= total;
+  const tone = done
+    ? 'bg-emerald-400 text-zinc-950 font-semibold ring-emerald-300'
+    : reviewed > 0
+      ? 'bg-zinc-950/80 text-emerald-300 ring-zinc-800'
+      : 'bg-zinc-950/80 text-zinc-300 ring-zinc-800';
+  return (
+    <span
+      className={`${base} ${tone}`}
+      title={`${reviewed} of ${total} boxes reviewed`}
+    >
+      {reviewed}/{total}
+    </span>
   );
 }

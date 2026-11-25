@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>F4 단계별 실제 화면</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #050506; color: #e4e4e7;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 5; background: #111113; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row + .row { margin-top: 8px; }
+  .lbl { font-size: 12px; color: #71717a; width: 64px; }
+  button { font: inherit; font-size: 13px; color: #d4d4d8; background: #1f1f23; border: 1px solid #3f3f46;
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: #71717a; }
+  button.on { background: #064e3b; border-color: #34d399; color: #d1fae5; }
+  button.mock.on { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
+  button:disabled { opacity: .3; cursor: default; }
+  kbd { font: 600 11px ui-monospace, monospace; border: 1px solid #52525b; border-radius: 3px; padding: 0 4px; color: #a1a1aa; }
+  .note { margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #d4d4d8; max-width: 1150px; }
+  .note b { color: #fff; }
+  .hint { font-size: 12px; color: #71717a; margin-left: 10px; }
+  .stage { padding: 16px; overflow-x: auto; }
+  .tag { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .tag.real { background: #064e3b; color: #a7f3d0; }
+  .tag.mock { background: #0c4a6e; color: #bae6fd; }
+  img { display: block; border: 1px solid #27272a; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="row"><span class="lbl">화면</span><span id="shots"></span></div>
+  <div class="row"><span class="lbl">창 크기</span><span id="sizes"></span>
+    <button id="mock" class="mock">시안과 비교 <kbd>Space</kbd></button>
+    <span class="hint">초록 = 실제 앱 캡처 · 파랑 = 구현 전 시안. 이미지를 클릭해도 바뀝니다. 이미지는 실제 크기(1:1)입니다.</span></div>
+  <p class="note" id="note"></p>
+</div>
+<div class="stage">
+  <span class="tag" id="tag"></span>
+  <img id="img" alt="" />
+</div>
+<script>
+// 단계가 끝날 때마다 항목을 추가한다. file: 2026-11-25_steps/ 안의 접두어, mock: 2026-11-25_mockup/ 안의 접두어.
+const SHOTS = [
+  { step: 'B', name: 'B1 검수 전', file: 'stepB1_unreviewed', sizes: ['1536x700', '1280x720'],
+    mock: { '1536x700': 'B_unreviewed_full', '1280x720': 'A_unreviewed_zoom' },
+    note: '<b>F4-B 실제 앱.</b> 앞의 6개를 마우스로 판정한 뒤 보행자(28m)를 선택한 화면입니다. 볼 곳: ① 오른쪽 아래 패널 제목이 "REVIEW"가 되고 그 아래 <b>Approve / Reject / Unsure</b> 버튼이 고정됩니다. ② 목록 행 오른쪽 끝의 <b>상태 아이콘</b>(✓ 승인, ✕ 반려, ? 판단 불가, ○ 미검수)과 가운데 <b>LiDAR 근거 막대</b>(주황 = 박스 안 점 4개 이하). ③ 상단 <b>Reviewed 6 / 583</b>. ④ 타임라인 첫 썸네일의 <b>6/40</b>. 카메라 확대, 단축키, 정렬, Export는 아직 없습니다(뒤 단계). 1280×720의 시안은 카메라 확대가 들어간 그림이라 카메라 칸은 다릅니다.' },
+  { step: 'B', name: 'B2 반려 + 사유', file: 'stepB2_rejected', sizes: ['1536x700', '1280x720'],
+    mock: { '1536x700': 'C_rejected_zoom', '1280x720': 'C_rejected_zoom' },
+    note: '<b>반려한 화면.</b> Reject를 누르면 사유 6개와 메모 칸이 나옵니다. "Wrong size"를 고르고 메모를 적었습니다. 사유는 여러 개 고를 수 있고, 하나도 안 고르면 아래 줄에 "Rejected · add a reason"이 주황색으로 뜹니다. 1536×700에서는 "Selected" 정보가 한 줄만 보이고 나머지는 패널 안에서 스크롤해야 합니다.' },
+  { step: 'B', name: 'B3 새로고침 후', file: 'stepB3_after_reload', sizes: ['1536x700'],
+    note: '<b>브라우저를 새로고침한 뒤.</b> 판정 7개, 반려 사유, 메모가 그대로 남아 있습니다. 판정은 누르는 즉시 브라우저 저장소(localStorage)에 저장됩니다.' },
+  { step: 'B', name: 'B5 COCO', file: 'stepB5_coco', sizes: ['1536x700'],
+    note: '<b>COCO 모드.</b> 검수 UI가 전혀 없고 F3 완료 때와 같은 화면입니다(패널 제목 "ANALYTICS", 진행률 없음, 상태 아이콘 없음).' },
+  { step: 'C', name: 'C1 키보드로 검수', file: 'stepC1_keyboard', sizes: ['1536x700', '1280x720'],
+    mock: { '1536x700': 'C_rejected_zoom', '1280x720': 'C_rejected_zoom' },
+    note: '<b>F4-C 실제 앱. 마우스 없이 키만 눌러 만든 화면입니다</b> (J → A A A → U → R → 2). 볼 곳: ① 버튼 옆의 작은 글자 <b>A / R / U</b>가 단축키입니다. ② 반려 사유 앞의 숫자 <b>1~6</b>이 그 사유를 켜고 끄는 키입니다. ③ 버튼 아래 줄의 <b>K prev · J next · C clear</b>. ④ 목록 제목 아래에 <b>Order</b> 정렬 줄과 남은 개수("35 to review")가 생겼습니다. 승인(A)과 판단 불가(U)는 누르면 다음 미검수 박스로 자동으로 넘어가고, 반려(R)는 사유를 고르도록 그 자리에 머뭅니다.' },
+  { step: 'C', name: 'C2 LiDAR 점 적은 순', file: 'stepC2_order_evidence', sizes: ['1536x700'],
+    note: '<b>Order를 "Fewest LiDAR pts"로 바꾼 화면.</b> 박스 안 LiDAR 점이 적은(근거가 약한) 박스가 위로 올라옵니다. 막대가 주황색인 행들이 맨 위에 모입니다. J / K는 이 순서대로 움직입니다.' },
+  { step: 'C', name: 'C3 목록을 다 끝냈을 때', file: 'stepC3_queue_done', sizes: ['1536x700'],
+    note: '<b>필터로 보행자만 남기고 전부 검수한 화면.</b> 필터에 걸린 행(흐린 행)은 J / K와 자동 이동에서 건너뜁니다. 남은 것이 없으면 초록색 안내 <b>"No unreviewed boxes left in this list · Next frame N"</b>이 뜨고, N을 누르면 미검수 박스가 남은 다음 프레임의 첫 박스로 갑니다. 프레임은 자동으로 넘어가지 않습니다.' },
+];
+// 처음 열면 가장 최근 단계의 첫 화면을 보여준다.
+let shot = SHOTS.find((s) => s.step === SHOTS[SHOTS.length - 1].step), size = shot.sizes[0], showMock = false;
+const $ = (id) => document.getElementById(id);
+function render() {
+  if (!shot.sizes.includes(size)) size = shot.sizes[0];
+  const mockKey = shot.mock && shot.mock[size];
+  if (!mockKey) showMock = false;
+  $('shots').innerHTML = '';
+  SHOTS.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.innerHTML = `${s.name} <kbd>${i + 1}</kbd>`; b.className = s === shot ? 'on' : '';
+    b.onclick = () => { shot = s; showMock = false; render(); };
+    $('shots').appendChild(b); $('shots').append(' ');
+  });
+  $('sizes').innerHTML = '';
+  shot.sizes.forEach((sz) => {
+    const b = document.createElement('button');
+    b.textContent = sz.replace('x', '×'); b.className = sz === size ? 'on' : '';
+    b.onclick = () => { size = sz; render(); };
+    $('sizes').appendChild(b); $('sizes').append(' ');
+  });
+  $('mock').disabled = !mockKey;
+  $('mock').className = 'mock' + (showMock ? ' on' : '');
+  $('img').src = showMock ? `2026-11-25_mockup/${mockKey}_${size}.jpg` : `2026-11-25_steps/${shot.file}_${size}.jpg`;
+  $('tag').textContent = showMock ? '구현 전 시안' : `실제 앱 · F4-${shot.step}`;
+  $('tag').className = 'tag ' + (showMock ? 'mock' : 'real');
+  $('note').innerHTML = shot.note;
+}
+const flip = () => { if (shot.mock && shot.mock[size]) { showMock = !showMock; render(); } };
+$('mock').onclick = flip; $('img').onclick = flip;
+addEventListener('keydown', (e) => {
+  if (e.key === ' ') { e.preventDefault(); flip(); return; }
+  const n = Number(e.key);
+  if (n >= 1 && n <= SHOTS.length) { shot = SHOTS[n - 1]; showMock = false; render(); }
+});
+render();
+</script>
+</body>
+</html>

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import type { Frame } from '@/lib/types';
 
 export type DatasetId = 'coco' | 'nuscenes';
@@ -16,6 +17,10 @@ type HeaderProps = {
   // Estimated/Measured badge so depth source is never misrepresented
   // (Immutable Rule #6). Optional/absent → no badge.
   source?: Frame['source'];
+  // (F4) Extra content at the right of the bar, after the frame meta (the page
+  // passes the review progress on nuScenes). The Header does not know what it
+  // is — it stays presentation-only and reads no store.
+  children?: ReactNode;
 };
 
 const DATASETS: { id: DatasetId; label: string }[] = [
@@ -30,6 +35,7 @@ export function Header({
   datasetId,
   onSelectDataset,
   source,
+  children,
 }: HeaderProps) {
   const measured = source === 'nuscenes-measured';
   // Only render a badge when we know the provenance.
@@ -94,9 +100,18 @@ export function Header({
       {/* (F3) The header is also shown while loading / on error so the dataset
           switcher stays usable; there is no frame meta to show then. */}
       {frameCount > 0 && (
-        <span className="text-xs text-zinc-400 tabular-nums">
-          Frame {frameIndex}/{frameCount} · {detectionCount} detections
-        </span>
+        <div className="flex items-center flex-wrap gap-x-3.5 gap-y-1">
+          <span className="text-xs text-zinc-400 tabular-nums">
+            Frame {frameIndex}/{frameCount} · {detectionCount} detections
+          </span>
+          {/* (F4) Review progress / actions for datasets that are reviewed. */}
+          {children && (
+            <>
+              <span aria-hidden="true" className="hidden lg:block w-px h-5 bg-zinc-800" />
+              {children}
+            </>
+          )}
+        </div>
       )}
     </header>
   );

@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
-import type { Frame } from '@/lib/types';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import type { Detection3D, Frame } from '@/lib/types';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { displayId } from '@/lib/ui/display-id';
 import { PANEL_CLASS, PanelHeader } from '@/components/workspace';
 import { detectionDistance, frameHasConfidence } from '@/lib/selectors';
+import type { Verdict } from '@/lib/review';
+import { EvidenceBars, StatusIcon } from '@/components/review';
 
 type ObjectListProps = {
   frame: Frame;
@@ -16,6 +18,19 @@ type ObjectListProps = {
   // Edge_#4 Case 1 still works for filtered-out objects); hidden rows are
   // dimmed instead.
   visibleIds?: Set<string>;
+  // (F4) Review verdict per object id for THIS frame. When passed, every row
+  // ends with a status icon (unreviewed rows get the empty ring). Omitted on
+  // datasets that are not reviewed (COCO) → no status column.
+  verdicts?: Map<string, Verdict>;
+  // (F4) The frame's 3D boxes in the order to list them (the review queue
+  // order). Omitted → the dataset order (`frame.detections3D`). The list does
+  // not sort anything itself; ordering is `lib/review`'s job.
+  boxes?: Detection3D[];
+  // (F4) Identifies the current ordering. When it changes, the selected row is
+  // scrolled back into view (the same row may have moved far away).
+  orderKey?: string;
+  // (F4) A thin bar under the title row (the page passes the order control).
+  toolbar?: ReactNode;
 };
 
 /**
@@ -26,7 +41,16 @@ type ObjectListProps = {
  * frames show whether the box is in the camera image and its distance from the
  * ego vehicle. COCO is 1:1 (2D and 3D share ids), so it lists the same objects.
  */
-export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectListProps) {
+export function ObjectList({
+  frame,
+  selectedId,
+  onSelect,
+  visibleIds,
+  verdicts,
+  boxes: orderedBoxes,
+  orderKey,
+  toolbar,
+}: ObjectListProps) {
   const selectedRef = useRef<HTMLLIElement | null>(null);
   // Measured (nuScenes) frames have no model score — the parser's 1.0 is a
   // placeholder, so the confidence gauge is not shown (Rule #6).
@@ -41,27 +65,34 @@ export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectLi
     () => new Set(frame.detections2D.map((d) => d.id)),
     [frame],
   );
-  const boxes = frame.detections3D;
+  const boxes = orderedBoxes ?? frame.detections3D;
 
-  // Scroll selected row into view when selection changes from outside the list.
-  // Adjusts the <ul>'s scrollTop directly instead of calling scrollIntoView —
-  // the latter chains up to every scrollable ancestor (including <body>) and
-  // can scroll the page on short viewports. See Edge_#9.5 Case C.
+  // Scroll selected row into view when selection changes from outside the list
+  // (3D / camera click, J / K, auto-advance after a verdict) or when the list
+  // is re-ordered. Adjusts the <ul>'s scrollTop directly instead of calling
+  // scrollIntoView — the latter chains up to every scrollable ancestor
+  // (including <body>) and can scroll the page on short viewports. See
+  // Edge_#9.5 Case C.
+  //
+  // The row's position is measured against the <ul>'s own box with
+  // getBoundingClientRect. The earlier version compared `li.offsetTop` with
+  // `ul.scrollTop`, but `offsetTop` is relative to the nearest POSITIONED
+  // ancestor — here <body>, not the <ul> — so it was off by the list's distance
+  // from the page top (~125px) and a row just above the visible area was never
+  // scrolled into view. See Edge_F#4 Case 1.
   useEffect(() => {
     if (!selectedId) return;
     const li = selectedRef.current;
     const ul = li?.parentElement;
     if (!li || !ul) return;
-    const liTop = li.offsetTop;
-    const liBottom = liTop + li.offsetHeight;
-    const viewTop = ul.scrollTop;
-    const viewBottom = viewTop + ul.clientHeight;
-    if (liTop < viewTop) {
-      ul.scrollTop = liTop;
-    } else if (liBottom > viewBottom) {
-      ul.scrollTop = liBottom - ul.clientHeight;
+    const view = ul.getBoundingClientRect();
+    const row = li.getBoundingClientRect();
+    if (row.top < view.top) {
+      ul.scrollTop -= view.top - row.top;
+    } else if (row.bottom > view.bottom) {
+      ul.scrollTop += row.bottom - view.bottom;
     }
-  }, [selectedId]);
+  }, [selectedId, orderKey]);
 
   return (
     <div
@@ -77,6 +108,7 @@ export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectLi
             </span>
           )}
         </PanelHeader>
+        {toolbar}
       </div>
 
       {boxes.length === 0 ? (
@@ -101,7 +133,9 @@ export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectLi
                 }}
                 className={[
                   // h-8: dense 32px rows so ~20 of 40 boxes fit at 1440×900.
-                  'flex items-center gap-2 px-3 h-8 cursor-pointer select-none',
+                  // Tighter gaps below 1400px, where the list column is 240px
+                  // and the row carries up to seven cells (F4).
+                  'flex items-center gap-1.5 min-[1400px]:gap-2 px-3 h-8 cursor-pointer select-none',
                   'transition-colors duration-100',
                   isSelected
                     ? 'bg-sky-400/10 ring-1 ring-inset ring-sky-400/60'
@@ -119,6 +153,10 @@ export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectLi
                   {d.class}
                 </span>
                 {isMeasured && <CameraIcon inCamera={inCamera} />}
+                {/* (F4) LiDAR evidence — only when the data carries the count. */}
+                {d.annotation?.lidarPoints !== undefined && (
+                  <EvidenceBars points={d.annotation.lidarPoints} />
+                )}
                 {showConfidence ? (
                   <span className="flex items-center gap-1.5 shrink-0">
                     {/* Confidence gauge track */}
@@ -146,10 +184,11 @@ export function ObjectList({ frame, selectedId, onSelect, visibleIds }: ObjectLi
                     and in the details panel. */}
                 <span
                   title={d.id}
-                  className="shrink-0 w-12 text-right font-mono text-[11px] text-zinc-500 ml-1"
+                  className="shrink-0 w-10 min-[1400px]:w-12 text-right font-mono text-[11px] text-zinc-500 min-[1400px]:ml-1"
                 >
                   {displayId(d.id)}
                 </span>
+                {verdicts && <StatusIcon verdict={verdicts.get(d.id)} />}
               </li>
             );
           })}
