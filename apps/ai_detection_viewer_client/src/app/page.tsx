@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { parseCoco } from '@/lib/coco';
 import { parseNuScenes } from '@/lib/nuscenes';
+import { fetchJson } from '@/lib/data/fetch-json';
 import { enrichFrame } from '@/lib/geometry';
 import { AUTOPLAY_INTERVAL_MS, nextFrameIndex } from '@/lib/sequence';
 import {
@@ -176,8 +177,9 @@ export default function Index() {
     setFrames(null);
     setPlantedErrors(null);
     setError(null);
-    fetch(DATASET_SOURCES[datasetId], { signal: ac.signal })
-      .then((r) => r.json())
+    // `fetchJson` rejects with the HTTP status on a non-2xx answer, so a failed
+    // request is reported as what it is and not as a JSON parse error.
+    fetchJson(DATASET_SOURCES[datasetId], { signal: ac.signal })
       .then((raw) => {
         // COCO: parse → estimate 3D (enrichFrame). nuScenes: parseNuScenes
         // already returns measured, enriched frames — do not estimate again.
