@@ -174,15 +174,27 @@ pessimistic for the 3D part; read differences.
 - **Memory held by the 60 preloaded photos was not measured** (the JS heap does not include decoded
   images). 8 MB encoded; revisit with F7's larger set.
 
-## Found during F6, not caused by F6 — not changed
+## Found during F6, not caused by F6 — fixed afterwards, on the user's request
 
-- **At 1024 px the last class chip ("motorcycle") is cut off in the filter bar.** Present in the F5
-  captures (`assets/F5/2026-11-25_before/…_1024x768.jpg`). nuScenes has seven class chips.
-- **"5 false alarm"** in the panel's frame row: the label is not pluralised (F5 wrote
-  `OUTCOME_LABEL[kind].toLowerCase()`). More visible now that a frame's counts are sums over six
-  photos.
+Both were reported to the user instead of being fixed inside F6 (HANDOFF §6: a problem this feature
+did not make is recorded and asked about). The user asked for both; they went into a separate `fix:`
+commit on the same branch.
 
-Both are reported to the user rather than fixed inside F6.
+- **At 1024 px the last class chip ("motorcycle") was cut off in the filter bar.** Present in the F5
+  captures (`assets/F5/2026-11-25_before/…_1024x768.jpg`). Measured: nuScenes' seven chips need
+  649 px, the bar had 558 px (91 px hidden; still 15 px at 1100 px; fits from about 1115 px). F3 made
+  the row scroll sideways when it overflows, but nothing on screen said so.
+  **Fix:** the one long chip shows its short name (`classLabel`: "static_object.bicycle_rack" →
+  "bicycle_rack", full name in the tooltip and as the accessible name; the class itself — filter,
+  colour, the rack rule — is unchanged), and chips are 4 px narrower below 1280 px. Overflow 0 px at
+  1024 / 1100 / 1279 / 1280 / 1536 in review, practice and evaluate; bar still 40 px.
+- **"5 false alarm"** in the panel's frame row: the label was not pluralised (F5 wrote
+  `OUTCOME_LABEL[kind].toLowerCase()`). More visible once a frame's counts became sums over six
+  photos. **Fix:** `outcomeCountLabel(kind, count)`; the three tooltips that pluralised inline use
+  it too. Checked on all ten frames (5, 8, 12, 5, 5, 5, 13, 21, 17, 16 "false alarms").
+
+Not done on purpose: the object list and the 3D label still show the full class name
+("static_object.bicycle_rack", truncated in the list). Only the chip was the reported problem.
 
 ## Notes on decisions that did NOT become edge cases
 

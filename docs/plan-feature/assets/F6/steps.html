@@ -117,6 +117,13 @@ const SHOTS = [
   { step: 'D·엣지', name: 'E5 낮은 창 1536×600', file: '2026-11-26_edge/edge_1536x600.jpg',
     note: '높이가 640px보다 낮은 창입니다. F3에서 정한 최소 높이(640px) 때문에 <b>40px 스크롤</b>이 생깁니다. F6 전과 똑같은 동작이라 고치지 않았습니다(Edge_F#5에도 기록된 기존 동작).',
     look: '<b>무엇을 보면 되나:</b> 썸네일 줄을 넣었다고 스크롤이 더 늘지 않았는지(여전히 40px).' },
+  { step: 'D·엣지', name: 'E6 클래스 칩 (1024px)', file: '2026-11-26_edge/small_chips_1024x768.jpg',
+    compare: '2026-11-26_steps/stepB_bus_1024x768.jpg', compareLabel: '고치기 전 (F6-B 때)',
+    note: '<b>F6이 만든 것은 아니지만 엣지 검증에서 찾아 따로 고친 문제입니다.</b> 1024px에서 필터 바의 마지막 클래스 칩("motorcycle")이 화면 밖으로 밀려 있었습니다(F5 때도 같았습니다). 실제로 재 보니 칩 7개에 649px가 필요한데 자리는 558px였습니다. 가장 긴 칩("static_object.bicycle_rack")을 <b>짧은 이름 "bicycle_rack"</b>으로 표시하고, 1280px 미만에서 칩의 여백을 조금 줄였습니다.',
+    look: '<b>무엇을 보면 되나:</b> 필터 바 오른쪽 끝에 <b>motorcycle 칩이 보입니다.</b> <kbd>Space</kbd>로 고치기 전 화면과 비교하면 그 칩이 없던 것을 볼 수 있습니다. 칩의 동작은 그대로입니다(전체 이름은 마우스를 올리면 나옵니다). 목록의 클래스 이름은 바꾸지 않았습니다.' },
+  { step: 'D·엣지', name: 'E7 false alarms 복수형', file: '2026-11-26_edge/small_plural_1024x768.jpg',
+    note: '평가 패널의 프레임 줄이 "5 false alarm"으로 나오던 것을 개수에 맞춰 <b>"5 false alarms"</b>로 고쳤습니다(1개일 때만 "false alarm"). 이것도 F5 때의 문구였고, 프레임 합계가 사진 6장분이 되면서 눈에 띄게 됐습니다.',
+    look: '<b>무엇을 보면 되나:</b> 오른쪽 패널의 "Frame 6 · 19 missed · 5 false alarms · 35 found" 줄. 한 줄에 들어가고 줄바꿈이 없습니다.' },
 ];
 let index = 0, showCompare = false;
 const $ = (id) => document.getElementById(id);

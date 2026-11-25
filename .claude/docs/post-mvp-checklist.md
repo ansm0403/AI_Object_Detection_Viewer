@@ -1337,8 +1337,10 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
   - **Memory held by preloaded photos not measured.** Frame rate on the user's laptop not measured
     (headless software GL here).
   - **three.js idle cost** — unchanged; the user chose to do it after F6, before F7.
-  - **Found, not caused by F6, not changed:** the last class chip is cut off at 1024 px; "5 false
-    alarm" is not pluralised. Reported to the user.
+  - ~~**Found, not caused by F6, not changed:** the last class chip is cut off at 1024 px; "5 false
+    alarm" is not pluralised. Reported to the user.~~ **Fixed afterwards on the user's request**, in a
+    separate `fix:` commit (`classLabel` for the long chip + tighter chips below 1280 px;
+    `outcomeCountLabel`). Tests 688 → **695**. See Edge_F#6.
   - Whether the nuScenes benchmark's bike-rack filter is applied to predictions, ground truth or both
     was not confirmed from the source file read.
   - COCO mode: still on hold.
@@ -1399,7 +1401,8 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
   - 느린 회선에서 화면이 뜨자마자 재생하면 사진이 재생을 따라오지 못한다. F7에서 미리 받는 범위를 정해야 한다.
   - 미리 받은 사진의 메모리, 사용자 노트북의 프레임률은 재지 않았다.
   - three.js 상시 비용은 그대로다(사용자 결정: F6 뒤, F7 전).
-  - F6이 만든 것이 아니라 고치지 않은 것: 1024px에서 마지막 클래스 칩이 잘림, "5 false alarm"의 복수형.
+  - (끝남) F6이 만든 것이 아니라 고치지 않았던 2건(1024px에서 마지막 클래스 칩이 잘림, "5 false alarm"의 복수형)은
+    사용자 요청으로 별도 `fix:` 커밋에서 고쳤다. 테스트 688 → 695개.
   - nuScenes 공식 평가의 거치대 처리가 예측과 정답 중 어디에 적용되는지는 확인하지 못했다.
   - COCO 모드: 계속 보류.
 - Edge refs: Edge_F#6 Case 1~6, "측정하고 바꾸지 않은 것", "관찰하고 그대로 둔 것".
@@ -1543,8 +1546,8 @@ parsing (becomes necessary in F7 when the frame count grows).
     8 MB) and measure the memory the preloaded photos hold; the thumbnail row reuses the full
     1600×900 file, which stops being acceptable with hundreds of frames.
   - *Possible later:* a rule for labels cut off by the image edge (38% vs 68% recall; it would
-    change the front camera's numbers); a 3×2 view of all six photos; the two small pre-F6
-    wording / width items recorded in Edge_F#6 ("not caused by F6").
+    change the front camera's numbers); a 3×2 view of all six photos; the short class name
+    (`classLabel`) in the object list and the 3D label, where the long name is still shown.
 - **COCO mode: left as it is for now.** Whether it stays as a secondary tab or is retired is decided
   after the F3 redesign shows what that tab looks like in the new layout (user decision, 2026-11-25).
   **F3 is done and COCO sits unchanged in the new layout; the user has not decided yet** (captures:

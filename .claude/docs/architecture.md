@@ -161,6 +161,10 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── distance.ts                  # ✅ F2-A — DISTANCE_MAX / DISTANCE_STEP (distance-filter slider + store default)
 │   │   │   ├── display-id.ts                # ✅ F3 — displayId(id): first 6 chars of a long id (nuScenes token), short ids (COCO) unchanged. Display only (Rule #1)
 │   │   │   ├── display-id.test.ts           # 5 tests — 32-char → 6, COCO unchanged, ≤8 kept, >8 shortened, empty
+│   │   │   ├── class-label.ts               # ✅ after F6 — classLabel(name): short display name of an unmapped class ("static_object.bicycle_rack" → "bicycle_rack"); used by the filter chips, full name kept as tooltip
+│   │   │   ├── class-label.test.ts          # 4 tests
+│   │   │   ├── class-label.ts               # ✅ after F6 — classLabel(name): short display name of an unmapped class ("static_object.bicycle_rack" → "bicycle_rack"); used by the filter chips, full name kept as tooltip
+│   │   │   ├── class-label.test.ts          # 4 tests
 │   │   │   └── image-overlay.ts             # ✅ F5 — types only: ImageRect {key, bbox, color, dashed, emphasis, caption?, selectId?}, ImageOverlay {rects, focus}. The contract between "what to draw" (lib/evaluation/overlay) and Viewer2D
 │   │   ├── data/           # ✅ F5-0 — loading helpers
 │   │   │   ├── fetch-json.ts                # fetchJson(url, {signal, fetchImpl}): rejects with "HTTP <status> while loading <url>" on a non-2xx answer (used for the dataset AND the predictions)
@@ -187,7 +191,7 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── describe.ts       # describeResult (the one-line reason), visibilityText
 │   │   │   ├── box-colors.ts     # boxOutcomeColors(frame, evaluation): colour of every 3D box (found / missed / grey)
 │   │   │   ├── test-helpers.ts   # box / makeFrame / makePrediction builders
-│   │   │   ├── *.test.ts         # 204 tests after F6 (139 after F5): + per-photo / per-object evaluation, the bicycle-rack rule, predictions@1 and @2, six-camera numbers of the shipped sample. F5 breakdown was: iou 8, classes 5, parse 11, match 30, metrics 10, evaluate 6, outcomes 6, list 11, overlay 21, describe 9, box-colors 6, sample-data 16 (the SHIPPED files: 91 found / 83 missed / 13 false alarms / 26 not scored)
+│   │   │   ├── *.test.ts         # 207 tests after F6 and its follow-up fix (139 after F5): + per-photo / per-object evaluation, the bicycle-rack rule, predictions@1 and @2, six-camera numbers of the shipped sample. F5 breakdown was: iou 8, classes 5, parse 11, match 30, metrics 10, evaluate 6, outcomes 6, list 11, overlay 21, describe 9, box-colors 6, sample-data 16 (the SHIPPED files: 91 found / 83 missed / 13 false alarms / 26 not scored)
 │   │   │   └── index.ts          # barrel
 │   │   ├── review/         # ✅ F4 — review logic, all pure (no React / Zustand / DOM). See "Review (F4)" below
 │   │   │   ├── types.ts          # Verdict, RejectReason (+ REJECT_REASONS order = keys 1–6), ReviewRecord, ReviewMap, ReviewScope
