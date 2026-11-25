@@ -54,8 +54,11 @@
 - 둘 다 `Edge_F#4.md`의 "Found during F4, not caused by F4 — deferred"와 `post-mvp-checklist.md`의 "Open / deferred"에 있다.
 
 **커밋 상태 (2026-11-25, F4 세션 종료 시점)**
-- F4는 브랜치 `feat/f4-box-review`에 커밋돼 있다(설계 문서 1, 기능 5, 마무리 문서 1). **push와 PR은 하지 않았다.**
-  사용자가 요청하면 push하고 PR을 만든다. F3 때는 사용자가 GitHub에서 squash and merge 했다.
+- F4는 브랜치 `feat/f4-box-review`에 커밋돼 있고(설계 문서 1, 기능 5, 마무리 문서 2) **원격에 push했다**(사용자 요청).
+  **PR은 사용자가 GitHub 화면에서 만든다.** 이 컴퓨터에는 GitHub CLI(`gh`)가 없어 명령으로 PR을 만들 수 없었다.
+  PR 본문을 클립보드에 복사하고 제목이 채워진 작성 페이지
+  (`…/compare/main...feat/f4-box-review?expand=1&title=…`)를 브라우저로 열어 주는 방식으로 넘겼다.
+  F3 때는 사용자가 GitHub에서 squash and merge 했다. **합쳐졌는지는 다음 세션에서 `git log`로 확인한다.**
 - F5 작업은 F4가 합쳐진 최신 `main`에서 새 브랜치로 시작한다.
 - 커밋은 사용자가 요청할 때만 한다. F4에서는 사용자가 **단계가 끝날 때마다 "커밋 후 다음 단계"** 를 요청했다.
 
@@ -543,6 +546,8 @@ const { chromium } = require('<저장소 루트>/node_modules/playwright');
   빌드가 바꿔 놓는 `next-env.d.ts`를 `git checkout`으로 되돌린다.
 - 이 환경의 Bash heredoc은 작은따옴표가 들어간 긴 내용에서 깨지는 일이 있었다. 여러 줄을 고치는 스크립트(Python)와
   커밋 메시지는 **Write 도구로 파일을 만들어** 실행한다(`git commit -F 파일`). 파일을 고칠 때는 CRLF를 유지한다.
+- **`gh`(GitHub CLI)가 설치돼 있지 않다.** `git push`는 되지만 PR 생성·조회는 명령으로 할 수 없다. 설치하려면
+  사용자에게 먼저 묻는다.
 - PIL이 없다. PNG를 JPEG로 바꿀 때는 Playwright로 이미지를 띄워 `screenshot({ type: 'jpeg' })`으로 다시 찍는다.
 - 로컬 시각 확인은 PowerShell `Get-Date`로 한다(Git Bash의 `TZ=Asia/Seoul date`는 UTC를 보여준다).
 
