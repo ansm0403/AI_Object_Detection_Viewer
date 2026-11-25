@@ -6,6 +6,7 @@ import type { Frame } from '@/lib/types';
 import { frameBoxesForCamera, selectFollowTarget } from '@/lib/geometry';
 import { Scene } from './Scene';
 import { HintBox } from './HintBox';
+import { ViewerLabel } from '@/components/workspace';
 
 type Viewer3DProps = {
   frame: Frame;
@@ -22,6 +23,8 @@ type Viewer3DProps = {
   // WHILE PLAYING (paused/scrubbing shows the exact measured keyframe — Rule #6).
   nextFrame?: Frame | null;
   playing?: boolean;
+  // (F3) Name tag in the top-left corner (e.g. "3D · estimated from 2D").
+  label?: string;
 };
 
 export function Viewer3D({
@@ -32,6 +35,7 @@ export function Viewer3D({
   cameraMode = 'fixed',
   nextFrame,
   playing = false,
+  label,
 }: Viewer3DProps) {
   // nuScenes boxes sit at real measured positions (tens of metres ahead, Three
   // forward = −z) so the COCO camera (at −z looking +z) faces away from them.
@@ -49,11 +53,11 @@ export function Viewer3D({
   // frame's framing keeps target stable; the scene's box cloud is consistent
   // across the short sequence, so frame 0's fit is representative.
   //
-  // ── Extension seam (camera-follow, decision 3-B, deferred): `target` is the
-  // single point the camera aims at. To make the camera FOLLOW the selected
-  // object later, pass that object's current center as `target` per frame
-  // (recomputed from `selectedId` + `frame.detections3D`) instead of this frozen
-  // framing. No other wiring changes — the prop already flows to OrbitControls.
+  // ── Camera follow (F2-D-1, built below as `followTarget`): `target` is the
+  // single point the camera aims at. In 'follow' mode the selected object's
+  // current center replaces this frozen framing as `target`; this framing stays
+  // the default AND the fallback (nothing selected / object not in this frame).
+  // Only the aim point changes — no remount, no key change.
   const mountFrame = useRef(frame).current;
   const framing = useMemo(
     () =>
@@ -81,7 +85,11 @@ export function Viewer3D({
   const target = followTarget ?? (framing ? framing.target : undefined);
 
   return (
-    <div className="relative overflow-hidden w-full aspect-[4/3] bg-neutral-950 rounded">
+    // Sized by the parent cell (F3: WorkspaceShell); this only fills it. A size
+    // change resizes the existing Canvas (R3F ResizeObserver) — no remount.
+    // Same rounded corner + border as every other pane (F3-D); the dark scene
+    // background stays (bg-neutral-950 behind the #0a0a0a canvas clear color).
+    <div className="relative overflow-hidden w-full h-full bg-neutral-950 rounded-lg border border-zinc-800">
       {/* 3D 씬을 렌더링하는 R3F Canvas. COCO estimator는 "큰 bbox = 작은 z =
           가까움"으로 깊이를 인코딩 → 카메라를 -z 위치에 두고 +z 방향을 응시.
           nuScenes는 실측 위치라 박스 클라우드에 맞춰 카메라를 -z(전방)로 향함. */}
@@ -107,6 +115,7 @@ export function Viewer3D({
           playing={playing}
         />
       </Canvas>
+      {label && <ViewerLabel>{label}</ViewerLabel>}
       <HintBox />
       <span className="sr-only">
         3D scene; drag to orbit, scroll to zoom.

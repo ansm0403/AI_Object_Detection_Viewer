@@ -3,6 +3,7 @@
 import type { Frame } from '@/lib/types';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { frameHasConfidence } from '@/lib/selectors';
+import { SECTION_TITLE_CLASS } from '@/components/workspace';
 
 type Props = {
   frame: Frame;
@@ -98,7 +99,7 @@ export function SelectedObjectInfo({ frame, selectedId }: Props) {
 
 function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wide mb-1">
+    <h3 className={`${SECTION_TITLE_CLASS} mb-1`}>
       {children}
     </h3>
   );

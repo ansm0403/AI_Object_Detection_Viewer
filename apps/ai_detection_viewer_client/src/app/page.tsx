@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { parseCoco } from '@/lib/coco';
 import { parseNuScenes } from '@/lib/nuscenes';
 import { enrichFrame } from '@/lib/geometry';
@@ -19,6 +19,7 @@ import { Filters } from '@/components/filters';
 import { Header, type DatasetId } from '@/components/header';
 import { Timeline } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
+import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
 import { useViewerStore } from '@/store';
 import type { Frame } from '@/lib/types';
 
@@ -166,8 +167,8 @@ export default function Index() {
     [currentFrame, maxDistance],
   );
 
-  // Two visible-id sets. The 2D set drives Viewer2D + ObjectList; the 3D set
-  // drives Viewer3D. They diverge only on nuScenes, where a measured 3D box may
+  // Two visible-id sets. The 2D set drives Viewer2D; the 3D set drives Viewer3D
+  // and ObjectList (F3: the list shows every 3D box). They diverge only on nuScenes, where a measured 3D box may
   // have no 2D projection (behind camera / off-screen, Edge_F#2 Case 1) — the
   // 3D set must still include it so the box renders. Both are intersected with
   // the distance filter. COCO is 1:1, so both sets coincide there.
@@ -273,10 +274,35 @@ export default function Index() {
     [datasetId, setSelectedObject, resetFilters],
   );
 
-  if (error) {
-    return (
-      <main className="min-h-screen flex items-center justify-center p-8">
-        <div className="text-center space-y-4">
+  // (F3) Every state — loading, error, empty, loaded — renders inside the same
+  // WorkspaceShell, so the panes sit in the same place before and after the
+  // data arrives (no layout jump). The shell owns zone sizes; the camera cell's
+  // ratio follows the dataset (nuScenes photos are 16:9, COCO photos vary → 4:3).
+  const cameraAspect = datasetId === 'nuscenes' ? 16 / 9 : 4 / 3;
+  // The header stays live in every state so the dataset switcher is usable
+  // while loading or after a failed load.
+  const header = (
+    <Header
+      frameIndex={frameIndex}
+      frameCount={frames?.length ?? 0}
+      // Count by 3D boxes — the main view (Rule #5) renders 3D, and on nuScenes
+      // the 3D set is the superset (some boxes have no 2D projection).
+      detectionCount={currentFrame?.detections3D.length ?? 0}
+      datasetId={datasetId}
+      onSelectDataset={handleSelectDataset}
+      source={currentFrame?.source}
+    />
+  );
+
+  if (error || !frames || frames.length === 0 || !currentFrame) {
+    // Loading (no frames yet) and the one render between frames arriving and
+    // the auto-select effect firing (no currentFrame) both show skeletons.
+    const loading = !error && (!frames || frames.length > 0);
+    const pane = <PanePlaceholder pulse={loading} />;
+    let mainContent: ReactNode = pane;
+    if (error) {
+      mainContent = (
+        <PaneMessage>
           <p className="text-rose-400 text-sm">Failed to load sample data</p>
           <p className="text-zinc-600 text-xs font-mono">{error}</p>
           <button
@@ -286,149 +312,151 @@ export default function Index() {
           >
             Retry
           </button>
-        </div>
-      </main>
-    );
-  }
-
-  if (!frames) {
+        </PaneMessage>
+      );
+    } else if (frames && frames.length === 0) {
+      mainContent = (
+        <PaneMessage>
+          <p className="text-zinc-400 text-sm">No frames.</p>
+        </PaneMessage>
+      );
+    }
     return (
-      <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
-        <div className="h-12 rounded-lg bg-zinc-900 animate-pulse" />
-        <div className="h-14 rounded-lg bg-zinc-900 animate-pulse" />
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          <div className="md:col-span-5 aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
-          <div className="md:col-span-7 aspect-[4/3] rounded-lg bg-zinc-900 animate-pulse" />
-          <div className="md:col-span-12 h-28 rounded-lg bg-zinc-900 animate-pulse" />
-          <div className="md:col-span-5 rounded-lg bg-zinc-900 animate-pulse h-64 md:h-72" />
-          <div className="md:col-span-7 rounded-lg bg-zinc-900 animate-pulse h-64 md:h-72" />
-        </div>
-      </main>
+      <WorkspaceShell
+        cameraAspect={cameraAspect}
+        topBar={header}
+        filterBar={<div className="h-full min-h-10 bg-zinc-900/60 border-b border-zinc-800" />}
+        list={pane}
+        main={mainContent}
+        camera={pane}
+        details={<PanePlaceholder pulse={loading} className="min-h-48 lg:min-h-0" />}
+        timeline={<PanePlaceholder pulse={loading} className="min-h-[84px]" />}
+      />
     );
   }
 
-  if (frames.length === 0)
-    return <main className="p-4 text-zinc-400">No frames.</main>;
-  // selectedFrameId is null for one render between frames arriving and the
-  // auto-select effect firing; render a placeholder rather than crash.
-  if (!currentFrame) return <main className="p-4 text-zinc-400">Selecting frame…</main>;
-
-  // Count by 3D boxes — the main view (Rule #5) renders 3D, and on nuScenes the
-  // 3D set is the superset (some boxes have no 2D projection). COCO is 1:1, so
-  // this matches the previous detections2D count there.
   const totalCount = currentFrame.detections3D.length;
   const filterMode = datasetId === 'nuscenes' ? 'distance' : 'confidence';
+  // (F3) Viewer name tags, keyed on the frame's provenance so the 3D tag never
+  // claims measured depth for estimated data (Immutable Rule #6). The camera name
+  // is fixed because scripts/prep_nuscenes.py exports CAM_FRONT only (until F6).
+  const isMeasured = currentFrame.source === 'nuscenes-measured';
+  const label3D = isMeasured ? 'LiDAR · measured 3D' : '3D · estimated from 2D';
+  const label2D = isMeasured ? 'CAM_FRONT' : 'Image';
 
-  // Layout: 12-column grid with Timeline wedged between row 1 (viewers) and
-  // row 2 (list + analytics) so frame navigation stays within reach of the
-  // viewers it controls.
-  // Row 1 — Viewer2D (5) | Viewer3D (7): the 7-wide Viewer3D promotes it as
-  //   the main view per Immutable Rule #5.
-  // Timeline (full width) — placed here, not at the bottom, because it is the
-  //   primary frame-switch control and belongs next to the viewers it drives.
-  // Row 2 — ObjectList (5) | AnalyticsPanel (7): downstream views of the
-  //   currently selected frame; living below the Timeline matches the
-  //   "select frame → inspect" reading order.
-  // Header / Filters span the full width above.
   return (
-    <main className="p-4 max-w-screen-xl mx-auto flex flex-col gap-4">
-      <Header
-        frameIndex={frameIndex}
-        frameCount={frames.length}
-        detectionCount={totalCount}
-        datasetId={datasetId}
-        onSelectDataset={handleSelectDataset}
-        source={currentFrame.source}
-      />
-      <Filters
-        classes={allClasses}
-        confidenceThreshold={confidenceThreshold}
-        visibleClasses={visibleClasses}
-        visibleCount={visibleIds3D.size}
-        totalCount={totalCount}
-        filterMode={filterMode}
-        maxDistance={maxDistance}
-        onChangeThreshold={setConfidenceThreshold}
-        onChangeDistance={setMaxDistance}
-        onToggleClass={toggleClass}
-        onReset={resetFilters}
-        onDeselect={() => setSelectedObject(null)}
-      />
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-        <div className="md:col-span-5">
-          <Viewer2D
-            frame={currentFrame}
-            selectedId={selectedObjectId}
-            onSelect={setSelectedObject}
-            visibleIds={visibleIds}
-          />
-        </div>
-        <div className="md:col-span-7">
-          {/* (F2-C) DATASET-AWARE key.
-              - COCO: key=frame.id → full Canvas remount per frame, so
-                OrbitControls resets cleanly on every switch. Edge_#4 Case 6.
-              - nuScenes: a single STABLE key → the Canvas does NOT remount on
-                frame switch, so the camera holds its position/orbit across
-                frames and autoplay. Frame-to-frame the boxes move within a still
-                camera (the "objects move" effect); without this the camera would
-                bounce every 0.5 s during playback. Edge_F#2 Case 6. */}
-          <Viewer3D
-            key={tracksAcrossFrames ? 'nuscenes-sequence' : currentFrame.id}
-            frame={currentFrame}
-            selectedId={selectedObjectId}
-            onSelect={setSelectedObject}
-            visibleIds={visibleIds3D}
-            // (F2-D) Camera-follow + box-tween are nuScenes-only; COCO gets the
-            // defaults (fixed camera, no tween) so its path is unchanged.
-            cameraMode={tracksAcrossFrames ? cameraMode : undefined}
-            nextFrame={tracksAcrossFrames ? nextFrame : null}
-            playing={tracksAcrossFrames ? isPlaying : false}
-          />
-        </div>
-        <div className="md:col-span-12">
-          {/* (F2-C) Autoplay controls are passed only when the dataset tracks
-              objects (nuScenes); on COCO the play button is hidden (independent
-              frames → playback would be a meaningless slideshow). */}
-          <Timeline
-            frames={frames}
-            selectedFrameId={selectedFrameId}
-            onSelectFrame={handleSelectFrame}
-            isPlaying={tracksAcrossFrames ? isPlaying : undefined}
-            onTogglePlay={
-              tracksAcrossFrames ? () => setIsPlaying((p) => !p) : undefined
-            }
-            // (F2-D-1) Fixed/Follow camera toggle, nuScenes only.
-            cameraMode={tracksAcrossFrames ? cameraMode : undefined}
-            onToggleCameraMode={
-              tracksAcrossFrames
-                ? () => setCameraMode((m) => (m === 'fixed' ? 'follow' : 'fixed'))
-                : undefined
-            }
-            // Reset-to-frame-1 is sequence-only → nuScenes; COCO frames are
-            // independent so it's hidden there (callback omitted).
-            onReset={tracksAcrossFrames ? handleResetSequence : undefined}
-          />
-        </div>
-        <div className="md:col-span-5">
-          <ObjectList
-            frame={currentFrame}
-            selectedId={selectedObjectId}
-            onSelect={setSelectedObject}
-            visibleIds={visibleIds}
-          />
-        </div>
-        <div className="md:col-span-7">
-          <AnalyticsPanel
-            frame={currentFrame}
-            selectedId={selectedObjectId}
-            buckets={confidenceBuckets}
-            threshold={confidenceThreshold}
-            counts={classCounts}
-            visibleClasses={visibleClasses}
-            onToggleClass={toggleClass}
-          />
-        </div>
-      </div>
-    </main>
+    <WorkspaceShell
+      cameraAspect={cameraAspect}
+      topBar={header}
+      filterBar={
+        <Filters
+          classes={allClasses}
+          confidenceThreshold={confidenceThreshold}
+          visibleClasses={visibleClasses}
+          visibleCount={visibleIds3D.size}
+          totalCount={totalCount}
+          filterMode={filterMode}
+          maxDistance={maxDistance}
+          onChangeThreshold={setConfidenceThreshold}
+          onChangeDistance={setMaxDistance}
+          onToggleClass={toggleClass}
+          onReset={resetFilters}
+          onDeselect={() => setSelectedObject(null)}
+        />
+      }
+      list={
+        <ObjectList
+          frame={currentFrame}
+          selectedId={selectedObjectId}
+          onSelect={setSelectedObject}
+          visibleIds={visibleIds3D}
+        />
+      }
+      main={
+        // (F2-C) DATASET-AWARE key.
+        // - COCO: key=frame.id → full Canvas remount per frame, so
+        //   OrbitControls resets cleanly on every switch. Edge_#4 Case 6.
+        // - nuScenes: a single STABLE key → the Canvas does NOT remount on
+        //   frame switch, so the camera holds its position/orbit across
+        //   frames and autoplay. Frame-to-frame the boxes move within a still
+        //   camera (the "objects move" effect); without this the camera would
+        //   bounce every 0.5 s during playback. Edge_F#2 Case 6.
+        <Viewer3D
+          key={tracksAcrossFrames ? 'nuscenes-sequence' : currentFrame.id}
+          frame={currentFrame}
+          selectedId={selectedObjectId}
+          onSelect={setSelectedObject}
+          visibleIds={visibleIds3D}
+          // (F2-D) Camera-follow + box-tween are nuScenes-only; COCO gets the
+          // defaults (fixed camera, no tween) so its path is unchanged.
+          cameraMode={tracksAcrossFrames ? cameraMode : undefined}
+          nextFrame={tracksAcrossFrames ? nextFrame : null}
+          playing={tracksAcrossFrames ? isPlaying : false}
+          label={label3D}
+        />
+      }
+      camera={
+        <Viewer2D
+          frame={currentFrame}
+          selectedId={selectedObjectId}
+          onSelect={setSelectedObject}
+          visibleIds={visibleIds}
+          label={label2D}
+        />
+      }
+      details={
+        <AnalyticsPanel
+          frame={currentFrame}
+          selectedId={selectedObjectId}
+          buckets={confidenceBuckets}
+          threshold={confidenceThreshold}
+          counts={classCounts}
+          visibleClasses={visibleClasses}
+          onToggleClass={toggleClass}
+        />
+      }
+      timeline={
+        // (F2-C) Autoplay controls are passed only when the dataset tracks
+        // objects (nuScenes); on COCO the play button is hidden (independent
+        // frames → playback would be a meaningless slideshow).
+        <Timeline
+          frames={frames}
+          selectedFrameId={selectedFrameId}
+          onSelectFrame={handleSelectFrame}
+          isPlaying={tracksAcrossFrames ? isPlaying : undefined}
+          onTogglePlay={
+            tracksAcrossFrames ? () => setIsPlaying((p) => !p) : undefined
+          }
+          // (F2-D-1) Fixed/Follow camera toggle, nuScenes only.
+          cameraMode={tracksAcrossFrames ? cameraMode : undefined}
+          onToggleCameraMode={
+            tracksAcrossFrames
+              ? () => setCameraMode((m) => (m === 'fixed' ? 'follow' : 'fixed'))
+              : undefined
+          }
+          // Reset-to-frame-1 is sequence-only → nuScenes; COCO frames are
+          // independent so it's hidden there (callback omitted).
+          onReset={tracksAcrossFrames ? handleResetSequence : undefined}
+        />
+      }
+    />
+  );
+}
+
+// (F3) Stand-in for a pane while loading / on error. Fills its cell so the
+// workspace keeps its final geometry before data arrives.
+function PanePlaceholder({ pulse, className = '' }: { pulse: boolean; className?: string }) {
+  return (
+    <div
+      className={`h-full w-full ${PANEL_CLASS} ${pulse ? 'animate-pulse' : ''} ${className}`}
+    />
+  );
+}
+
+function PaneMessage({ children }: { children: ReactNode }) {
+  return (
+    <div className={`h-full w-full ${PANEL_CLASS} flex flex-col items-center justify-center gap-3 p-8 text-center`}>
+      {children}
+    </div>
   );
 }

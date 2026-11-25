@@ -52,18 +52,21 @@ export function Filters({
   const isDefault = metricIsDefault && visibleClasses.size === 0;
 
   return (
+    // (F3) A flush bar under the header. Wide screens keep it on one line (the
+    // class chips scroll sideways if they ever overflow); narrow screens wrap.
     <div
-      className="flex items-center justify-between flex-wrap gap-x-6 gap-y-3 bg-zinc-900 rounded-lg px-4 py-3"
+      className="flex items-center flex-wrap lg:flex-nowrap gap-x-4 gap-y-2 h-full bg-zinc-900/60 border-b border-zinc-800 px-4 py-1.5"
       onClick={onDeselect}
     >
-      <div onClick={(e) => e.stopPropagation()}>
+      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
         {filterMode === 'distance' ? (
           <DistanceSlider value={maxDistance} onChange={onChangeDistance} />
         ) : (
           <ConfidenceSlider value={confidenceThreshold} onChange={onChangeThreshold} />
         )}
       </div>
-      <div onClick={(e) => e.stopPropagation()}>
+      <span aria-hidden="true" className="hidden lg:block w-px h-5 bg-zinc-800 shrink-0" />
+      <div className="min-w-0 lg:overflow-x-auto" onClick={(e) => e.stopPropagation()}>
         <ClassToggles
           classes={classes}
           visibleClasses={visibleClasses}
@@ -71,7 +74,7 @@ export function Filters({
         />
       </div>
       <div
-        className="flex items-center gap-3 ml-auto"
+        className="flex items-center gap-3 ml-auto shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
         <span className="text-xs text-zinc-400 tabular-nums">
@@ -81,7 +84,7 @@ export function Filters({
           type="button"
           onClick={onReset}
           disabled={isDefault}
-          className="text-xs px-2 py-1 rounded border border-zinc-800 text-zinc-400 hover:border-sky-400/40 hover:text-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="text-xs px-2 py-0.5 rounded border border-zinc-800 text-zinc-400 hover:border-sky-400/40 hover:text-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Reset
         </button>

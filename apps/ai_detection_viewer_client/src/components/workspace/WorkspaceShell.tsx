@@ -1,0 +1,119 @@
+import type { ReactNode } from 'react';
+
+// Height of the timeline row on wide screens. Shared by the real Timeline and
+// the loading skeleton so the panes above it do not move when data arrives.
+export const TIMELINE_ROW_HEIGHT_CLASS = 'lg:h-[84px]';
+
+type WorkspaceShellProps = {
+  topBar: ReactNode;
+  filterBar: ReactNode;
+  /** Left column: object list. */
+  list: ReactNode;
+  /** Centre: the 3D view (main view, Immutable Rule #5). */
+  main: ReactNode;
+  /** Right column, top: the camera image + 2D boxes. */
+  camera: ReactNode;
+  /** Right column, bottom: selected object + analytics. */
+  details: ReactNode;
+  /** Bottom row: frame timeline. */
+  timeline: ReactNode;
+  /**
+   * Width / height of the camera cell. The shell sizes the cell; the viewer
+   * inside only fills it. nuScenes photos are 16:9; COCO photos vary, so 4:3.
+   */
+  cameraAspect: number;
+};
+
+/**
+ * The workspace frame (F3). It only defines WHERE each zone sits and how big it
+ * is; it holds no state and computes nothing. Every zone's content is passed in.
+ *
+ * Wide screens (lg, ≥1024px): a fixed full-viewport grid. The page itself never
+ * scrolls; only panels with overflowing content (list, details) scroll inside.
+ *
+ *   [ topBar                                  ]
+ *   [ filterBar                               ]
+ *   [ list | main (3D)          | camera      ]
+ *   [      |                    | details     ]
+ *   [ timeline                                ]
+ *
+ * Narrow screens: zones stack in one column and the page scrolls. The 3D view
+ * comes first (Rule #5). `order-*` sets that stacking order; on wide screens
+ * every zone is placed explicitly, so `order` has no effect there.
+ *
+ * Very short windows: the frame keeps a 640px minimum height, so the page
+ * scrolls a little instead of squashing the panes.
+ */
+export function WorkspaceShell({
+  topBar,
+  filterBar,
+  list,
+  main,
+  camera,
+  details,
+  timeline,
+  cameraAspect,
+}: WorkspaceShellProps) {
+  return (
+    <div className="flex flex-col min-h-screen lg:h-screen lg:min-h-[640px]">
+      {/* Wide: fixed bar heights so the grid below never shifts. Narrow: the
+          bars may wrap onto two lines, so their height is left to the content. */}
+      <div className="flex-none lg:h-11">{topBar}</div>
+      <div className="flex-none lg:h-10">{filterBar}</div>
+
+      <main
+        className={[
+          'flex flex-col gap-2 p-2',
+          'lg:flex-1 lg:min-h-0 lg:grid lg:gap-2',
+          'lg:grid-cols-[240px_minmax(0,1fr)_360px]',
+          'min-[1400px]:grid-cols-[272px_minmax(0,1fr)_400px]',
+          'lg:grid-rows-[minmax(0,1fr)_auto]',
+        ].join(' ')}
+      >
+        {/* Centre — the 3D view. Narrow: 4:3 box. Wide: fills the grid cell. */}
+        <section
+          aria-label="3D view"
+          className="order-1 aspect-[4/3] lg:aspect-auto lg:col-start-2 lg:row-start-1 min-h-0 min-w-0"
+        >
+          {main}
+        </section>
+
+        {/* Right column. Narrow: `contents` lets camera + details join the
+            outer column so they can be ordered on their own. */}
+        <div className="contents lg:flex lg:flex-col lg:gap-2 lg:col-start-3 lg:row-start-1 lg:min-h-0">
+          {/* min-h-0 + overflow-hidden make the aspect ratio binding: without
+              them a box with `aspect-ratio` grows to fit its content, and a
+              portrait COCO photo stretched the cell to 400×600. */}
+          <section
+            aria-label="Camera image"
+            className="order-2 flex-none min-h-0 overflow-hidden"
+            style={{ aspectRatio: String(cameraAspect) }}
+          >
+            {camera}
+          </section>
+          <section
+            aria-label="Details"
+            className="order-5 lg:flex-1 lg:min-h-0"
+          >
+            {details}
+          </section>
+        </div>
+
+        {/* Left column — object list. Narrow: capped height, scrolls inside. */}
+        <section
+          aria-label="Objects"
+          className="order-4 h-[60vh] lg:h-auto lg:col-start-1 lg:row-start-1 min-h-0"
+        >
+          {list}
+        </section>
+
+        <section
+          aria-label="Frames"
+          className={`order-3 lg:col-span-3 lg:row-start-2 min-w-0 ${TIMELINE_ROW_HEIGHT_CLASS}`}
+        >
+          {timeline}
+        </section>
+      </main>
+    </div>
+  );
+}

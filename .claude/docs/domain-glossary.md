@@ -346,3 +346,34 @@ A single unit of data: one image + its 2D detections + estimated 3D detections +
 **2D ↔ 3D Synchronization**
 When the user selects an object in the 2D view, the same object highlights in the 3D view,
 and vice versa. Implemented via shared `selectedObjectId`.
+
+**In camera (카메라에 보임)** *(F3)*
+A 3D box is "in camera" when it has a 2D projection in the camera image — i.e. a `detections2D`
+entry with the same id (Immutable Rule #1). Boxes beside or behind the front camera are outside its
+[[Field of View (FOV, 시야각)]] and have no projection (Edge_F#2 Case 1). Since F3 the object list
+shows every 3D box and marks this with a camera icon (dim and struck through = not in camera); the
+list header reads e.g. "13 in camera" out of 40. Analogy: everything the car's LiDAR "felt" around it
+vs. what the single front photo happens to show.
+
+**Distance from ego (자차와의 거리)** *(F3 list column; F2-A filter)*
+How far a box's centre is from the [[Ego Vehicle (에고 차량)]], in metres: `|center|` in the ego
+frame (`detectionDistance` in `lib/selectors/distance-filter.ts`). Real metres only on measured
+(nuScenes) frames; on COCO the 3D position is estimated, so the value is not shown (Rule #6). The
+distance slider and the list's "22 m" column use the same function.
+
+**Display id (short id)** *(F3)*
+The first 6 characters of a long id, shown in the object list instead of the 32-character nuScenes
+[[track id / instance token]] (`displayId` in `lib/ui/display-id.ts`). Display only — the real id is
+unchanged (Rule #1) and appears in the row tooltip and the details panel. Because the token is a
+track id, the same short id means the same object across frames ("`ca5b3c` is that car again").
+
+**Letterbox / Pillarbox (빈 띠)**
+The empty bands that appear when a picture is fitted inside a box of a different shape without
+stretching it: bands above/below = letterbox, bands left/right = pillarbox. The camera cell is 4:3 on
+COCO, so a portrait COCO photo gets pillar-boxed. Clicking a band deselects (Edge_#9.5 Case B).
+
+**Workspace layout (작업 화면 배치)** *(F3)*
+The no-scroll, full-viewport layout introduced in F3 (`components/workspace/WorkspaceShell.tsx`):
+fixed zones (top bar, filter bar, list, 3D, camera, details, timeline) whose sizes are decided by the
+shell, with only the list and details panels scrolling inside. Real data-labelling tools are laid out
+this way so the user never scrolls away from the view they are checking.

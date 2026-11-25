@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { Frame } from '@/lib/types';
 import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
 import { frameHasConfidence } from '@/lib/selectors';
+import { PANEL_CLASS, ViewerLabel } from '@/components/workspace';
 
 type Viewer2DProps = {
   frame: Frame;
@@ -12,12 +13,14 @@ type Viewer2DProps = {
   // 현재 필터를 통과한 id 목록. `undefined`이면 "필터 없음"으로 간주하여
   // 컴포넌트를 단독으로 사용할 수 있다 (예: 테스트, 데모).
   visibleIds?: Set<string>;
+  // (F3) Name tag in the top-left corner (e.g. the camera name). Optional.
+  label?: string;
 };
 
 const SELECTED_STROKE_WIDTH = 4;
 const DEFAULT_STROKE_WIDTH = 2;
 
-export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DProps) {
+export function Viewer2D({ frame, selectedId, onSelect, visibleIds, label }: Viewer2DProps) {
   const [imageError, setImageError] = useState(false);
   useEffect(() => { setImageError(false); }, [frame.id]);
   // 화면에 그릴 2D detection 목록을 만드는 부분. SVG는 CSS z-index를 무시하고
@@ -35,16 +38,19 @@ export function Viewer2D({ frame, selectedId, onSelect, visibleIds }: Viewer2DPr
     );
   const showConfidence = frameHasConfidence(frame);
   return (
+    // 크기는 부모 칸이 정한다(F3: WorkspaceShell). 이 컴포넌트는 받은 칸을 채우기만
+    // 하고, 사진은 preserveAspectRatio="meet"로 칸 안에 비율을 유지해 들어간다.
     // 선택 해제 핸들러는 <svg>가 아니라 wrapper에 둔다.
-    // 이미지의 종횡비가 4:3과 다를 때 생기는 letterbox/pillarbox 영역을 클릭해도
+    // 이미지의 종횡비가 칸의 종횡비와 다를 때 생기는 letterbox/pillarbox 영역을 클릭해도
     // 선택이 해제되도록 하기 위해서다.
     // <rect>들은 stopPropagation을 호출하므로,
     // bbox 클릭은 여전히 “선택만 하기”로 처리된다.
     // Edge_#9.5 Case B.
     <div
-      className="relative w-full aspect-[4/3] bg-zinc-900 rounded-lg ring-1 ring-inset ring-zinc-800 overflow-hidden"
+      className={`relative w-full h-full ${PANEL_CLASS}`}
       onClick={() => onSelect?.(null)}
     >
+    {label && <ViewerLabel>{label}</ViewerLabel>}
     <svg
       viewBox={`0 0 ${frame.imageWidth} ${frame.imageHeight}`}
       preserveAspectRatio="xMidYMid meet"

@@ -34,13 +34,14 @@ Do NOT add TanStack Query, Recharts (until post-MVP), database, backend, or auth
 **CLAUDE.md (this file) is the single entry point.** New contexts read this first;
 it routes to every other document below. Always loaded with each session.
 
-The project's full design is reconstructed from three doc groups:
+The project's full design is reconstructed from four doc groups:
 
 | Group | Files | Role |
 |---|---|---|
 | **Spec triangle** (the design itself) | `docs/PROJECT_DESIGN.md` + `.claude/docs/architecture.md` + progress log (`mvp-checklist.md` 🔒 frozen → `post-mvp-checklist.md` active) | why + current structure + progress |
 | **Rules + entry point** (always loaded) | `CLAUDE.md` | Immutable Rules, Workflow Rules, Error Defaults, Testing Policy |
 | **Reading aids** (consulted as needed) | `.claude/docs/domain-glossary.md` + `docs/edgecases/Edge_#N.md` | terminology + per-Step decision history |
+| **Feature design + handoff** (post-MVP F3 onward) | `docs/plan-feature/HANDOFF.md` + `docs/plan-feature/F#_*.md` (index: `docs/plan-feature/README.md`) | cross-session handoff + the pre-implementation design of each feature |
 
 Detail per file:
 
@@ -59,6 +60,20 @@ Detail per file:
   Edge_#N.md when starting any Step that has deferred cases pointed at it. Post-MVP features use
   `Edge_F#N.md` (created only when a feature actually surfaces edge cases), cross-referenced from
   `post-mvp-checklist.md`.
+- `docs/plan-feature/` — **pre-implementation design docs for post-MVP features (F3 onward), plus
+  the cross-session handoff.** Each large feature (F#) is done in its own session, so this folder is
+  what carries intent across sessions. Written in Korean (the user reads and approves these).
+  - `HANDOFF.md` — **read first in any session that works on F3+.** Current state and next action,
+    how to work with the user, why the roadmap direction was chosen (so settled decisions are not
+    re-litigated), per-feature design guidance for F3–F8, how to write a design doc, and the
+    session start/end checklists. Update its "현재 상태" and "세션 기록" sections at the end of
+    every session.
+  - `F#_*.md` — one design doc per feature (problem, target, scope, steps, decisions with
+    alternatives, done-when, rule interactions, risks). Written at the start of that feature's
+    session and approved by the user before implementation. It is the *proposal*; once the feature
+    lands, the outcome is recorded in `post-mvp-checklist.md` and `architecture.md`, and the design
+    doc is kept as the record of what was planned (do not rewrite it to match the result).
+  - `README.md` — index of the design docs and their status.
 - `docs/PROJECT_DESIGN.md` — **READ-ONLY historical record** of the original project vision and
   decisions. Read ONLY when (a) clarifying user intent, (b) resolving conflicts between docs, or
   (c) deciding whether a feature fits the project goal. Do NOT read for routine implementation tasks.
@@ -70,6 +85,8 @@ Routing shortcuts:
 - Unsure about a 3D/AI term → read `domain-glossary.md` before answering.
 - Structural or multi-file changes → read `architecture.md` first.
 - Working on a post-MVP feature → read `post-mvp-checklist.md` (and any Edge_F#N.md it links).
+- Starting or continuing F3 or later → read `docs/plan-feature/HANDOFF.md` first, then that
+  feature's design doc in `docs/plan-feature/` (write it first if it does not exist yet).
 - User references "step N" → read `mvp-checklist.md` (🔒 frozen; and any Edge_#N.md it links).
 
 ## Immutable Rules

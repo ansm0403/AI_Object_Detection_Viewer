@@ -822,3 +822,321 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 - F2-B: 실측 LiDAR 점구름(sensor→ego + 오프라인 decimation). F1-A 깊이색이 진짜 깊이를 보임.
 - F2-C: 시퀀스 + tracking(instance token → 프레임 간 id) + 자동재생. Step 9.5 tween 제외 재검토 가능.
 -->
+
+---
+
+## F3 — No-scroll Workspace Layout ✅ Done (2026-11-25; F3-A + F3-B + F3-C + F3-D)
+- **Design doc:** `docs/plan-feature/F3_workspace_layout.md` (provisionally approved: build the
+  recommended options for all 9 decisions, adjust after seeing them). Captures + mockup:
+  `docs/plan-feature/assets/F3/` (before / mockup / after, timestamped KST).
+- **Goal:** work on one screen without page scrolling — object list, 3D view, camera image, details
+  and timeline visible together — and fix the 7 defects found in the 2026-11-25 render (design doc §2).
+- **Scope:**
+  - **Mockup first (decision 9).** Static HTML at real colours and sizes (Tailwind 3.4.3, same as the
+    app), 1440×900 and 1280×720, beside captures of the current app. The 3D pane was the real 3D view
+    re-rendered at the mockup's cell size; the camera pane was the app's own 2D SVG. The user approved
+    the direction and 4 extra proposals (below).
+  - **F3-A — frame.** New `components/workspace/WorkspaceShell.tsx` (zones only, no state); `page.tsx`
+    renders loading / error / empty / loaded inside it; `Viewer2D` / `Viewer3D` fill their cell
+    (`aspect-[4/3]` removed); camera cell ratio per dataset (`cameraAspect`: nuScenes 16:9, COCO 4:3);
+    `ObjectList` / `AnalyticsPanel` fill their cell; Header and Filters became flush bars; Timeline
+    became one 84px row (Play / Reset / Follow on the left).
+  - **F3-B — one counting basis (decision 4).** `selectClassCounts` counts `detections3D`;
+    `ObjectList` lists every 3D box (visible set = 3D set) with an in-camera icon and the distance from
+    the ego vehicle on measured frames; Timeline badges count 3D boxes.
+  - **F3-C — small fixes.** `lib/ui/display-id.ts` (6-char display id, decision 7); histogram tick
+    labels moved out of the stretched SVG (fixed 10px); HintBox text in English (decision 8).
+  - **F3-D — one panel look.** New `components/workspace/Panel.tsx` (`PANEL_CLASS`,
+    `SECTION_TITLE_CLASS`, `PanelTitle`, `PanelHeader`, `ViewerLabel`) used by every pane; real border
+    instead of `ring-inset`; 32px title rows on data panels, corner tags on viewers (text from
+    `Frame.source`, Rule #6); 32px list rows; class-name column widened in `ClassCountBar`.
+- **Done when (design doc §8) — all met, render-verified with Playwright:**
+  - No page scroll at 1440×900 and 1280×720 (also 1536×700 / 1536×730 / 1280×700) for nuScenes and
+    COCO, with a selection and during autoplay. 390×844 stacks and scrolls.
+  - Selecting in the list never moves the page (list `scrollTop` 606, page `scrollY` 0).
+  - 7 zones visible; 3D is the largest (736×708 at 1440×900).
+  - Loading skeleton and loaded page: all five pane rectangles identical.
+  - 2D ↔ 3D ↔ list sync; deselect on 3D empty space, 2D background, COCO pillar-box band; nuScenes
+    camera holds across frame switch + autoplay; COCO camera resets on frame switch; the 3D canvas
+    follows window resizes and is the same element after 5 resizes (not remounted).
+  - Header = list = class-count sum = timeline badge (frame 1: 40, frame 7: 66).
+  - Tests **206 → 213** (`selectClassCounts` +2, `displayId` +5). `tsc --noEmit` 0 errors.
+- **Changes from the plan, and why:**
+  1. **Flush top bars and the one-row timeline moved from F3-D into F3-A.** Their heights decide the
+     grid rows; fixing them in A was needed for the loading skeleton and the loaded page to share the
+     same pane positions.
+  2. **List shows distance (m) instead of "—" on measured frames.** Not in the design doc; proposed in
+     the mockup and approved by the user. Uses `detectionDistance`, the distance filter's own function,
+     so the two can never disagree. Added in F3-B (the step that rewrote the list).
+  3. **Viewers got corner tags instead of title rows; top bars are flush bars, not cards; the timeline
+     is one row (84px instead of the ~112px estimate).** Mockup proposals, approved by the user.
+  4. **F3-B gave the list's id cell a temporary truncate** so class names stayed visible until F3-C
+     shortened the ids (the full 32-char id had pushed the class name out of the 272px column in A).
+  5. **Bug found and fixed in F3-A:** the COCO camera cell grew to 400×600 on a portrait photo
+     (`aspect-ratio` box sized by its content). Fixed with `min-h-0 overflow-hidden` (Edge_F#3 Case 1).
+  6. **3D empty space above the scene at 1440×900 — left as is (user decision).** The design doc's
+     risk §11 allowed adjusting the camera init. The user's laptop viewport (~1536×700) gives a wide,
+     short 3D cell where the gap does not appear (Edge_F#3 Case 3).
+  7. **Next.js dev indicator over the Play button — left as is (user decision; dev server only)**
+     (Edge_F#3 Case 2).
+- **Decisions kept from the design doc:** camera image top-right (cost: 510×287 → 400×225 at
+  1440×900 and 360×203 at 1280×720 — half the area at 1280); filters in a bar under the header;
+  narrow screens stack (< 1024px); no resizable panels; no Server Component data loading (decision
+  6 — still unmeasured; measure load time first, as a separate item); English UI.
+- **Not done / open:**
+  - **COCO mode — keep or retire: on hold.** F3 left it functionally unchanged inside the new layout
+    (estimated 3D, confidence slider, 4:3 camera cell). Asked after F3; the user kept it on hold
+    (2026-11-25).
+  - Camera image size for review work is judged in F4 (decision 5).
+  - GPU memory during resize was not measured (canvas identity was).
+- **Edge refs:** Edge_F#3 Cases 1–3.
+
+<!-- KO (move to a localized file)
+## F3 — 스크롤 없는 작업 화면 ✅ 완료 (2026-11-25; F3-A + B + C + D)
+- 설계 문서: `docs/plan-feature/F3_workspace_layout.md`(임시 승인: 결정 9개 모두 추천안으로 만들고 보면서 조정).
+  시안과 캡처: `docs/plan-feature/assets/F3/`(전 / 시안 / 후, 한국 시간 표시).
+- 목표: 페이지 스크롤 없이 목록, 3D 뷰, 카메라 이미지, 정보 패널, 타임라인을 한 화면에서 보며 작업. 2026-11-25
+  캡처에서 찾은 문제 7가지 해결.
+- 범위:
+  - 시안 먼저(결정 9): 실제 색·크기의 정적 HTML, 1440×900·1280×720, 지금 화면 캡처와 비교. 3D 칸은 실제 3D 화면을
+    시안 칸 크기로 다시 그린 캡처, 카메라 칸은 앱의 2D SVG 그대로. 사용자가 방향과 추가 제안 4개를 승인.
+  - F3-A 화면 틀: `WorkspaceShell`(자리만 정의, 상태 없음). 로딩·오류·빈 데이터도 틀 안에. 두 뷰어는 칸을 채움.
+    카메라 칸 비율은 데이터셋별(nuScenes 16:9, COCO 4:3). 상단 바·필터 바는 붙은 막대, 타임라인은 84px 한 줄.
+  - F3-B 개수 기준 통일(결정 4): 클래스 집계·목록·타임라인 배지 모두 3D 박스 기준. 목록에 카메라 아이콘과 거리.
+  - F3-C: ID 6자리(`lib/ui/display-id.ts`), 차트 축 글자 10px 고정, 3D 조작 안내 영어.
+  - F3-D: `Panel.tsx`로 패널 모양 한 규칙(배경, 1px 테두리, 모서리, 32px 제목 줄, 뷰어 이름표).
+- 완료 기준(설계 문서 8장): 모두 충족, Playwright 캡처로 확인. 1440×900·1280×720(그리고 1536×700 등)에서 스크롤
+  없음, 목록 선택 시 페이지 고정, 로딩 전후 칸 위치 같음, 선택 동기화·해제, 카메라 유지(nuScenes)·초기화(COCO),
+  창 크기 변경 5번에도 같은 3D 캔버스, 개수 일치(프레임 1: 40, 프레임 7: 66). 테스트 206 → 213, tsc 오류 0.
+- 계획과 달라진 점과 이유:
+  1. 붙은 상단 바와 한 줄 타임라인을 F3-D에서 F3-A로 당김. 이 높이들이 칸 높이를 정해서, 로딩 전후 위치를 맞추려면
+     A에서 확정해야 했다.
+  2. 목록 숫자 칸을 "—" 대신 거리(m)로. 설계 문서에 없던 시안 제안, 사용자 승인. 거리 필터와 같은 함수 사용.
+  3. 뷰어는 제목 줄 대신 모서리 이름표, 상단은 카드 대신 붙은 막대, 타임라인 한 줄(예상 112px → 84px). 시안 제안, 승인.
+  4. F3-B에서 ID 칸에 임시 말줄임. A에서 32자 ID가 클래스 이름을 밀어낸 문제를 C 전까지 막기 위해.
+  5. F3-A에서 버그 발견·수정: 세로 COCO 사진에서 카메라 칸이 400×600으로 커짐. `min-h-0 overflow-hidden`(Edge_F#3 Case 1).
+  6. 1440×900에서 3D 위쪽 빈 공간은 그대로 둠(사용자 결정). 사용자 노트북 창(~1536×700)에서는 생기지 않음(Case 3).
+  7. Next.js 개발 표시 "N"이 Play 버튼을 가림. 개발 서버에서만 보여 그대로 둠(사용자 결정, Case 2).
+- 설계대로 유지: 카메라 오른쪽 위(대가: 510×287 → 400×225, 1280에서는 360×203으로 넓이 절반), 필터는 헤더 아래,
+  1024px 미만은 세로 쌓기, 패널 크기 조절 없음, 서버 컴포넌트 전환 안 함(결정 6, 로딩 시간을 먼저 재야 함), 영어 UI.
+- 남은 것: **COCO 모드를 남길지는 보류**(F3에서 기능 변화 없이 새 화면 안에 둠. F3 종료 후 다시 물었고 보류 유지). 카메라 이미지가 검수에
+  충분한지는 F4에서 판단. 창 크기 변경 시 GPU 메모리는 재지 않음(캔버스가 같은 요소인지만 확인).
+- Edge refs: Edge_F#3 Case 1~3.
+-->
+
+---
+
+## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
+
+> **Status:** direction agreed in discussion. **No feature below is planned or approved for
+> implementation.** Each one needs its own `/plan-feature` pass (Immutable Rule #4), which replaces
+> its row here with a full per-feature entry (Goal / Scope / Done when / Tests / Decisions / Edge
+> refs). Feature numbers are **provisional** — per "How this doc works", a feature gets its number
+> when it is *started*, and any item may still be reordered or dropped.
+>
+> **Design docs:** the pre-implementation design for each feature is written in
+> `docs/plan-feature/F#_*.md` (index: `docs/plan-feature/README.md`), one doc per feature, written
+> just before that feature starts. **F3 is done** (2026-11-25, see the F3 entry above; design doc
+> `F3_workspace_layout.md`). Next: F4 — its design doc is written at the start of the F4 session.
+> Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
+
+### Why change direction (the gap this closes)
+- **The app is a read-only viewer.** A user can explore, filter and click, but leaves with no
+  output and no decision made. Real AI-data tools exist to support one job (review labels, find
+  model errors, curate data).
+- **The page is laid out like a document, not a tool.** Rendered check (Playwright, 1440×900,
+  2026-11-25): content is capped at `max-w-screen-xl`, and ObjectList + Analytics sit below the
+  fold, so "click in the list → look at the 3D view" needs page scrolling.
+- **Career target.** The project started from an autonomous-driving data-visualization frontend
+  posting (`PROJECT_DESIGN.md` §1: AI data platform, multimodal data, 3D visualization, annotation,
+  data-exploration UI). The strongest existing work against that list is F2 (measured 3D, LiDAR,
+  coordinate frames), so the roadmap builds on nuScenes rather than on generic 2D (COCO) labeling.
+
+### Identity after the roadmap
+**A perception data quality tool**, nuScenes-centred. The 3D view stays the main view and the
+camera image stays the supporting verification view (Immutable Rule #5).
+
+| Pillar | Question it answers | Feature |
+|---|---|---|
+| Label quality | Is the human-made ground truth right? | 3D box review |
+| Model quality | Does the model find what the ground truth says is there — and where/why not? | Camera detection evaluation |
+
+The two pillars share one dataset and feed each other: fixing a wrong label makes the evaluation
+more accurate; scenes where the model fails are the first place to suspect the labels.
+
+### Sequence (provisional)
+
+| # | Feature | What the user can do when it lands |
+|---|---|---|
+| F3 | No-scroll workspace layout | Work in a full-viewport, fixed-pane layout: list, 3D view and camera view visible together |
+| F4 | 3D box review | Approve / reject each measured 3D box (checked against its projection on the camera image), record a reason, resume later, export the result |
+| F5 | Camera detection evaluation | See TP / FP / FN for a 2D detector run on the nuScenes camera images, locate a missed object in the 3D view, read recall by distance |
+| F6 | Six cameras | Review and evaluate around the whole vehicle; find which camera sees a given 3D box |
+| F7 | Scene exploration | Search across many more keyframes by condition, including "scenes where the model missed something" |
+| F8 (stretch) | 3D box editing in a bird's-eye view | Correct a rejected box (position / size / yaw as a rotated rectangle; height as a number) with undo/redo |
+
+Order rationale: the layout (F3) is the surface every later feature sits on; review (F4) and
+evaluation (F5) are the two pillars; F6/F7 widen the data both pillars run on; editing (F8) is the
+hardest interaction and goes last.
+
+**Tech upgrades are trigger-based, not features of their own** — measure first, change only when the
+measurement justifies it, and record before/after numbers: Server Component data loading (F3
+considered and deferred it — design doc decision 6: measure load time first, as a separate item); `useTransition` / `useDeferredValue` (only if
+filtering measurably janks after F5); binary point clouds + lazy per-frame loading + Web Worker
+parsing (becomes necessary in F7 when the frame count grows).
+
+### Questions each plan must settle (carry into `/plan-feature`)
+- **F3:** pane zones and sizes; mobile behaviour (tool layout is desktop-first — keep the stacked
+  layout on narrow screens?); fix the defects found in the 2026-11-25 render (2D/3D pane height and
+  frame mismatch; header says "40 detections" while ObjectList says 13 with no on-screen reason;
+  unreadable hash ids in ObjectList; oversized histogram axis text; Korean hint box in an English UI).
+- **F4:** shape of the review state and where it lives; persistence with no backend (IndexedDB?);
+  reject-reason vocabulary; keyboard shortcuts; export format.
+- **F5:**
+  - **Prediction ids vs Immutable Rule #1.** A model prediction is a 2D-only object with no 3D
+    counterpart and is a *different* object from the ground-truth box it matches. It needs its own
+    id scheme that cannot collide with the `instance`-derived ids.
+  - **How the ground-truth 2D box is derived.** nuScenes has no hand-drawn 2D boxes. Projecting the
+    8 corners of a 3D box gives a loose rectangle (lower IoU across the board); tightening it with
+    the LiDAR points inside the box helps but degrades for distant objects with few points.
+  - **Matching rule** (IoU threshold and/or centre distance) given those loose boxes.
+  - **Occlusion.** Fully hidden objects are still annotated; carry nuScenes `visibility` through the
+    prep script and filter on it.
+  - **Class mapping** between the detector's classes and nuScenes categories; classes the detector
+    cannot output are excluded from the evaluation.
+  - **Confidence returns on nuScenes frames.** Predictions carry a real score, so the confidence
+    slider becomes meaningful again and must re-evaluate live at the selector level. This collides
+    with F2-E, where `frameHasConfidence` is keyed on `Frame.source` (per frame): provenance now
+    differs *per detection* within one frame.
+  - **Honest labelling.** Derived ground-truth 2D boxes are approximations and must be presented as
+    such — same spirit as Rule #6.
+  - **Pipeline.** The detector runs offline in `scripts/` (as in Step 11); IoU and matching are pure
+    functions in `lib/` with Vitest (Rule #3). No runtime backend.
+- **F6:** data size with six images per keyframe; per-box "which camera sees it" lookup.
+- **F7:** how many of nuScenes-mini's keyframes (10 scenes, ~400 keyframes vs the 10 used today) to
+  ship; searching on scene descriptions and per-frame counts with no backend; hosting size limits on
+  Vercel; the binary / lazy-loading work above.
+- **F8:** rotated-rectangle editing interaction; undo/redo history model.
+
+### Known limits (state them wherever results are shown)
+- **Small sample.** With 10 keyframes × 1 camera, recall-by-distance has only a few boxes per
+  distance bin. F5 proves the analysis works; the numbers become quotable only after F6/F7.
+- **Recall only by distance.** A false positive has no matched ground truth, hence no distance.
+- **Derived 2D ground truth** is an approximation (see F5).
+- **This evaluates a 2D camera detector, not 3D detection.**
+
+### Out of scope
+- Running a 3D detector (GPU-only research toolchains, multi-sweep input preparation, rotated-box
+  matching).
+- Backend, database, auth, multi-user roles, server-side storage.
+- WebGPU renderer migration; live streaming.
+- 2D-only label types (polygons, masks, keypoints).
+
+### Open / deferred
+- **COCO mode: left as it is for now.** Whether it stays as a secondary tab or is retired is decided
+  after the F3 redesign shows what that tab looks like in the new layout (user decision, 2026-11-25).
+  **F3 is done and COCO sits unchanged in the new layout; the user has not decided yet** (captures:
+  `docs/plan-feature/assets/F3/2026-11-25_after/coco_*.jpg`).
+- **Relation to earlier records:** F2's "out of scope" items *multi-camera* and *additional scenes*
+  are now roadmap items (F6, F7). The COCO ground-truth-vs-prediction comparison (the data exists in
+  `sample.gt_backup.json`) is superseded by F5 and remains optional.
+
+<!-- KO (move to a localized file)
+## 로드맵 — F3 이후 방향 (2026-11-25 합의) 🧭 방향만 정함, 아직 계획된 기능 없음
+
+> **상태:** 논의로 방향만 합의했다. **아래 기능 중 구현이 계획되거나 승인된 것은 없다.** 각 기능은
+> 시작할 때 `/plan-feature`를 거쳐야 하고(불변 규칙 #4), 그때 아래 표의 한 줄이 정식 항목(Goal / Scope /
+> Done when / Tests / Decisions / Edge refs)으로 바뀐다. 번호는 **임시**다. 이 문서의 규칙대로 번호는
+> 기능을 *시작할 때* 붙으며, 순서 변경이나 취소가 가능하다.
+>
+> **설계 문서:** 각 기능의 구현 전 설계는 `docs/plan-feature/F#_*.md`에 쓴다(목록:
+> `docs/plan-feature/README.md`). 기능 하나에 문서 하나이며, 그 기능을 시작하기 직전에 쓴다. F3 문서가
+> 있고 **F3은 구현 완료**(2026-11-25, 위 F3 항목 참고). 다음은 F4이며, 설계 문서는 F4 세션을 시작할 때 쓴다.
+> 큰 기능 하나를 세션 하나에서 진행한다. **`docs/plan-feature/HANDOFF.md`부터 읽는다.**
+
+### 방향을 바꾸는 이유
+- **지금 앱은 읽기 전용 뷰어다.** 둘러보고 거르고 클릭할 수는 있지만, 사용자에게 남는 결과물이나 내린
+  결정이 없다. 실제 AI 데이터 도구는 하나의 업무(라벨 검수, 모델 오류 찾기, 데이터 선별)를 위해 존재한다.
+- **화면이 도구가 아니라 문서처럼 배치돼 있다.** 실제 렌더 확인(Playwright, 1440×900, 2026-11-25) 결과,
+  폭이 `max-w-screen-xl`로 제한되고 ObjectList와 Analytics가 화면 아래에 있어 "목록 클릭 → 3D 확인"에
+  페이지 스크롤이 필요하다.
+- **목표 직무.** 이 프로젝트는 자율주행 데이터 시각화 프론트엔드 공고에서 시작했다(`PROJECT_DESIGN.md`
+  §1: AI 데이터 플랫폼, 멀티모달 데이터, 3D 시각화, 어노테이션, 데이터 탐색 UI). 이 목록에 가장 잘 맞는
+  기존 작업이 F2(실측 3D, LiDAR, 좌표계)이므로, 로드맵은 일반 2D(COCO) 라벨링이 아니라 nuScenes 위에 쌓는다.
+
+### 로드맵 이후의 정체성
+nuScenes 중심의 **인지 데이터 품질 도구**. 3D 뷰가 메인이고 카메라 이미지는 확인용 보조 화면이다(규칙 #5).
+
+| 기둥 | 답하는 질문 | 기능 |
+|---|---|---|
+| 라벨 품질 | 사람이 만든 정답이 맞나? | 3D 박스 검수 |
+| 모델 품질 | 모델이 정답에 있는 것을 찾아내나, 못 찾는다면 어디서 왜? | 카메라 탐지 평가 |
+
+두 기둥은 같은 데이터를 쓰고 서로 이어진다. 틀린 라벨을 고치면 평가가 더 정확해지고, 모델이 많이
+틀리는 장면은 라벨부터 의심해 볼 장면이다.
+
+### 순서 (임시)
+
+| # | 기능 | 끝나면 사용자가 할 수 있는 것 |
+|---|---|---|
+| F3 | 스크롤 없는 작업 화면 | 화면 전체를 쓰는 고정 배치에서 목록, 3D 뷰, 카메라 뷰를 한꺼번에 보며 작업 |
+| F4 | 3D 박스 검수 | 실측 3D 박스를 카메라 이미지 위 투영과 대조해 승인/반려, 사유 기록, 이어하기, 결과 내보내기 |
+| F5 | 카메라 탐지 평가 | nuScenes 카메라 이미지에 돌린 2D 탐지 모델의 맞힘/잘못 찾음/놓침 확인, 놓친 객체를 3D 뷰에서 찾기, 거리별 탐지율 보기 |
+| F6 | 카메라 6대 | 차량 주변 전체를 검수·평가, 특정 3D 박스를 어느 카메라가 보는지 찾기 |
+| F7 | 장면 탐색 | 훨씬 많은 키프레임을 조건으로 검색 ("모델이 놓친 객체가 있는 장면" 포함) |
+| F8 (도전) | 위에서 본 화면에서 3D 박스 수정 | 반려한 박스 고치기 (위치/크기/방향은 회전된 사각형으로, 높이는 숫자로), 실행 취소 |
+
+순서의 근거: 화면 배치(F3)는 이후 모든 기능이 올라가는 바탕이다. 검수(F4)와 평가(F5)가 두 기둥이고,
+F6·F7은 두 기둥이 쓰는 데이터를 넓힌다. 수정(F8)은 인터랙션이 가장 어려워 마지막이다.
+
+**기술 고도화는 독립 기능이 아니라 필요할 때 한다.** 먼저 측정하고, 측정 결과가 뒷받침할 때만 바꾸며,
+전후 수치를 기록한다. 대상: 서버 컴포넌트 데이터 로딩(F3에서 검토 후 미룸. 설계 문서 결정 6: 로딩 시간을 먼저 재고 별도 항목으로 판단),
+`useTransition` / `useDeferredValue`(F5 이후 필터링이 실제로 버벅일 때만), 포인트클라우드 바이너리 전환 +
+프레임별 지연 로딩 + Web Worker 파싱(F7에서 프레임 수가 늘면 필요해짐).
+
+### 각 계획에서 정해야 할 것 (`/plan-feature`로 가져갈 것)
+- **F3:** 패널 구역과 크기. 모바일 동작(도구 배치는 데스크톱 기준, 좁은 화면은 지금처럼 세로로 쌓을지).
+  2026-11-25 렌더에서 찾은 문제 수정(2D/3D 패널 높이와 테두리 불일치, 헤더는 "40 detections"인데 목록은
+  13개이고 화면에 이유가 없음, 목록의 읽을 수 없는 해시 ID, 히스토그램 축 글자가 과하게 큼, 영어 UI 속
+  한국어 조작 안내).
+- **F4:** 검수 상태의 형태와 위치. 백엔드 없는 저장 방식(IndexedDB?). 반려 사유 목록. 단축키. 내보내기 형식.
+- **F5:**
+  - **예측 ID와 불변 규칙 #1.** 모델 예측은 3D 짝이 없는 2D 전용 객체이고, 짝지어진 정답 박스와도 *다른*
+    객체다. `instance`에서 나온 ID와 겹칠 수 없는 별도 ID 체계가 필요하다.
+  - **정답 2D 박스를 만드는 방법.** nuScenes에는 사람이 그린 2D 박스가 없다. 3D 박스의 꼭짓점 8개를
+    투영하면 헐렁한 사각형이 나와 IoU가 전반적으로 낮아진다. 박스 안 LiDAR 점으로 좁히면 나아지지만 점이
+    적은 먼 객체에서는 부정확해진다.
+  - **짝짓기 규칙**(IoU 기준, 중심점 거리)을 그 헐렁한 박스에 맞게 정하기.
+  - **가려짐.** 완전히 가려진 객체도 정답에 들어 있다. nuScenes의 `visibility`를 준비 스크립트에서 가져와 거른다.
+  - **클래스 대응표.** 탐지 모델의 클래스와 nuScenes 카테고리를 맞추고, 모델이 출력할 수 없는 클래스는 평가에서 뺀다.
+  - **nuScenes 프레임에 confidence가 돌아온다.** 예측에는 실제 점수가 있으므로 confidence 슬라이더가 다시
+    의미를 갖고, selector 단계에서 실시간으로 재평가해야 한다. 이는 F2-E와 부딪힌다. `frameHasConfidence`는
+    `Frame.source`(프레임 단위) 기준인데, 이제 한 프레임 안에서 출처가 *객체마다* 다르다.
+  - **정직한 표시.** 만들어낸 정답 2D 박스는 근사치이며 그렇게 표시해야 한다(규칙 #6과 같은 태도).
+  - **파이프라인.** 탐지 모델은 `scripts/`에서 오프라인으로 실행한다(Step 11과 동일). IoU와 짝짓기는
+    `lib/`의 순수 함수 + Vitest(규칙 #3). 런타임 백엔드 없음.
+- **F6:** 키프레임당 이미지 6장일 때의 데이터 크기. 박스별 "어느 카메라가 보는지" 조회.
+- **F7:** nuScenes-mini 키프레임(장면 10개, 약 400개, 현재 사용은 10개) 중 몇 개를 넣을지. 백엔드 없이
+  장면 설명과 프레임별 개수로 검색하기. Vercel 호스팅 용량 한도. 위의 바이너리·지연 로딩 작업.
+- **F8:** 회전된 사각형 편집 인터랙션. 실행 취소 이력 모델.
+
+### 알려진 한계 (결과를 보여주는 곳마다 밝힐 것)
+- **표본이 작다.** 키프레임 10개 × 카메라 1대에서는 거리 구간마다 박스가 몇 개뿐이다. F5는 분석이
+  동작함을 보여주는 단계이고, 수치를 인용할 수 있는 건 F6/F7 이후다.
+- **거리별 지표는 탐지율(Recall)뿐이다.** 잘못 찾은 것(FP)은 짝지어진 정답이 없어 거리를 알 수 없다.
+- **만들어낸 2D 정답**은 근사치다(F5 참고).
+- **평가 대상은 2D 카메라 탐지 모델이며, 3D 탐지가 아니다.**
+
+### 범위 밖
+- 3D 탐지 모델 실행(GPU 전용 연구용 도구, 여러 스캔을 겹치는 입력 준비, 회전된 박스 짝짓기).
+- 백엔드, DB, 인증, 다중 사용자 권한, 서버 저장.
+- WebGPU 렌더러 전환, 실시간 스트리밍.
+- 2D 전용 라벨 유형(폴리곤, 마스크, 키포인트).
+
+### 미정 / 보류
+- **COCO 모드는 일단 그대로 둔다.** 보조 탭으로 남길지 정리할지는 F3 재설계 후 새 배치에서 그 탭이 어떻게
+  보이는지 확인한 뒤 정한다(2026-11-25 사용자 결정). **F3이 끝났고 COCO는 새 화면 안에 그대로 있다. 아직
+  결정하지 않았다**(캡처: `docs/plan-feature/assets/F3/2026-11-25_after/coco_*.jpg`).
+- **이전 기록과의 관계:** F2의 "범위 밖" 항목이던 *멀티 카메라*와 *추가 장면*은 이제 로드맵 항목이다(F6,
+  F7). COCO 정답 vs 예측 비교(데이터는 `sample.gt_backup.json`에 있음)는 F5로 대체됐고 선택 사항으로 남는다.
+-->

@@ -1,6 +1,7 @@
 'use client';
 
 import { DISTANCE_MAX, DISTANCE_STEP } from '@/lib/ui/distance';
+import { SECTION_TITLE_CLASS } from '@/components/workspace';
 
 type Props = {
   value: number;
@@ -15,8 +16,8 @@ type Props = {
 export function DistanceSlider({ value, onChange }: Props) {
   const atMax = value >= DISTANCE_MAX;
   return (
-    <label className="flex items-center gap-3 text-sm text-zinc-300 select-none">
-      <span className="font-semibold uppercase tracking-wide text-xs text-zinc-400">
+    <label className="flex items-center gap-3 text-xs text-zinc-300 select-none">
+      <span className={SECTION_TITLE_CLASS}>
         Distance
       </span>
       <input
@@ -26,7 +27,7 @@ export function DistanceSlider({ value, onChange }: Props) {
         step={DISTANCE_STEP}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="w-40 accent-sky-400 cursor-pointer"
+        className="w-32 accent-sky-400 cursor-pointer"
       />
       <span className="tabular-nums text-zinc-100 w-12 text-right">
         {atMax ? 'All' : `${value}m`}
