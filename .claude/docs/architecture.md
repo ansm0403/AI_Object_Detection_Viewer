@@ -47,7 +47,20 @@ apps/ai_detection_viewer_client/
 │   │   ├── workspace/      # ✅ F3 — the workspace frame + shared panel look
 │   │   │   ├── WorkspaceShell.tsx  # zone layout only (no state): topBar, filterBar, list, main, camera, details, timeline slots + cameraAspect; exports TIMELINE_ROW_HEIGHT_CLASS
 │   │   │   ├── Panel.tsx           # PANEL_CLASS, SECTION_TITLE_CLASS, PanelTitle, PanelHeader (32px title row), ViewerLabel (viewer corner tag)
+│   │   │   ├── useScrollSelectedIntoView.ts  # ✅ F5 — keep the selected <li> of a scrolling list in view (moved out of ObjectList unchanged; shared with the result list)
 │   │   │   └── index.ts            # barrel
+│   │   ├── evaluation/     # ✅ F5 — camera-detection evaluation UI (see "Evaluation (F5)" below). Presentation only; all logic is in lib/evaluation
+│   │   │   ├── ModeSwitch.tsx         # top bar: Review | Evaluate (type WorkMode); Evaluate blocked with a reason while practising
+│   │   │   ├── EvaluationHeadline.tsx # top bar right: model name + overall Precision / Recall (or "Loading…" / "Predictions unavailable")
+│   │   │   ├── EvaluationPanel.tsx    # the details panel in evaluate mode: pinned slot, Precision / Recall with counts, this frame's outcome counts, recall by distance / by class, notes
+│   │   │   ├── SelectedResult.tsx     # pinned strip: outcome + class + distance + visibility, and the one-line reason (describeResult); "Not evaluated" for a box outside the evaluation
+│   │   │   ├── ResultList.tsx         # the list in evaluate mode: one row per result, outcome chips ("Show"), footer "+ N boxes not evaluated"
+│   │   │   ├── OverlayLegend.tsx      # camera legend: "model" (solid) / "label · approx. (projected 3D box)" (dashed)
+│   │   │   ├── BoxColorLegend.tsx     # 3D legend: found / missed / not evaluated
+│   │   │   ├── icons.tsx              # OutcomeIcon (check / cross / exclamation / dash — four shapes, not only four colours)
+│   │   │   ├── usePredictions.ts      # load + parse predictions.json; state none | loading | ready | failed, keyed on the url
+│   │   │   ├── useFrameResults.ts     # memoises the per-frame derivations (order, queue, selected result, overlay, 3D colours)
+│   │   │   └── index.ts               # barrel
 │   │   ├── review/         # ✅ F4 — 3D box review UI (see "Review (F4)" below). Presentation only; all logic is in lib/review
 │   │   │   ├── ReviewControls.tsx     # verdict buttons (Approve/Reject/Unsure) + reject reasons + note + queue-done banner; sits ABOVE the details scroll area
 │   │   │   ├── EvidenceStrip.tsx      # one line above the buttons: LiDAR point count, visibility, in camera
@@ -61,13 +74,13 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── useReviewShortcuts.ts  # window keydown → resolveShortcut → page handler
 │   │   │   └── index.ts               # barrel
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
-│   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?, visibleIds?, label?, zoom?, onToggleZoom?, zoomShortcut? (F2-E: bbox label = class only on measured frames; F3: fills its cell, corner tag; F4: Full/Zoom + projected 3D box, see "Review (F4)")
+│   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?, visibleIds?, label?, zoom?, onToggleZoom?, zoomShortcut? (F2-E: bbox label = class only on measured frames; F3: fills its cell, corner tag; F4: Full/Zoom + projected 3D box, see "Review (F4)"; F5: optional `overlay` (ready-made rectangles drawn INSTEAD of the frame's boxes; zoom follows `overlay.focus`) + `legend` — the viewer does not know what the rectangles mean)
 │   │   │   └── index.ts        # barrel
 │   │   ├── viewer-3d/      # ✅ Step 4, 5 — R3F canvas, point cloud, 3D bboxes, selection sync
-│   │   │   ├── Viewer3D.tsx    # props: frame, selectedId?, onSelect?, label?; hosts Canvas (F3: fills its cell, resized not remounted)
-│   │   │   ├── Scene.tsx       # lights + PointCloud + BBox3D + OrbitControls; passes selection
+│   │   │   ├── Viewer3D.tsx    # props: frame, selectedId?, onSelect?, label?; hosts Canvas (F3: fills its cell, resized not remounted). F5: optional `boxColors` (wire colour per box id, replacing the class colour — recolours only, no remount) + `legend` under the name tag
+│   │   │   ├── Scene.tsx       # lights + PointCloud + BBox3D + OrbitControls; passes selection (F5: passes `boxColors.get(id)` to each box)
 │   │   │   ├── PointCloud.tsx  # THREE.BufferGeometry via useMemo + dispose; per-vertex depth color (F1-A)
-│   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight + hover tint (F1-B); mounts BBoxLabel (F1-C)
+│   │   │   ├── BBox3D.tsx      # EdgesGeometry wireframe + invisible click mesh; selection highlight + hover tint (F1-B); mounts BBoxLabel (F1-C). F5: optional `color` overrides the wire's resting colour (selection white and hover tint still apply; the label pill keeps the class colour)
 │   │   │   ├── BBoxLabel.tsx   # ✅ F1-C — drei <Html> info pill (class + confidence) anchored above the box; pointer-events-none
 │   │   │   ├── HintBox.tsx     # ✅ Step 9.5 — corner mouse-controls overlay (plain HTML sibling of Canvas; English since F3)
 │   │   │   └── index.ts        # barrel
@@ -75,16 +88,16 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── ObjectList.tsx  # props: frame, selectedId?, onSelect?, visibleIds?, verdicts?, boxes?, orderKey?, toolbar? (F3: lists every 3D box; measured rows show in-camera icon + distance; 6-char display id. F4: LiDAR evidence bars + verdict icon per row, order supplied by the page, toolbar slot)
 │   │   │   └── index.ts        # barrel
 │   │   ├── filters/        # ✅ Step 7 — confidence slider + class toggles
-│   │   │   ├── Filters.tsx           # props: classes, threshold, visibleClasses, filterMode, maxDistance, callbacks
-│   │   │   ├── ConfidenceSlider.tsx  # 0..1 range input (shown for COCO)
+│   │   │   ├── Filters.tsx           # props: classes, threshold, visibleClasses, filterMode, maxDistance, callbacks. F5: thresholdLabel / thresholdTitle / defaultThreshold (Reset target) / countNoun — evaluate mode shows the confidence slider as "Min score" resting at 0.25 and counts "results"
+│   │   │   ├── ConfidenceSlider.tsx  # 0..1 range input (shown for COCO; F5: also evaluate mode, via `label`)
 │   │   │   ├── DistanceSlider.tsx    # ✅ F2-A — metres range input (shown for nuScenes; swapped with ConfidenceSlider by filterMode)
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
 │   │   ├── timeline/       # ✅ Step 8 — horizontal thumbnail strip
-│   │   │   ├── Timeline.tsx     # (F4: optional reviewCounts → thumbnail badge "reviewed/total") props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only). F3: one 84px row (title + Play/Reset/Follow left, 96×56 thumbnails right); badge = detections3D count
+│   │   │   ├── Timeline.tsx     # (F5: optional `badges` Map<frameId, TimelineBadge {text, title?, tone}> → shown instead of the count; evaluate mode passes "N missed" / "no preds") (F4: optional reviewCounts → thumbnail badge "reviewed/total") props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only). F3: one 84px row (title + Play/Reset/Follow left, 96×56 thumbnails right); badge = detections3D count
 │   │   │   └── index.ts         # barrel
 │   │   ├── header/         # ✅ Step 9.5 Phase 2 — app title + frame meta line
-│   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount, datasetId, onSelectDataset, source?, children?, practiceActive?, practiceRequested?, onTogglePractice?. F3: flush 44px app bar; meta hidden when frameCount is 0 (loading/error). F4: `children` slot at the right (review progress + Export); Practice toggle + "Practice · labels modified" badge; below 1280px the "N detections" text yields when children are present
+│   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount, datasetId, onSelectDataset, source?, children?, practiceActive?, practiceRequested?, onTogglePractice?. F3: flush 44px app bar; meta hidden when frameCount is 0 (loading/error). F4: `children` slot at the right (review progress + Export); Practice toggle + "Practice · labels modified" badge; below 1280px the "N detections" text yields when children are present. F5: `modeSwitch` slot after the badge; the practice badge reads "Practice" below 1280px (full text in the tooltip); the left group wraps on phone widths
 │   │   │   └── index.ts
 │   │   ├── analytics/      # ✅ Step 9.5 Phase 3 — right-rail analytics container
 │   │   │   ├── AnalyticsPanel.tsx  # composes Inspector + charts. F4: optional title / headerRight / controls (above the scroll area) / bodyTop (top of the scroll area) slots — the page turns it into the "Review" panel on nuScenes; the panel itself knows nothing about reviews
@@ -142,7 +155,27 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── class-colors.ts              # CLASS_COLORS map (+truck/bus/motorcycle F2-A), getClassColor(), DEFAULT_COLOR, SELECTED_COLOR
 │   │   │   ├── distance.ts                  # ✅ F2-A — DISTANCE_MAX / DISTANCE_STEP (distance-filter slider + store default)
 │   │   │   ├── display-id.ts                # ✅ F3 — displayId(id): first 6 chars of a long id (nuScenes token), short ids (COCO) unchanged. Display only (Rule #1)
-│   │   │   └── display-id.test.ts           # 5 tests — 32-char → 6, COCO unchanged, ≤8 kept, >8 shortened, empty
+│   │   │   ├── display-id.test.ts           # 5 tests — 32-char → 6, COCO unchanged, ≤8 kept, >8 shortened, empty
+│   │   │   └── image-overlay.ts             # ✅ F5 — types only: ImageRect {key, bbox, color, dashed, emphasis, caption?, selectId?}, ImageOverlay {rects, focus}. The contract between "what to draw" (lib/evaluation/overlay) and Viewer2D
+│   │   ├── data/           # ✅ F5-0 — loading helpers
+│   │   │   ├── fetch-json.ts                # fetchJson(url, {signal, fetchImpl}): rejects with "HTTP <status> while loading <url>" on a non-2xx answer (used for the dataset AND the predictions)
+│   │   │   └── fetch-json.test.ts           # 5 tests
+│   │   ├── evaluation/     # ✅ F5 — camera-detection evaluation, all pure (no React / Zustand / DOM). See "Evaluation (F5)" below
+│   │   │   ├── types.ts          # Prediction2D (id `pred:<frame>:<index>`, `score`), PredictionSet, EvaluationRules, EvalResult (found / missed / false-alarm / not-scored), FrameEvaluation, EvalSummary
+│   │   │   ├── parse.ts          # parsePredictions (null for a wrong root; malformed items skipped), predictionId, isPredictionId
+│   │   │   ├── iou.ts            # iou(a, b)
+│   │   │   ├── classes.ts        # EVALUATED_CLASSES, toEvaluatedClass (model class → app class | null)
+│   │   │   ├── match.ts          # evaluateFrame (greedy, same class, IoU ≥ IOU_THRESHOLD 0.3; visibility v0-40 not scored), DEFAULT_MIN_SCORE 0.25, findResult, selectionIdOf, countResults
+│   │   │   ├── metrics.ts        # ratio (null when the denominator is 0), precisionOf, recallOf, summarize (totals + recall by 10 m band + by class)
+│   │   │   ├── evaluate.ts       # evaluateFrames(frames, predictionSet, rules): per-frame map + summary; a frame with no entry in the file is left out (not "all missed")
+│   │   │   ├── outcomes.ts       # EVAL_KINDS (display order), OUTCOME_LABEL / HINT / COLOR, NOT_EVALUATED_COLOR, CONTEXT_COLOR, countOf, formatPercent (null → "—")
+│   │   │   ├── list.ts           # orderResults, ResultFilter, isResultVisible, resultQueue (ids J / K walk)
+│   │   │   ├── overlay.ts        # buildOverlay → ImageOverlay (labels dashed, model boxes solid, outcome colours, companion box, focus), unionBox
+│   │   │   ├── describe.ts       # describeResult (the one-line reason), visibilityText
+│   │   │   ├── box-colors.ts     # boxOutcomeColors(frame, evaluation): colour of every 3D box (found / missed / grey)
+│   │   │   ├── test-helpers.ts   # box / makeFrame / makePrediction builders
+│   │   │   ├── *.test.ts         # 139 tests — iou 8, classes 5, parse 11, match 30, metrics 10, evaluate 6, outcomes 6, list 11, overlay 21, describe 9, box-colors 6, sample-data 16 (the SHIPPED files: 91 found / 83 missed / 13 false alarms / 26 not scored)
+│   │   │   └── index.ts          # barrel
 │   │   ├── review/         # ✅ F4 — review logic, all pure (no React / Zustand / DOM). See "Review (F4)" below
 │   │   │   ├── types.ts          # Verdict, RejectReason (+ REJECT_REASONS order = keys 1–6), ReviewRecord, ReviewMap, ReviewScope
 │   │   │   ├── records.ts        # reviewKey, getReview, withVerdict / withReasonToggled / withNote / withoutReview (return the SAME map on a no-op)
@@ -178,6 +211,7 @@ apps/ai_detection_viewer_client/
 │       ├── frame_001.jpg ~ frame_010.jpg
 │       └── nuscenes/       # ✅ F2 — offline-generated (scripts/prep_nuscenes.py)
 │           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes + ~6.5k LiDAR pts/frame); NuScenesPrepped schema. Compact (no indent) — the inline lidar.points arrays dominate size (~1.5 MB). Format 1.1 since F4: each annotation also carries annotationToken / numLidarPts / visibility.
+│           ├── predictions.json # ✅ F5 — YOLOv8n predictions for the 10 CAM_FRONT images (scripts/predict_nuscenes.py): 428 predictions, score ≥ 0.05, ~32 KB. Format "ai-detection-viewer/predictions@1": { format, camera, model {name, weights, library, imageSize, minScore, nmsIou}, frames [{ token, predictions [{ class, score, bbox [x,y,w,h] }] }] }
 │           └── cam_front/       # 10 CAM_FRONT keyframe jpgs
 └── vitest.config.ts        # include: src/**/*.test.ts + tests/**/*.test.ts
 
@@ -190,6 +224,10 @@ scripts/                    # ✅ F2 — offline, build-time only (repo root, li
                             #   (Rule #3; decimation is subsampling, not a transform). NOT a runtime backend.
                             #   F4: also copies per-box annotationToken / numLidarPts / visibility level (format 1.1).
                             #   Re-running is deterministic (verified: output identical apart from the new fields).
+  predict_nuscenes.py       # ✅ F5 — runs YOLOv8n (ultralytics, CPU, imgsz 1280, conf 0.05) on the images listed in
+                            #   nuscenes.json and writes predictions.json. Copies the model's output only: no class
+                            #   filtering, no scoring (that is lib/evaluation's job, Rule #3). No timestamp in the file;
+                            #   re-running is deterministic (verified: byte-identical). NOT a runtime backend.
 ```
 
 Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
@@ -526,8 +564,9 @@ Wide (lg, ≥1024px): full viewport, the page never scrolls (lg:h-screen, min-h 
 - **Viewer labels follow provenance** (Rule #6): `Frame.source === 'nuscenes-measured'` →
   "LiDAR · measured 3D" / "CAM_FRONT"; otherwise "3D · estimated from 2D" / "Image". "CAM_FRONT" is
   fixed because `scripts/prep_nuscenes.py` exports that camera only (until F6).
-- **(F4 filled its spots — see "Review (F4)" below. Still reserved: F5 summary in the details panel
-  and a confidence slider in the filter bar; F6 cameras in the camera cell.)**
+- **(F4 filled its spots — see "Review (F4)" below. F5 did not stack onto them: it added a
+  Review | Evaluate mode in which each zone changes ROLE while the frame stays the same — see
+  "Evaluation (F5)" below. Still reserved: F6 cameras in the camera cell.)**
 - **Reserved spots for later features** (F3 design doc §12): F4 review buttons at the top of the
   details panel and progress in the top bar, review status at the right of each list row; F5 summary
   in the details panel and a confidence slider in the filter bar; F6 cameras in the camera cell.
@@ -705,6 +744,187 @@ F4(2026-11-25)부터 nuScenes 화면은 검수 도구다. 실측 3D 박스를 �
 - 연습 모드: 원본 JSON 단계에서 프레임당 약 10%의 박스를 시드에 따라 어긋나게 한다. 원본 파일은 바뀌지 않는다.
   화면의 표시(배지, 3D 이름표, 범위, 내보내기)는 토글이 아니라 실제로 불러온 데이터에 따라 정해진다.
 - 상단 바는 1024px부터 한 줄이어야 한다. 1280px 미만에서는 일부 글자를 숨긴다.
+-->
+
+## Evaluation (F5) — current
+
+F5 (2026-11-26) adds a second job to the nuScenes workspace: **scoring a 2D camera detector against
+the labels.** YOLOv8n is run offline on the ten CAM_FRONT photos; the app compares its boxes with the
+labels' 2D projections and shows what was found, missed and falsely reported — and *where in 3D* the
+misses are. This evaluates a 2D camera detector, not 3D detection. COCO has no evaluate mode.
+Design: `docs/plan-feature/F5_camera_detection_eval.md`; edge cases: `Edge_F#5.md`.
+
+### Two modes, one workspace
+
+`page.tsx` holds `mode: 'review' | 'evaluate'` (a view setting like `cameraMode`; not stored, reset to
+`'review'` on a dataset switch). The frame and `selectedObjectId` are shared by both modes. The
+`WorkspaceShell` zones stay where they are; each changes role:
+
+| Zone | Review (F4) | Evaluate (F5) |
+|---|---|---|
+| top bar, left | dataset, badge, Practice | + `ModeSwitch`; Practice hidden while evaluating |
+| top bar, right | review progress, Export | `EvaluationHeadline`: model name, overall Precision / Recall |
+| filter bar | distance slider, class chips | **"Min score"** slider (the store's `confidenceThreshold`), class chips, "n/m results" |
+| list | `ObjectList` (every 3D box) | `ResultList` (this frame's results: missed → false alarm → found → not scored) |
+| 3D view | class colours | **outcome colours** via `boxColors` + legend (found green, missed red, everything else grey) |
+| camera cell | labels; zoom draws the projected 3D box | `overlay`: labels dashed, model boxes solid, outcome colours; zoom shows both |
+| details | "Review" panel | `EvaluationPanel` with `SelectedResult` pinned on top |
+| timeline badge | reviewed / total | "N missed" (or "no preds") |
+
+`evaluating = mode === 'evaluate' && reviewEnabled && plantedErrors === null`. Practice and evaluate
+exclude each other in both directions (a practice set has deliberately wrong labels and cannot be an
+answer key): Evaluate is blocked, with the reason in its tooltip, while practising, and the Practice
+toggle is hidden while evaluating.
+
+### Data flow
+
+```
+predictions.json ── usePredictions(url) ── parsePredictions ──▶ PredictionSet { model, camera, byFrame }
+                                                                 (nothing filtered at parse time)
+frames + PredictionSet + { minScore: confidenceThreshold, iouThreshold: 0.3 }
+        │  evaluateFrames  (page, useMemo — re-runs on every slider move; 0.2–0.4 ms for 10 frames)
+        ▼
+DatasetEvaluation { byFrame: Map<frameId, FrameEvaluation>, summary, evaluatedFrames, framesWithoutPredictions }
+        ├─ summary ─────────────────────────▶ EvaluationHeadline, EvaluationPanel (totals, by distance, by class)
+        ├─ byFrame.get(id).counts ──────────▶ Timeline badges, panel "Frame n" row, list chips
+        └─ useFrameResults(frame, predictions, frameEvaluation, selectedObjectId, class chips, outcome chips)
+              ├─ orderResults ──────────────▶ ResultList rows
+              ├─ resultQueue ───────────────▶ J / K
+              ├─ findResult ────────────────▶ SelectedResult (describeResult)
+              ├─ buildOverlay ──────────────▶ Viewer2D `overlay` (ImageRect[] + focus)
+              └─ boxOutcomeColors ──────────▶ Viewer3D `boxColors`
+```
+
+- **Predictions are a separate type and a separate file** (`Prediction2D`, field `score`; not in
+  `Frame`). `detections2D` / `detections3D` stay the 2D / 3D halves of one object with one id
+  (Rule #1); a prediction has no 3D half and is not the label it may match. Surfaces that draw labels
+  therefore keep hiding the placeholder confidence with `frameHasConfidence` unchanged (F2-E), and
+  only prediction-drawing surfaces show a score.
+- **Scoring happens at the selector level**, from (frames, predictions, score). The file is never
+  filtered when parsed, so the slider re-scores everything (CLAUDE.md: threshold filtering at the
+  selector level).
+- **Load.** `predictions.json` is requested next to the dataset (`PREDICTION_SOURCES`). It is
+  independent of the dataset request: if it fails, review works and evaluate mode says "Predictions
+  unavailable" with the reason. Both requests go through `fetchJson`, which reports an HTTP failure
+  as its status instead of a JSON parse error (F5-0).
+
+### The rules (`lib/evaluation/match.ts`)
+
+1. **Labels** = the frame's `detections2D` (boxes that project into the camera image) of an evaluated
+   class (`person, bicycle, car, motorcycle, bus, truck`). Their 2D rectangle is the projection of the
+   3D box — **approximate**, looser than the object (Rule #6; stated in the camera legend and the
+   panel).
+2. **Predictions** that take part = an evaluated class and `score ≥ minScore` (default 0.25).
+3. **Greedy matching**, highest score first: each prediction takes the still-unmatched label **of its
+   class** it overlaps most; `IoU ≥ 0.3` → the label is **found**. One label, one prediction.
+   0.3, not the benchmark 0.5, because the projected labels are loose: at 0.5 more than 20 correct
+   detections are each counted as a miss plus a false alarm (`sample-data.test.ts` locks this; the
+   design probe measured 28).
+4. **Not scored** = labels with nuScenes visibility `v0-40`: neither found nor missed, and a
+   prediction of the same class lying on one is dropped rather than called a false alarm. Caveat:
+   nuScenes rates visibility over all six cameras, not the front camera alone.
+5. Every other unmatched label is **missed**; every other unmatched prediction is a **false alarm**.
+6. Each miss / false alarm carries its **nearest** box of the other kind and the one fact that kept
+   it from counting (`wrong-class`, `below-min-score`, `low-overlap`, `matched-elsewhere`). These are
+   facts for the reader, not a diagnosis of the model.
+
+`Precision = found / (found + falseAlarm)`, `Recall = found / (found + missed)`; both are `null`
+(shown "—", never 0%) when the denominator is 0. Breakdowns (10 m distance bands, class) are recall
+only — a false alarm has no matched label, hence no measured distance.
+
+**A frame with no entry in the file is not evaluated** (badge "no preds", left out of the totals); a
+frame with an empty entry was run and all its scored labels are missed.
+
+On the shipped sample at the default rules: found 91, missed 83, false alarms 13, not scored 26 →
+Precision 88%, Recall 52%; recall by class car 18/22, person 73/112, motorcycle 0/40. **Ten frames,
+one camera, one scene — a demonstration that the analysis works, not a statement about the model.**
+
+### Selection (Rule #2)
+
+Still one `selectedObjectId`. A label result (found / missed / not scored) is selected by its
+**object id**, so the 3D box, the list row and both rectangles highlight together; a false alarm is
+selected by its **prediction id** `pred:<frameId>:<fileIndex>` (cannot collide with a hex instance
+token; carries the frame so a stale id can never point at another prediction). `findResult` resolves
+either id; `selectionIdOf(result)` is the id to store. One page effect drops a prediction id when it
+no longer names a result on screen (frame change, leaving evaluate mode, the slider passing it,
+predictions unavailable). A false alarm highlights nothing in the 3D view: a model box is a 2D
+rectangle with no depth, and no 3D position is invented for it (Rule #6).
+
+### Viewer contracts added by F5
+
+- **`Viewer2D` `overlay?: ImageOverlay`, `legend?`.** With an overlay the viewer draws
+  `overlay.rects` instead of the frame's boxes and, in zoom mode, crops to `overlay.focus`. Strokes
+  and dashes are in screen pixels (`non-scaling-stroke`); captions scale with the visible region so
+  they are the same size on screen at any zoom. A rectangle without `selectId` lets clicks through.
+  The viewer knows nothing about evaluation; `lib/evaluation/overlay.ts` decides what is drawn
+  (labels dashed, model boxes solid, outcome colour, selected emphasised and captioned, the rest
+  dimmed, plus the selected result's **companion** box — the one its explanation refers to, even if
+  it is below the minimum score). Without an overlay the review / COCO paths are untouched.
+- **`Viewer3D` `boxColors?: ReadonlyMap<id, colour>`, `legend?`.** Passed down to `BBox3D` as
+  `color`. Only the material colour changes: same components, same keys, same Canvas — verified that
+  mode switches, slider moves, frame switches and autoplay do not re-create the canvas.
+- **`Timeline` `badges?`**, **`Header` `modeSwitch?`**, **`Filters` `thresholdLabel` /
+  `defaultThreshold` / `countNoun`** — slots and labels; none of these components knows what
+  evaluation is.
+
+### Filters in evaluate mode
+
+- The store's `confidenceThreshold` is the model's minimum score: set to 0.25 on entering, to 0 on
+  leaving; it never filters labels in this mode (`labelThreshold = 0`), and the distance filter is
+  off (`labelMaxDistance = DISTANCE_MAX`).
+- **Class chips** hide (rows dimmed, boxes not drawn in the photo or the 3D view); **outcome chips**
+  (`shownKinds`, page state) filter the list and the photo. **Neither changes a number** — totals
+  are always over everything (the same principle as F4: the queue follows the filters, the progress
+  denominator does not).
+- **Reset** returns the score to 0.25 and clears the class chips; it leaves review mode's distance
+  filter alone (Edge_F#5 Case 1).
+- Below the file's own minimum (`model.minScore`, 0.05) the panel states the score actually in
+  effect (Edge_F#5 Case 2).
+
+### Shortcuts
+
+`resolveShortcut` is reused unchanged. In evaluate mode the page handles `step` (J / K, over
+`resultQueue`) and `toggle-zoom` (Z) and ignores every action that writes a review.
+
+### Width budget
+
+The mode switch (126px) is in the top bar's left group. Checked one line / no page scroll at 1024,
+1100, 1279 and 1280 in review, practice and evaluate (evaluate also at 1440, 1536 and 1920); the
+tightest is review at 1024 (68px between the groups). The practice badge reads "Practice" below 1280px. Below 1024px the layout
+stacks (F3) and the left group wraps.
+
+<!-- KO (move to a localized file)
+## 평가 (F5) — 현재
+
+F5(2026-11-26)는 nuScenes 화면에 두 번째 일을 더했다. **2D 카메라 탐지 모델을 정답과 비교해 채점**하는 것이다.
+YOLOv8n을 앞 카메라 사진 10장에 미리 돌려 두고, 앱이 그 박스를 정답의 2D 투영과 비교해 찾음 / 놓침 / 헛짚음과
+"놓친 것이 3D 어디에 있는지"를 보여준다. 3D 탐지 평가가 아니다. COCO에는 평가 모드가 없다.
+
+- **모드:** `page.tsx`의 `mode`(`review` | `evaluate`). 화면 설정이며 저장하지 않는다. 프레임과 `selectedObjectId`는
+  두 모드가 함께 쓴다. 화면 틀은 그대로이고 칸의 역할만 바뀐다(위 표). 연습 모드와 평가 모드는 서로 막는다.
+- **데이터 흐름:** `predictions.json` → `parsePredictions`(읽을 때는 아무것도 거르지 않음) → 슬라이더 값과 함께
+  `evaluateFrames`(page의 `useMemo`, 슬라이더가 움직일 때마다 다시 계산, 10개 프레임에 0.2~0.4ms) → 상단 숫자,
+  패널, 타임라인 배지, 그리고 `useFrameResults`가 목록 순서, J/K 대기열, 선택한 결과, 사진에 그릴 사각형, 3D 색을 만든다.
+- **예측은 별도 타입, 별도 파일**이다(`Prediction2D`, 필드 이름 `score`, `Frame`에 넣지 않음). 그래서 규칙 #1(2D와 3D의
+  ID가 같다)이 그대로이고, 정답을 그리는 곳은 F2-E대로 점수를 숨긴다.
+- **채점 규칙:** 정답 = 사진에 투영되는 박스 중 평가 대상 클래스(근사치임을 화면에 표시). 예측 = 평가 대상 클래스이고
+  점수가 기준 이상(기본 0.25). 점수가 높은 예측부터 **같은 클래스**의 짝 없는 정답 중 가장 많이 겹친 것과 짝짓고
+  IoU 0.3 이상이면 찾음. 가시성 0~40%인 정답은 채점 제외(그 위의 같은 클래스 예측도 헛짚음으로 세지 않음).
+  나머지 정답은 놓침, 나머지 예측은 헛짚음. 놓침과 헛짚음에는 "가장 가까운 상대"와 이유 한 가지가 붙는다.
+- Precision = 찾음 ÷ (찾음 + 헛짚음), Recall = 찾음 ÷ (찾음 + 놓침). 분모가 0이면 `null`이고 화면에는 "—".
+  거리별·클래스별 지표는 Recall뿐이다.
+- **예측 파일에 없는 프레임은 평가하지 않는다**("no preds", 합계에서 제외). 예측이 0개인 프레임은 돌린 것이므로 전부 놓침.
+- 실제 데이터의 기본 결과: 찾음 91, 놓침 83, 헛짚음 13, 채점 제외 26 → Precision 88%, Recall 52%.
+  **프레임 10개, 카메라 1대, 장면 1개다. 분석이 동작함을 보이는 것이지 모델 성능의 주장이 아니다.**
+- **선택(규칙 #2):** 여전히 `selectedObjectId` 하나. 정답 쪽 결과는 객체 ID, 헛짚음은 예측 ID(`pred:<프레임>:<번호>`).
+  예측 ID는 그 결과가 화면에서 사라지면(프레임·모드 전환, 슬라이더) 해제한다. 헛짚음은 3D에 표시하지 않는다(위치 정보가 없음).
+- **뷰어에 더한 입력:** `Viewer2D`의 `overlay`(그릴 사각형 목록)와 `legend`, `Viewer3D`의 `boxColors`(박스별 색)와
+  `legend`, `Timeline`의 `badges`, `Header`의 `modeSwitch`, `Filters`의 이름·기본값·개수 단위. 이 컴포넌트들은 평가가
+  무엇인지 모른다. 3D는 색 값만 바뀌고 캔버스를 다시 만들지 않는다(확인함).
+- **필터:** 평가 모드에서 `confidenceThreshold`는 모델의 최소 점수다(들어갈 때 0.25, 나올 때 0). 클래스 칩과 결과 칩은
+  보이는 것만 거르고 숫자는 바꾸지 않는다. Reset은 검수 모드의 거리 필터를 건드리지 않는다.
+- **단축키:** 평가 모드에서는 J / K / Z만 동작하고 검수 기록을 쓰는 키는 무시한다.
+- **상단 바 폭:** 전환 버튼 126px. 1024px(검수 모드)에서 두 묶음 사이 여유 68px이 가장 빠듯하다.
 -->
 
 ### Layout (after Step 9.5) — superseded by F3

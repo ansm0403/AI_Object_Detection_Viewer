@@ -437,8 +437,8 @@ points — "weak evidence" (≤ 4 points here) — so it is worth looking at fir
 **Visibility (nuScenes, 가려짐 단계)** *(F4)*
 nuScenes' record of how much of an object is visible, in four bins: 0–40 %, 40–60 %, 60–80 %,
 80–100 %. Per the nuScenes schema it is "the fraction of annotation visible in all 6 images" — across
-the six cameras together, not the one camera this app shows. F5 will use it to leave hidden objects
-out of the evaluation.
+the six cameras together, not the one camera this app shows. F5 uses it to leave hidden objects out
+of the evaluation ([[Not scored / ignore (채점 제외)]]).
 
 **Projected 3D box (투영한 3D 박스)** *(F4)*
 The 3D box drawn onto the photo: its 8 corners are each projected to a pixel
@@ -471,3 +471,92 @@ a detector in F5: true positive / false negative / false positive.
 The system component that turns key presses into non-Latin text (e.g. Hangul). While it is active the
 same physical key reports a different character (`key: "ㅁ"` instead of `"a"`), so shortcuts fall back
 to the physical key position (`code: "KeyA"`) — Edge_F#4 Case 5.
+
+## Evaluation Terms (F5 — camera detection evaluation)
+
+The running analogy is **marking an exam**: the photo is the question, the model's boxes are the
+student's answers, the dataset's boxes are the answer key. (F4's practice mode marked the *reviewer*
+the same way — found / missed / false alarm.)
+
+**Prediction (예측, 모델 박스)** *(F5)*
+A box the model drew on a photo: a class, a 2D rectangle and a score. It has **no depth** — it is a
+shape on the image, not a place in the world — so this app never draws one in the 3D view. Kept as
+its own type (`Prediction2D`) and in its own file (`predictions.json`), apart from the labels.
+
+**Label / ground truth (정답, 라벨)** *(F5)*
+What the dataset says is there: the human-made annotation the model is scored against. On nuScenes a
+label is a 3D box; on the photo it appears as the rectangle around the box's 8 projected corners
+([[Projected 2D box (AABB of corners)]]). That rectangle is **approximate** — looser than the object,
+because a 3D box seen at an angle has a bigger outline than the thing inside it. nuScenes has no
+hand-drawn 2D boxes.
+
+**Score (점수, model confidence)** *(F5)*
+The model's own 0–1 estimate of how sure it is about one prediction (0.9 "almost certain", 0.1 "a
+guess"). Only predictions have one. A label's `confidence: 1.0` in this codebase is a placeholder to
+fill the type and is never shown ([[Confidence (score)]], F2-E).
+
+**Min score / score threshold (최소 점수, 점수 기준)** *(F5)*
+The cut-off below which a prediction is treated as if the model had not made it — the slider in
+evaluate mode. Raising it keeps only confident answers: fewer false alarms, more misses. Lowering it
+does the opposite. Default 0.25 (YOLO's own default). The file holds predictions down to 0.05, so the
+slider has nothing more to add below that.
+
+**IoU — Intersection over Union (겹친 정도)** *(F5)*
+How much two rectangles overlap: the area they share divided by the area they cover together. Two
+sheets of paper laid on each other — "overlapping part ÷ total covered part". 0 = apart, 1 =
+identical. Benchmarks usually require 0.5; this app uses **0.3** because its labels are loose
+projections (a correct detection of a pedestrian overlaps its label by only about 0.5 here).
+
+**Matching (짝짓기)** *(F5)*
+Deciding which prediction answers which label. The standard greedy rule: go through the predictions
+from the highest score down; each takes the still-free label **of its class** that it overlaps most,
+and the pair counts if the IoU reaches the threshold. A label can be taken once, so a second box on
+the same object is left over.
+
+**Found / true positive, TP (찾음)** *(F5)*
+A label that a prediction of the same class matched. A right answer.
+
+**Missed / false negative, FN (놓침)** *(F5)*
+A label nothing matched. An answer the student did not write. The panel shows the closest model box
+and the one fact that kept it from counting (another class, a score under the minimum, too little
+overlap, already matched to another label).
+
+**False alarm / false positive, FP (헛짚음)** *(F5)*
+A prediction with no label of its class under it. An answer that is not in the answer key. **Not
+always the model's mistake**: of the 13 in the sample, 3 look like real cars whose label was already
+matched by a stronger box, and 3 are motorcycles the model called a person or a car (each of those
+also counts once as a miss).
+
+**Precision (정밀도)** *(F5)*
+Of what the model reported, how much was right: found ÷ (found + false alarms). "How far can I trust
+a box the model draws?"
+
+**Recall (재현율, 탐지율)** *(F5)*
+Of what was there, how much the model found: found ÷ (found + missed). "How much does it overlook?"
+Precision and recall pull against each other — that trade is what the score slider shows.
+
+**Not scored / ignore (채점 제외)** *(F5)*
+A label left out of the score either way: finding it earns nothing, missing it costs nothing, and a
+box drawn on it is not a false alarm. Used here for objects less than 40 % visible ([[Visibility
+(nuScenes, 가려짐 단계)]]) — the model found 3 of 26 such objects, which says more about the occlusion
+than about the model. Benchmarks call these "ignore" or "don't care" regions.
+
+**Not evaluated (평가하지 않음)** *(F5)*
+A 3D box that takes no part at all: outside the camera image (about two thirds of the boxes, with one
+camera), or of a class the model cannot name. Different from *not scored*, which is a label in the
+photo. Both are grey in the 3D view.
+
+**Recall by distance (거리별 탐지율)** *(F5)*
+Recall computed separately for labels 10–20 m, 20–30 m, … from the car. Possible only because every
+label is a measured 3D box with a real distance — a 2D-only dataset such as COCO cannot give it.
+There is no "precision by distance": a false alarm has no label, hence no distance.
+
+**NMS — non-maximum suppression** *(F5)*
+The step inside a detector that removes its own duplicate boxes on one object. Done by the model
+before the app sees anything (`nmsIou: 0.7` in the predictions file); mentioned because a crowd can
+still leave two overlapping boxes, one of which becomes a false alarm.
+
+**Sample size (표본 수)** *(F5)*
+How many things a percentage was computed from. "0 % of 40" and "0 % of 2" are different findings, so
+every percentage in the panel has its counts beside it. The whole evaluation is 10 frames of one
+scene from one camera: it shows that the analysis works, not how good the model is.
