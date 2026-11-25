@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>F6 단계별 화면</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #050506; color: #e4e4e7;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 5; background: #111113; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row + .row { margin-top: 8px; }
+  .lbl { font-size: 12px; color: #71717a; width: 64px; }
+  button { font: inherit; font-size: 13px; color: #d4d4d8; background: #1f1f23; border: 1px solid #3f3f46;
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: #71717a; }
+  button.on { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
+  button.mock.on { background: #3f3f46; border-color: #a1a1aa; color: #fff; }
+  button:disabled { opacity: .3; cursor: default; }
+  kbd { font: 600 11px ui-monospace, monospace; border: 1px solid #52525b; border-radius: 3px; padding: 0 4px; color: #a1a1aa; }
+  .note { margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #d4d4d8; max-width: 1180px; }
+  .note b { color: #fff; }
+  .look { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid #38bdf8; background: #0b1722; font-size: 14px; line-height: 1.6; max-width: 1160px; }
+  .look b { color: #7dd3fc; }
+  .hint { font-size: 12px; color: #71717a; margin-left: 10px; }
+  .stage { padding: 16px; overflow-x: auto; }
+  .tag { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .tag.real { background: #064e3b; color: #a7f3d0; }
+  .tag.mock { background: #3f3f46; color: #fff; }
+  img { display: block; border: 1px solid #27272a; cursor: pointer; max-width: none; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="row"><span class="lbl">단계</span><span id="steps"></span>
+    <span class="hint">실제 앱을 조작한 뒤 찍은 화면 · 이미지는 실제 크기(1:1) · 모두 프레임 6</span></div>
+  <div class="row"><span class="lbl">화면</span><span id="shots"></span></div>
+  <div class="row"><span class="lbl">비교</span><button id="mock" class="mock">시안 / 이전 화면 <kbd>Space</kbd></button>
+    <span class="hint"><kbd>←</kbd> <kbd>→</kbd> 화면 이동 · 비교할 그림이 있는 화면에서는 이미지를 클릭하거나 <kbd>Space</kbd></span></div>
+  <p class="note" id="note"></p>
+  <p class="look" id="look"></p>
+</div>
+<div class="stage">
+  <span class="tag" id="tag"></span>
+  <img id="img" alt="" />
+</div>
+<script>
+// 단계가 끝날 때마다 항목을 추가한다.
+// file: 실제 앱 캡처, compare: 번갈아 볼 그림(시안이나 이전 화면), compareLabel: 그 그림의 이름.
+const SHOTS = [
+  { step: 'A', name: 'A1 검수 (변화 없음)', file: '2026-11-26_steps/stepA_review_bus_1536x700.jpg',
+    compare: '2026-11-26_before/nuscenes_frame6_review_bus_1536x700.jpg', compareLabel: 'F5 완료 화면 (이전)',
+    note: '<b>F6-A는 데이터와 로직만 바꿨습니다. 화면은 달라지지 않아야 합니다.</b> 준비 스크립트가 카메라 6대의 사진과 보정값을 내보내고(사진 60장, <code>nuscenes.json</code> 형식 1.2), 파서가 카메라마다 2D 박스를 만들며, "이 박스를 어느 카메라가 보는가"와 "어느 카메라를 보여줄까"를 계산하는 함수가 생겼습니다. 화면은 아직 이 데이터를 쓰지 않습니다.',
+    look: '<b>무엇을 보면 되나:</b> <kbd>Space</kbd>로 이전 화면과 번갈아 보세요. 같은 버스를 고른 같은 화면입니다. 카메라 이름표가 여전히 CAM_FRONT이고 "Selected box is outside CAM_FRONT" 안내가 그대로 나옵니다. (3D 박스의 흰 선이 조금 다르게 보이는 것은 선택한 박스가 숨 쉬듯 커졌다 작아지는 애니메이션 때문입니다.)' },
+  { step: 'A', name: 'A2 평가 (숫자 그대로)', file: '2026-11-26_steps/stepA_evaluate_1536x700.jpg',
+    note: '평가 모드입니다. <b>앞 카메라의 숫자가 그대로인지</b> 확인한 화면입니다: Precision 88%, Recall 52%, 프레임 6은 놓침 10 · 헛짚음 1 · 찾음 12 · 채점 제외 3, 타임라인의 "N missed"도 이전과 같습니다. 스크립트가 실제 3D 장면에서 박스 선의 색을 세어 초록 12, 빨강 10, 회색 39도 확인했습니다.',
+    look: '<b>무엇을 보면 되나:</b> 오른쪽 위 Precision 88% / Recall 52%, 오른쪽 패널의 "91 of 104", "91 of 174". 3D 박스 대부분이 아직 회색입니다(앞 카메라에 안 보여 평가하지 않은 박스). 이 회색이 F6-C에서 색으로 바뀝니다.' },
+
+  { step: 'B', name: 'B1 버스 선택 → 뒤 카메라', file: '2026-11-26_steps/stepB_bus_1536x700.jpg',
+    compare: '2026-11-26_mockup/A1_review_bus_1536x700.jpg', compareLabel: '시안 A1',
+    note: '<b>F6-B: 카메라 칸이 6대를 씁니다.</b> 목록에서 차 뒤쪽의 <b>버스</b>를 골랐습니다. F5까지는 "앞 카메라에 없음" 안내만 나오던 박스입니다. 이제 큰 사진이 <b>자동으로 뒤 카메라(CAM_BACK)</b>로 바뀌고, 버스 위에 3D 박스가 겹쳐 그려집니다(흰 선 = 박스, 하늘색 = 박스의 앞면).',
+    look: '<b>무엇을 보면 되나:</b> ① 큰 사진 왼쪽 위 이름표가 <b>CAM_BACK</b>. ② 그 아래 <b>썸네일 6개</b>(BL FL F FR BR B = 차 주위를 한 바퀴 둘러본 순서). 하늘색 테두리가 지금 보는 카메라입니다. ③ BR과 B 썸네일의 <b>작은 흰 네모</b>가 버스의 위치입니다(두 카메라에 걸쳐 보임). ④ 판정 버튼 위의 <b>"Seen by B · BR"</b>(잘 보이는 카메라가 먼저). ⑤ 왼쪽 목록의 카메라 아이콘 자리에 <b>카메라 이름표</b>("B+" = 뒤 카메라, 한 대 더 있음). <kbd>Space</kbd>로 시안과 번갈아 보세요. 시안과 다른 점: 목록 이름표를 "BR·B"에서 "B+"로 줄였습니다(클래스 이름이 잘리지 않게).' },
+  { step: 'B', name: 'B2 선택 없음', file: '2026-11-26_steps/stepB_none_1536x700.jpg',
+    note: '앱을 처음 연 화면입니다(프레임 1, 아무것도 고르지 않음). 큰 사진은 앞 카메라이고 썸네일 6개가 모두 떠 있습니다. 썸네일에 흰 네모가 없습니다(고른 박스가 없으므로).',
+    look: '<b>무엇을 보면 되나:</b> 썸네일 줄이 생기면서 오른쪽 아래 패널이 43px 낮아졌습니다(275 → 232px, 설계 문서 결정 1의 대가). 페이지 스크롤은 없습니다. 사진 60장은 화면이 뜬 뒤 뒤에서 미리 받습니다(확인 스크립트가 60장 요청을 셌습니다).' },
+  { step: 'B', name: 'B3 썸네일을 직접 누름', file: '2026-11-26_steps/stepB_manual_camera_1536x700.jpg',
+    note: '버스를 고른 채 <b>FR 썸네일을 직접 눌렀습니다.</b> 큰 사진은 오른쪽 앞 카메라가 되고 <b>선택은 그대로</b>입니다(목록과 3D의 버스가 여전히 선택 표시). 이 사진에는 버스가 없으므로 안내문이 <b>어느 카메라에 있는지</b> 알려줍니다.',
+    look: '<b>무엇을 보면 되나:</b> 사진 아래의 노란 안내 <b>"Selected box is outside CAM_FRONT_RIGHT · seen by B, BR"</b>. 썸네일 BR과 B에는 여전히 흰 네모가 있어 어디를 누르면 되는지 알 수 있습니다. 키보드 <kbd>[</kbd> <kbd>]</kbd>로도 왼쪽 / 오른쪽 카메라로 옮길 수 있습니다. 직접 고른 카메라는 다른 박스를 고르거나 프레임을 바꿀 때까지 유지됩니다.' },
+  { step: 'B', name: 'B4 Unsure first 정렬', file: '2026-11-26_steps/stepB_unsure_first_1536x700.jpg',
+    note: '정렬에 <b>"Unsure first"</b>가 생겼습니다. F4에서 "앞 카메라에 안 보여서" 판단 불가(Unsure)로 둔 박스를 <b>이제 사진으로 다시 볼 수 있기</b> 때문입니다. 판단 불가 박스가 목록 맨 위로 모이고, 다시 판정하면 다음 판단 불가 박스로 넘어갑니다. 판정이 바뀐 박스는 맨 위 묶음에서 빠집니다.',
+    look: '<b>무엇을 보면 되나:</b> 왼쪽 목록 위 "Order"가 <b>Unsure first</b>이고, 맨 윗줄(물음표 아이콘)이 판단 불가 박스입니다. 이 화면은 판단 불가 2개 중 하나를 승인한 직후라 맨 위에 1개가 남아 선택돼 있고, 큰 사진이 그 박스를 보는 카메라입니다. "By camera" 정렬도 있습니다: 카메라별로 모아 보여 주어, J로 61개를 훑는 동안 큰 사진이 5번만 바뀝니다(카메라가 바뀔 때만).' },
+  { step: 'B', name: 'B5 연습 모드', file: '2026-11-26_steps/stepB_practice_1536x700.jpg',
+    note: '<b>연습 모드</b>도 6대 기준이 됐습니다. "오류를 사진으로 확인할 수 있는 박스에만 심는다"는 규칙에서 "카메라에 보이는 박스"가 앞 카메라 하나가 아니라 <b>어느 카메라든</b>으로 바뀌었습니다.',
+    look: '<b>무엇을 보면 되나:</b> 상단 배지와 3D 이름표가 "practice"를 말하고 썸네일 줄이 그대로 있습니다. 확인 스크립트가 이 프레임에 심긴 오류를 하나씩 골라, 모두 사진에 보이는 것을 확인했습니다. 알아둘 점: 같은 시드라도 심기는 오류가 F5 때와 다릅니다(후보 박스가 200개에서 583개로 늘어서).' },
+  { step: 'B', name: 'B6 1280×720', file: '2026-11-26_steps/stepB_bus_1280x720.jpg',
+    compare: '2026-11-26_mockup/A1_review_bus_1280x720.jpg', compareLabel: '시안 A1 (1280×720)',
+    note: '같은 상태를 <b>1280×720</b>에서 본 화면입니다. 오른쪽 칸이 360px로 좁아져 썸네일 줄은 360×32, 패널은 360×278입니다.',
+    look: '<b>무엇을 보면 되나:</b> 페이지 스크롤이 없고, 근거 줄("LiDAR … Visible … Seen by B · BR")이 한 줄에 들어갑니다. 왼쪽 목록에서 "person", "car"가 잘리지 않습니다(이름표를 넣으면서 거리 칸을 8px 줄여 맞췄습니다).' },
+  { step: 'B', name: 'B7 1024×768', file: '2026-11-26_steps/stepB_bus_1024x768.jpg',
+    note: '약속한 최소 폭 <b>1024px</b>입니다. 상단 바가 한 줄이고 페이지 스크롤이 없습니다. (필터 바에서 "motorcycle" 칩이 화면 밖으로 밀려 있는 것은 F5 때도 같았던 기존 동작입니다. 엣지 케이스 검증에서 다시 봅니다.)',
+    look: '<b>무엇을 보면 되나:</b> 상단 바는 건드리지 않았습니다(카메라 선택은 카메라 칸 안에 있습니다). 썸네일 6개가 360px 안에 들어갑니다.' },
+
+  { step: 'C', name: 'C1 평가 · 3D에 색이 붙는다', file: '2026-11-26_steps/stepC_evaluate_none_1536x700.jpg',
+    compare: '2026-11-26_steps/stepA_evaluate_1536x700.jpg', compareLabel: 'F6-A 때 화면 (앞 카메라만)',
+    note: '<b>F6-C: 평가 모드가 카메라 6대를 씁니다.</b> YOLO를 사진 60장(프레임 10개 × 카메라 6대)에 돌려, 사진마다 따로 채점한 뒤 더했습니다. <kbd>Space</kbd>로 앞 카메라만 쓰던 화면과 번갈아 보세요. 같은 프레임 6입니다.',
+    look: '<b>무엇을 보면 되나:</b> ① <b>3D 뷰</b>: 회색(평가 안 함) 39개가 17개로 줄고 초록 28, 빨강 16이 됐습니다. 차 오른쪽과 뒤쪽 박스에 색이 붙은 것이 가장 큰 변화입니다. 범례가 "found by a camera / missed by all"입니다(어느 카메라에서든 찾았으면 초록). ② <b>오른쪽 위 숫자</b>: Precision 88% → 77%, Recall 52% → 66%. 앞 카메라의 숫자는 그대로이고 옆·뒤 사진이 더해진 결과입니다. ③ <b>썸네일의 숫자</b>: 그 사진에서 놓친 개수(빨강). ④ <b>타임라인</b>: 프레임마다 6장 합계("19 missed"). <b>이 숫자들은 여전히 모델 성능이 아닙니다</b>(장면 하나, 프레임 10개).' },
+  { step: 'C', name: 'C2 찾음 (오른쪽 앞 사진)', file: '2026-11-26_steps/stepC_found_fr_1536x700.jpg',
+    compare: '2026-11-26_mockup/A3_evaluate_car_1536x700.jpg', compareLabel: '시안 A3',
+    note: '<b>한 물체, 사진 두 장.</b> 차 <code>e3f3d9</code>(35m)를 <b>오른쪽 앞 카메라(FR)</b> 사진에서 본 화면입니다. 이 사진에서는 차가 온전히 보여 모델이 찾았습니다(초록 실선 = 모델 박스 0.45, 초록 점선 = 정답 박스).',
+    look: '<b>무엇을 보면 되나:</b> ① 왼쪽 목록 제목의 <b>"FR"</b>: 목록은 지금 보는 사진 한 장의 결과입니다(21개). ② 오른쪽 패널 맨 위 <b>"Found … other camera: F missed"</b>: 같은 차를 앞 카메라는 놓쳤다는 것을 함께 알려줍니다. ③ 썸네일 F와 FR에 흰 네모(그 차의 위치). ④ 3D에서 이 차는 초록입니다(한 대라도 찾았으므로). <kbd>Space</kbd>로 시안과 비교할 수 있습니다. 시안과 다른 점: 패널의 "물체 단위" 한 줄을 Precision / Recall 아래가 아니라 "Recall by camera" 아래로 옮겼습니다(위에 두면 거리별 막대가 화면 밖으로 밀렸습니다).' },
+  { step: 'C', name: 'C3 놓침 (앞 사진)', file: '2026-11-26_steps/stepC_missed_front_1536x700.jpg',
+    note: 'C2와 <b>같은 차</b>를 고른 채 썸네일 F를 눌러 <b>앞 카메라</b> 사진으로 본 화면입니다. 이 사진에서는 차가 오른쪽 끝에 잘려 있고, 모델 박스가 있긴 하지만 점수가 0.18이라 기준(0.25)에 못 미쳐 <b>놓침</b>입니다.',
+    look: '<b>무엇을 보면 되나:</b> 패널의 <b>"Missed … below the min score 0.25 — other camera: FR found"</b>. 사진 단위로는 놓침 1개 + 찾음 1개로 세고(그래서 Recall 계산에 두 번 들어갑니다), 3D 박스는 초록 하나입니다. "가장자리에 잘려서 놓친 것"이 놓침에 들어 있다는 점은 패널 아래 설명에 적어 두었습니다.' },
+  { step: 'C', name: 'C4 자전거 거치대', file: '2026-11-26_steps/stepC_rack_1536x700.jpg',
+    note: '<b>거치대 규칙.</b> 프레임 3, 왼쪽 뒤 카메라입니다. nuScenes는 거치대를 "거치대" 박스 하나로만 표시하고 그 안의 자전거에는 박스를 주지 않습니다. 모델은 자전거를 하나하나 찾으므로, 규칙이 없으면 맞게 찾은 것이 전부 헛짚음이 됩니다. 그래서 <b>중심이 거치대 사각형 안에 있는 자전거·오토바이 예측은 맞다 틀리다 하지 않고 뺍니다</b>(nuScenes 공식 평가와 같은 처리).',
+    look: '<b>무엇을 보면 되나:</b> ① 사진의 <b>회색 점선</b>이 거치대 정답, 그 안의 <b>회색 실선</b>이 세지 않은 모델 박스입니다. ② 패널: <b>"Not evaluated … a rack is one label for all the bikes in it … 5 model boxes on it, not counted"</b>. ③ 왼쪽 목록에 자전거 헛짚음이 없습니다. 전체로는 14개를 뺐고, 그 결과 헛짚음 121 → 107, Precision 74% → 77%입니다(규칙을 끄면 121이 되는 것도 테스트로 고정했습니다). 앞 카메라에는 거치대가 없어 앞 카메라 숫자는 그대로입니다.' },
+  { step: 'C', name: 'C5 1280×720', file: '2026-11-26_steps/stepC_evaluate_car_1280x720.jpg',
+    compare: '2026-11-26_mockup/A3_evaluate_car_1280x720.jpg', compareLabel: '시안 A3 (1280×720)',
+    note: '평가 모드를 <b>1280×720</b>에서 본 화면입니다(차 <code>e3f3d9</code> 선택, 앞 카메라).',
+    look: '<b>무엇을 보면 되나:</b> 페이지 스크롤이 없고, 패널의 "Frame 6" 줄이 한 줄입니다. 그 아래로 거리별 막대가 보입니다. 카메라별·클래스별 Recall과 설명은 패널 안에서 스크롤하면 나옵니다.' },
+  { step: 'C', name: 'C6 1024×768', file: '2026-11-26_steps/stepC_evaluate_car_1024x768.jpg',
+    note: '최소 폭 <b>1024px</b>의 평가 모드입니다. 상단 바가 한 줄이고 페이지 스크롤이 없습니다.',
+    look: '<b>무엇을 보면 되나:</b> 상단 바(Precision / Recall 포함)가 한 줄에 들어가는지, 썸네일의 숫자가 사진을 가리지 않는지.' },
+];
+let index = 0, showCompare = false;
+const $ = (id) => document.getElementById(id);
+const steps = [...new Set(SHOTS.map((s) => s.step))];
+
+function render() {
+  const shot = SHOTS[index];
+  $('steps').innerHTML = '';
+  steps.forEach((st) => {
+    const b = document.createElement('button');
+    b.textContent = `F6-${st}`; b.className = st === shot.step ? 'on' : '';
+    b.onclick = () => { index = SHOTS.findIndex((s) => s.step === st); showCompare = false; render(); };
+    $('steps').appendChild(b); $('steps').append(' ');
+  });
+  $('shots').innerHTML = '';
+  SHOTS.forEach((s, i) => {
+    if (s.step !== shot.step) return;
+    const b = document.createElement('button');
+    b.textContent = s.name; b.className = !showCompare && i === index ? 'on' : '';
+    b.onclick = () => { index = i; showCompare = false; render(); };
+    $('shots').appendChild(b); $('shots').append(' ');
+  });
+  if (!shot.compare) showCompare = false;
+  $('mock').disabled = !shot.compare;
+  $('mock').className = 'mock' + (showCompare ? ' on' : '');
+  $('mock').firstChild.textContent = (shot.compareLabel || '시안 / 이전 화면') + ' ';
+  $('img').src = showCompare ? shot.compare : shot.file;
+  $('tag').textContent = showCompare ? shot.compareLabel : `실제 앱 · ${shot.name}`;
+  $('tag').className = 'tag ' + (showCompare ? 'mock' : 'real');
+  $('note').innerHTML = shot.note;
+  $('look').innerHTML = shot.look || '';
+  $('look').style.display = shot.look ? '' : 'none';
+}
+const flip = () => { if (SHOTS[index].compare) { showCompare = !showCompare; render(); } };
+const go = (d) => { index = (index + d + SHOTS.length) % SHOTS.length; showCompare = false; render(); };
+$('mock').onclick = flip;
+$('img').onclick = flip;
+addEventListener('keydown', (e) => {
+  if (e.key === ' ') { e.preventDefault(); flip(); }
+  else if (e.key === 'ArrowRight') go(1);
+  else if (e.key === 'ArrowLeft') go(-1);
+});
+render();
+</script>
+</body>
+</html>
