@@ -21,6 +21,17 @@ import { useSampleCheck, type SampleCheck } from './useSampleCheck';
 /** Verdicts of the sample check live in their own review scope. */
 export const SAMPLE_SCOPE: ReviewScope = 'nuscenes-false-alarms';
 
+/**
+ * How long a sampled box must have been on screen before a verdict on it is
+ * accepted. A verdict moves on to the next box at once, so a second key press
+ * that follows within a fraction of a second (a double tap, or "A" then "R"
+ * typed ahead) would land on a box nobody has looked at — and every verdict
+ * counts in the estimate. Found in the edge review: "A" then "R" with no pause
+ * judged the second box unseen (Edge_F#7.5 Case 1). 400 ms is far below the
+ * time it takes to look at a photo, so deliberate verdicts are never held back.
+ */
+const MIN_LOOK_MS = 400;
+
 type Options = {
   /** The sample check is on screen. */
   on: boolean;
@@ -129,12 +140,20 @@ export function useSampleCheckController({
     if (first) open(first);
   }, [ready, sample, current, records, open]);
 
+  // When the box now on screen got there (see MIN_LOOK_MS).
+  const currentId = current?.item.predictionId ?? null;
+  const shownAt = useRef(0);
+  useEffect(() => {
+    shownAt.current = performance.now();
+  }, [currentId]);
+
   // A verdict is about a photo standing still; while the sequence plays the
   // photo changes under the reviewer.
   const blocked = playing ? 'Stop playback to judge.' : undefined;
   const judge = useCallback(
     (verdict: SampleVerdict) => {
       if (!current || playing) return;
+      if (performance.now() - shownAt.current < MIN_LOOK_MS) return;
       const { item } = current;
       setVerdict(SAMPLE_SCOPE, item.frameId, item.predictionId, toReviewVerdict(verdict));
       // Read the records AFTER the update, then move on to the next box that
@@ -151,10 +170,14 @@ export function useSampleCheckController({
   }, [current, playing, clearReview]);
   const step = useCallback(
     (direction: 1 | -1) => {
-      const next = stepInSample(sample, current?.item.predictionId ?? null, direction);
+      // With no sampled box selected (the reviewer clicked something else),
+      // stepping resumes the work: the first box that still needs a verdict.
+      const next = current
+        ? stepInSample(sample, current.item.predictionId, direction)
+        : (nextUnjudged(sample, records, null) ?? stepInSample(sample, null, direction));
       if (next) open(next);
     },
-    [sample, current, open],
+    [sample, current, records, open],
   );
 
   // The sample and its verdicts as a file (built by lib/sampling/export).

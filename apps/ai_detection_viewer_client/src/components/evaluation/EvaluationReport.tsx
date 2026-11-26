@@ -102,10 +102,11 @@ export function EvaluationReport({
       aria-label="Evaluation report"
       className={`flex flex-col h-full ${PANEL_CLASS} border-zinc-700 shadow-2xl shadow-black/60`}
     >
-      <div className="flex items-center justify-between gap-3 h-9 px-3.5 border-b border-zinc-800 shrink-0">
-        <h2 className="min-w-0 truncate text-xs font-semibold text-zinc-100">
+      {/* The title wraps on a narrow screen instead of being cut (Edge_F#7.5 Case 2). */}
+      <div className="flex items-center justify-between gap-3 min-h-9 px-3.5 py-1.5 border-b border-zinc-800 shrink-0">
+        <h2 className="min-w-0 flex flex-wrap items-baseline gap-x-2 text-xs font-semibold text-zinc-100">
           Evaluation report
-          <span className="ml-2 font-normal text-zinc-500">
+          <span className="font-normal text-zinc-500">
             {pending > 0
               ? `${scenes.scenes.length} of ${scenesTotal} scenes loaded`
               : `all ${scenes.scenes.length} scenes`}{' '}
@@ -176,7 +177,8 @@ export function EvaluationReport({
               </p>
               {pending > 0 && (
                 <p className="mt-1 text-[11px] text-sky-200">
-                  {pending} scene{pending === 1 ? ' is' : 's are'} still loading — these numbers are not complete yet.
+                  {pending} scene{pending === 1 ? ' is' : 's are'} not loaded (still on the way, or failed) — these
+                  numbers do not cover {pending === 1 ? 'it' : 'them'}.
                 </p>
               )}
               {scenes.notEvaluated.length > 0 && (

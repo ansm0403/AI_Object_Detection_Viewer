@@ -61,7 +61,8 @@ export function DayNightByDistance({ comparison, day, night }: Props) {
         </p>
       ) : (
         <>
-          <table className="w-full table-fixed border-collapse text-xs tabular-nums">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[19rem] table-fixed border-collapse text-xs tabular-nums">
             <colgroup>
               <col className="w-[4.25rem]" />
               <col />
@@ -112,6 +113,7 @@ export function DayNightByDistance({ comparison, day, night }: Props) {
               })}
             </tbody>
           </table>
+          </div>
           <p className="mt-2 text-[10px] leading-snug text-zinc-500">
             {gap && comparison.bAtMixOfA !== null && (
               <>

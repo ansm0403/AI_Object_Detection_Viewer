@@ -30,7 +30,10 @@ export function DriveTable({ drives, day, night }: Props) {
           {drives.length} drive{drives.length === 1 ? '' : 's'} · the independent units
         </span>
       </div>
-      <table className="w-full table-fixed border-collapse text-xs tabular-nums">
+      {/* On a phone the table keeps its width and scrolls sideways inside this
+          block, rather than squeezing the date / place column until it is cut. */}
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[26.5rem] table-fixed border-collapse text-xs tabular-nums">
         <colgroup>
           <col />
           <col className="w-10" />
@@ -100,6 +103,7 @@ export function DriveTable({ drives, day, night }: Props) {
           })}
         </tbody>
       </table>
+      </div>
       <p className="mt-2 text-[10px] leading-snug text-zinc-500">
         Day: {day.drives} drive{day.drives === 1 ? '' : 's'}, {pct1(day.recall)} (
         {number(day.counts.found)} / {number(day.counts.found + day.counts.missed)}).{' '}

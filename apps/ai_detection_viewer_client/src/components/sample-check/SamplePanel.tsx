@@ -140,7 +140,7 @@ export function SamplePanel({
               <>
                 <p className="text-xs text-zinc-400">No sampled box is selected.</p>
                 <p className="mt-0.5 text-[11px] text-zinc-500">
-                  Pick a row in the list, or press {keys.step} to go to the next box.
+                  Pick a row in the list, or press {keys.step} for the next box without a verdict.
                 </p>
               </>
             )}
