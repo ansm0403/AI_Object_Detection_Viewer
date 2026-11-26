@@ -51,23 +51,17 @@ import {
   type NotEvaluatedBox,
   type WorkMode,
 } from '@/components/evaluation';
-import { SampleBar, SampleList, SamplePanel, useSampleCheck } from '@/components/sample-check';
 import {
-  SAMPLE_SEED,
-  buildSampleExport,
-  nextUnjudged,
-  sampleExportFilename,
-  sampleExportToJson,
-  stepInSample,
-  toReviewVerdict,
-  toSampleVerdict,
-  type SampleVerdict,
-} from '@/lib/sampling';
+  SampleBar,
+  SampleList,
+  SamplePanel,
+  useSampleCheckController,
+} from '@/components/sample-check';
+import { toSampleVerdict } from '@/lib/sampling';
 import {
   BICYCLE_RACK_CLASS,
   DEFAULT_MIN_SCORE,
   IOU_THRESHOLD,
-  NEAREST_MIN_IOU,
   cameraOfPredictionId,
   compareByDistance,
   describeOtherViews,
@@ -83,7 +77,6 @@ import {
   visibilityText,
   type EvalKind,
   type EvaluationRules,
-  type UnlabelledFalseAlarm,
 } from '@/lib/evaluation';
 import { DISTANCE_MAX } from '@/lib/ui/distance';
 import {
@@ -189,9 +182,6 @@ const DEFAULT_EVALUATION_RULES: EvaluationRules = {
   minScore: DEFAULT_MIN_SCORE,
   iouThreshold: IOU_THRESHOLD,
 };
-
-// (F7.5) Verdicts of the sample check live in their own review scope.
-const SAMPLE_SCOPE: ReviewScope = 'nuscenes-false-alarms';
 
 // Set intersection (no Set.prototype.intersection in our target runtimes).
 const intersectIds = (a: Set<string>, b: Set<string>): Set<string> =>
@@ -1095,18 +1085,20 @@ export default function Index() {
   }, [exploring, sceneLibrary]);
   // Open a search result: the frame, in whatever scene it is. Another scene is
   // requested first and the frame is selected when that scene is on screen.
+  // (F7.5) `objectId`: what to select in that frame — a sampled model box.
   const handleOpenHit = useCallback(
-    (hit: { scene: string; frameId: string }) => {
+    (hit: { scene: string; frameId: string; objectId?: string }) => {
       setIsPlaying(false);
       if (hit.scene === shownSceneName && pendingSceneName === null) {
         setPendingFrame(null);
         setSelectedFrame(hit.frameId);
+        if (hit.objectId) setSelectedObject(hit.objectId);
         return;
       }
       handleSelectScene(hit.scene);
-      setPendingFrame({ scene: hit.scene, frameId: hit.frameId });
+      setPendingFrame({ scene: hit.scene, frameId: hit.frameId, objectId: hit.objectId });
     },
-    [shownSceneName, pendingSceneName, handleSelectScene, setSelectedFrame],
+    [shownSceneName, pendingSceneName, handleSelectScene, setSelectedFrame, setSelectedObject],
   );
   const handleOpenSceneHits = useCallback(
     (scene: string) => {
@@ -1128,112 +1120,37 @@ export default function Index() {
   }, [pendingFrame, frames, shownSceneName, setSelectedFrame, setSelectedObject]);
 
   // ---- (F7.5) Sample check ------------------------------------------------
-  // The population, the drawn sample and its summary are derived by
-  // `useSampleCheck` (pure functions of lib/sampling); this part only connects
-  // them to the one selection, the scene loader and the review store.
-  const sampleRecords = reviewsByScope[SAMPLE_SCOPE];
-  const sampleCheck = useSampleCheck({
+  // The population, the drawn sample, its summary and the actions on it live in
+  // `useSampleCheckController` (pure functions of lib/sampling underneath); the
+  // page only says where a box is opened and whether the check is on screen.
+  const stopPlayback = useCallback(() => setIsPlaying(false), []);
+  const sampleCheck = useSampleCheckController({
+    on: sampleCheckOn,
+    setOn: setSampleChecking,
     // The report shows how many such false alarms there are and what the
     // sample says so far, so it needs the same derived state.
-    active: sampleCheckOn || reportOn,
+    alsoNeeded: reportOn,
     sceneNames,
     loaded: sceneLibrary,
     failed: scenes.library.errors,
     rules: DEFAULT_EVALUATION_RULES,
-    records: sampleRecords,
     selectedId: selectedObjectId,
+    playing: isPlaying,
+    stopPlayback,
+    openBox: handleOpenHit,
   });
-  // Open a sampled box: its frame, in whatever scene it is, with the box
-  // selected (the photo follows from the selection — `useActiveCamera`).
-  const handleOpenSampleItem = useCallback(
-    (item: UnlabelledFalseAlarm) => {
-      setIsPlaying(false);
-      if (item.scene === shownSceneName && pendingSceneName === null) {
-        setPendingFrame(null);
-        setSelectedFrame(item.frameId);
-        setSelectedObject(item.predictionId);
-        return;
-      }
-      handleSelectScene(item.scene);
-      setPendingFrame({ scene: item.scene, frameId: item.frameId, objectId: item.predictionId });
-    },
-    [shownSceneName, pendingSceneName, handleSelectScene, setSelectedFrame, setSelectedObject],
-  );
-  // Entering opens the first box that still needs a verdict — once the sample
-  // exists (it needs every scene in memory, which can take a moment).
-  const openFirstSampleItem = useRef(false);
+  const enterSampleCheck = sampleCheck.enter;
   const handleEnterSampleCheck = useCallback(() => {
-    openFirstSampleItem.current = true;
-    setSampleChecking(true);
     setReportOpen(false); // from the report: the report gives way to the check
-    setIsPlaying(false);
-  }, []);
+    enterSampleCheck();
+  }, [enterSampleCheck]);
   const handleOpenReport = useCallback(() => setReportOpen(true), []);
   const handleCloseReport = useCallback(() => setReportOpen(false), []);
-  const handleExitSampleCheck = useCallback(() => {
-    openFirstSampleItem.current = false;
-    setSampleChecking(false);
-  }, []);
-  const sampleReady = sampleCheckOn && sampleCheck.availability.status === 'ready';
-  const sampleItems = sampleCheck.sample;
-  const sampleCurrent = sampleCheck.current;
-  useEffect(() => {
-    if (!sampleReady || !openFirstSampleItem.current) return;
-    openFirstSampleItem.current = false;
-    if (sampleCurrent) return;
-    const first = nextUnjudged(sampleItems, sampleRecords, null) ?? sampleItems[0];
-    if (first) handleOpenSampleItem(first);
-  }, [sampleReady, sampleItems, sampleCurrent, sampleRecords, handleOpenSampleItem]);
-  // A verdict is about a photo standing still; while the sequence plays the
-  // photo changes under the reviewer.
-  const sampleBlocked = isPlaying ? 'Stop playback to judge.' : undefined;
-  const handleSampleVerdict = useCallback(
-    (verdict: SampleVerdict) => {
-      if (!sampleCurrent || isPlaying) return;
-      const { item } = sampleCurrent;
-      setVerdict(SAMPLE_SCOPE, item.frameId, item.predictionId, toReviewVerdict(verdict));
-      // Read the records AFTER the update, then move on to the next box that
-      // has no verdict — in whatever scene it is.
-      const latest = useReviewStore.getState().reviews[SAMPLE_SCOPE];
-      const next = nextUnjudged(sampleItems, latest, item.predictionId);
-      if (next) handleOpenSampleItem(next);
-    },
-    [sampleCurrent, isPlaying, setVerdict, sampleItems, handleOpenSampleItem],
-  );
-  const handleSampleClear = useCallback(() => {
-    if (!sampleCurrent || isPlaying) return;
-    clearReview(SAMPLE_SCOPE, sampleCurrent.item.frameId, sampleCurrent.item.predictionId);
-  }, [sampleCurrent, isPlaying, clearReview]);
-  const handleSampleStep = useCallback(
-    (direction: 1 | -1) => {
-      const next = stepInSample(sampleItems, sampleCurrent?.item.predictionId ?? null, direction);
-      if (next) handleOpenSampleItem(next);
-    },
-    [sampleItems, sampleCurrent, handleOpenSampleItem],
-  );
-  // The sample and its verdicts as a file (built by lib/sampling/export).
-  const samplePopulation = sampleCheck.population;
-  const sampleScenes = sampleCheck.scenes;
-  const handleSampleExport = useCallback(() => {
-    if (samplePopulation === null) return;
-    const now = new Date();
-    const data = buildSampleExport(sampleItems, sampleRecords, {
-      exportedAt: now.toISOString(),
-      seed: SAMPLE_SEED,
-      population: samplePopulation,
-      scenes: sampleScenes,
-      rules: {
-        minScore: DEFAULT_MIN_SCORE,
-        iouThreshold: IOU_THRESHOLD,
-        noLabelWithinIou: NEAREST_MIN_IOU,
-      },
-    });
-    downloadTextFile(sampleExportFilename(now), sampleExportToJson(data), 'application/json');
-  }, [samplePopulation, sampleScenes, sampleItems, sampleRecords]);
 
   // (F4-C) Keyboard shortcuts. `resolveShortcut` (lib/review) decides what a key
   // means; this decides what the action does — always through the same handlers
   // the buttons use, so mouse and keyboard cannot drift apart.
+  const { judge: judgeSample, clear: clearSample, step: stepSample } = sampleCheck;
   const handleReviewAction = useCallback(
     (action: ReviewAction) => {
       // (F7.5) Sample check: the same keys as the label review, applied to the
@@ -1241,9 +1158,9 @@ export default function Index() {
       // Zoom and camera keys fall through to the shared handling below; every
       // other key (reject reasons, next frame) does nothing here.
       if (sampleCheckOn) {
-        if (action.type === 'verdict') return handleSampleVerdict(toSampleVerdict(action.verdict));
-        if (action.type === 'clear') return handleSampleClear();
-        if (action.type === 'step') return handleSampleStep(action.direction);
+        if (action.type === 'verdict') return judgeSample(toSampleVerdict(action.verdict));
+        if (action.type === 'clear') return clearSample();
+        if (action.type === 'step') return stepSample(action.direction);
         if (action.type !== 'toggle-zoom' && action.type !== 'camera') return;
       }
       // (F5) Evaluate mode only looks: moving through the list (J / K) and the
@@ -1304,9 +1221,9 @@ export default function Index() {
     },
     [
       sampleCheckOn,
-      handleSampleVerdict,
-      handleSampleClear,
-      handleSampleStep,
+      judgeSample,
+      clearSample,
+      stepSample,
       evaluating,
       exploring,
       orderedHits,
@@ -1761,9 +1678,9 @@ export default function Index() {
             sizes={sampleCheck.sizes}
             onChangeSize={sampleCheck.setSize}
             minScore={DEFAULT_MIN_SCORE}
-            onExport={handleSampleExport}
+            onExport={sampleCheck.exportFile}
             canExport={sampleCheck.population !== null}
-            onExit={handleExitSampleCheck}
+            onExit={sampleCheck.exit}
           />
         ) : exploring && search ? (
           <ExploreBar
@@ -1827,17 +1744,11 @@ export default function Index() {
           // (F7.5) The sample check lists the SAMPLED model boxes, across scenes.
           <SampleList
             sample={sampleCheck.sample}
-            records={sampleRecords}
+            records={sampleCheck.records}
             summary={sampleCheck.summary}
             selectedId={sampleCheck.current?.item.predictionId ?? null}
-            onOpen={handleOpenSampleItem}
-            unavailable={
-              sampleCheck.availability.status === 'loading'
-                ? `Loading scenes: ${sampleCheck.availability.loaded} of ${sampleCheck.availability.total}…`
-                : sampleCheck.availability.status === 'unavailable'
-                  ? sampleCheck.availability.reason
-                  : undefined
-            }
+            onOpen={sampleCheck.open}
+            unavailable={sampleCheck.message}
             stepHint={`${SHORTCUT_KEYS.next} / ${SHORTCUT_KEYS.previous} to step`}
           />
         ) : exploring && search ? (
@@ -1998,20 +1909,14 @@ export default function Index() {
         sampleCheckOn ? (
           <SamplePanel
             status={sampleCheck.availability.status}
-            message={
-              sampleCheck.availability.status === 'loading'
-                ? `The sample is drawn from all scenes: ${sampleCheck.availability.loaded} of ${sampleCheck.availability.total} are loaded.`
-                : sampleCheck.availability.status === 'unavailable'
-                  ? sampleCheck.availability.reason
-                  : undefined
-            }
+            message={sampleCheck.message}
             item={sampleCheck.current?.item ?? null}
             position={sampleCheck.current?.position ?? null}
             verdict={sampleCheck.current?.verdict ?? null}
             summary={sampleCheck.summary}
-            onVerdict={handleSampleVerdict}
-            onClear={handleSampleClear}
-            blocked={sampleBlocked}
+            onVerdict={sampleCheck.judge}
+            onClear={sampleCheck.clear}
+            blocked={sampleCheck.blocked}
             storageFailed={reviewStorageFailed}
             keys={{
               verdicts: [SHORTCUT_KEYS.approve, SHORTCUT_KEYS.reject, SHORTCUT_KEYS.unsure],
@@ -2160,12 +2065,7 @@ export default function Index() {
             comparison={reportTables.comparison}
             unlabelled={{
               status: sampleCheck.availability.status,
-              message:
-                sampleCheck.availability.status === 'loading'
-                  ? `Counted over all scenes: ${sampleCheck.availability.loaded} of ${sampleCheck.availability.total} are loaded…`
-                  : sampleCheck.availability.status === 'unavailable'
-                    ? sampleCheck.availability.reason
-                    : undefined,
+              message: sampleCheck.message,
               count: sampleCheck.population,
               falseAlarms: sampleCheck.falseAlarms,
               minScore: DEFAULT_MIN_SCORE,
