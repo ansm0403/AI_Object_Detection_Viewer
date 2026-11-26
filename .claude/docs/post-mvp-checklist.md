@@ -1408,6 +1408,85 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 - Edge refs: Edge_F#6 Case 1~6, "측정하고 바꾸지 않은 것", "관찰하고 그대로 둔 것".
 -->
 
+## F6.5 — three.js idle cost (performance fix, not a feature) ✅ Done (2026-11-26)
+- **What this is:** not a feature. One performance problem found in F4 and carried through F5 and
+  F6, done in its own session between F6 and F7 (user decision): measure → find the cause → fix →
+  measure again. No design doc (nothing to design before the cause was known). The number "6.5" only
+  places it between F6 and F7.
+- **Goal:** stop the nuScenes 3D scene from spending CPU on shader-program bookkeeping while nothing
+  happens, without changing how the 3D view looks or behaves.
+- **Cause (fact, see Edge_F#6.5 Case 1):** every `BBox3D` has a full-volume pick mesh. It was made
+  invisible with `transparent opacity={0}` on a double-sided material; three.js draws such a material
+  in two passes and flags it `needsUpdate` each time, so each box re-evaluated its shader program
+  twice per frame (≈ 78 look-ups per frame on a 40-box frame, and 78 of 119 draw calls).
+- **Fix (one file, `components/viewer-3d/BBox3D.tsx`):** the pick mesh is `visible={false}` with a
+  plain `<meshBasicMaterial side={DoubleSide} />`. The raycaster ignores `visible`, so clicks and
+  hover are unchanged; `side` stays because the raycaster reads it (click from inside a box).
+- **Before → after** (production build, idle, JS ms per second of wall time, median of three 5 s
+  CPU profiles; software GL / integrated-GPU GL):
+
+  | Case | Software GL | Hardware GL | Draw calls / frame |
+  |---|---|---|---|
+  | nuScenes, no selection | 67.7 → **15.0** | 114.3 → **34.1** | 119 → 41 |
+  | nuScenes, one box selected | 81.3 → **14.2** | 116.5 → **27.3** | 119 → 41 |
+  | COCO, no selection | 16.1 → 9.9 | 39.0 → 24.6 | 17 → 7 |
+  | COCO, one box selected | 13.6 → 10.2 | 35.8 → 16.8 | 17 → 7 |
+
+  Shader bookkeeping (`getParameters` + `getProgramCacheKey`): 29.5 / 53.6 ms/s → 0. GPU geometries
+  80 → 41, shader programs 5 → 3. Frame rate ~59 fps before and after (it was CPU cost, not jank).
+- **Done when — all met, verified on the fixed production build:**
+  - nuScenes 3D pane pixel-identical (0 of 521,088 pixels, default + three orbited views).
+  - Hover and click results identical at 135 grid points on both datasets; click from inside a box
+    works.
+  - Regression script 46 / 46: selection, pulse, label, deselect, Follow, playback tween and exact
+    pose on pause, canvas never re-created (selection, Follow, playback, mode, frame, five window
+    sizes), evaluate colours on frame 6 = 28 / 16 / 17, Precision 77% / Recall 66%, 349 of 456,
+    349 of 531, front camera 91/174, review A / U / J / K, six thumbnails + auto camera, COCO.
+  - Tests **695** (unchanged — no pure logic changed, UI-only per the Testing Policy), `tsc --noEmit`
+    0 errors, CI lint 0 errors (19 pre-existing warnings), production build passes.
+- **One visible change, approved by the user before the fix:** on **COCO** the floor grid now shows
+  through the boxes. The old invisible mesh still wrote depth and erased the grid lines behind a box
+  (1.6–1.8% of the pane in two of four views). The alternative (`forceSinglePass`, pixel-identical
+  everywhere, ≈ 2× the remaining cost because 40 invisible boxes are still drawn) was offered and not
+  chosen. See Edge_F#6.5 Case 2.
+- **Decisions:** option A (`visible={false}`) over B (`forceSinglePass`). `frameloop="demand"` and
+  `instancedMesh` not attempted (measured, no hot spot left — Edge_F#6.5 "Measured and NOT changed").
+  A new R3F Performance Rule records the cause (`architecture.md`).
+- **Open / not measured:** F4's absolute numbers (≈ 420–560 ms/s) were not reproduced — today's
+  "before" is 6–7× lower with the same share for the program functions; reason not found. Not
+  measured: the discrete GPU, GPU-process time, the user's own browser, the dev server.
+- **Captures:** `docs/plan-feature/assets/F6.5/` (`compare.html`).
+- **Edge refs:** Edge_F#6.5 Case 1–2, "Measured and NOT changed", "Could not be measured".
+
+<!-- KO (move to a localized file)
+## F6.5 — three.js 상시 비용 (기능이 아니라 성능 수정) ✅ 완료 (2026-11-26)
+- 무엇인가: 기능이 아니다. F4에서 찾아 F5, F6 동안 그대로 둔 성능 문제 하나를 F6과 F7 사이의 별도 세션에서
+  처리했다(사용자 결정). 재고 → 원인을 찾고 → 고치고 → 다시 쟀다. 설계 문서는 없다. "6.5"는 F6과 F7 사이라는 뜻일 뿐이다.
+- 목표: 아무 일도 없을 때 nuScenes 3D 장면이 셰이더 정보 계산에 CPU를 쓰지 않게 한다. 3D 화면의 모습과 동작은 그대로 둔다.
+- 원인 (사실, Edge_F#6.5 Case 1): 박스마다 클릭을 받는 속이 찬 상자가 있다. 이 상자를 "투명 + 양면 + 투명도 0"으로 안 보이게
+  해 두었는데, three.js는 그런 재질을 두 번에 나눠 그리고 그때마다 "바뀌었음" 표시를 붙인다. 그래서 박스마다 프레임당 두 번씩
+  셰이더 정보를 다시 따졌다(박스 40개 프레임에서 프레임당 약 78번, 그리기 호출 119번 중 78번).
+- 수정 (파일 하나, `BBox3D.tsx`): 클릭용 상자를 `visible={false}`로 하고 재질은 `side={DoubleSide}`만 남겼다. 클릭 판정은
+  `visible`을 보지 않으므로 클릭과 마우스 올림은 그대로다. `side`는 클릭 판정이 읽으므로 남겼다(박스 안에서의 클릭).
+- 전후 (배포용 빌드, 가만히 둔 상태, 1초당 JS ms, 5초 프로파일 3번의 가운데 값. 소프트웨어 렌더링 / 내장 GPU):
+  nuScenes 선택 없음 67.7 → 15.0 / 114.3 → 34.1, 선택 있음 81.3 → 14.2 / 116.5 → 27.3.
+  COCO 선택 없음 16.1 → 9.9 / 39.0 → 24.6, 선택 있음 13.6 → 10.2 / 35.8 → 16.8.
+  그리기 호출 119 → 41 (COCO 17 → 7). 셰이더 정보 계산 29.5 / 53.6 → 0. GPU에 올린 도형 80 → 41. 프레임률은 전후 모두 약 59fps.
+- 완료 기준 (모두 충족, 고친 배포용 빌드에서 확인): nuScenes 3D 칸 픽셀 동일(521,088개 중 0개, 기본 + 돌린 화면 3개).
+  두 데이터셋의 격자 135곳에서 마우스 올림과 클릭 결과 동일. 박스 안에서의 클릭 동작. 확인 스크립트 46 / 46(선택, 맥동,
+  이름표, 선택 해제, 따라가기, 재생 중 이동과 멈췄을 때의 정확한 위치, 캔버스가 다시 만들어지지 않음, 프레임 6의 색
+  28 / 16 / 17, 평가 숫자, 검수 키, 썸네일 6개와 자동 카메라, COCO). 테스트 695개(그대로), tsc 0, 린트 오류 0(경고 19), 빌드 성공.
+- 눈에 보이는 변화 하나 (고치기 전에 사용자가 승인): COCO에서 바닥 격자가 박스 너머로 보인다. 예전의 안 보이는 상자는
+  깊이 값을 써서 박스 뒤의 격자 줄을 지우고 있었다(네 방향 중 두 방향에서 1.6~1.8%). 대안(`forceSinglePass`, 픽셀이 모두
+  같지만 안 보이는 상자 40개를 계속 그려 남는 비용이 약 2배)도 제시했고 사용자가 A를 골랐다. Edge_F#6.5 Case 2.
+- 결정: A(`visible={false}`). `frameloop="demand"`와 `instancedMesh`는 하지 않았다(재 보니 남은 곳에 두드러진 비용이 없다).
+  원인을 R3F Performance Rules에 새 규칙으로 적었다.
+- 남은 것 / 재지 못한 것: F4의 절대 숫자(초당 약 420~560ms)는 재현되지 않았다. 오늘의 "전" 숫자는 그 6~7분의 1이고
+  셰이더 정보 계산의 비율은 같다. 이유는 찾지 못했다. 외장 GPU, GPU 프로세스의 시간, 사용자의 실제 브라우저, 개발 서버는 재지 않았다.
+- 캡처: `docs/plan-feature/assets/F6.5/`(`compare.html`).
+- Edge refs: Edge_F#6.5 Case 1~2, "측정하고 바꾸지 않은 것", "재지 못한 것".
+-->
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -1421,8 +1500,9 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 > just before that feature starts. **F3 is done** (2026-11-25, see the F3 entry above; design doc
 > `F3_workspace_layout.md`). **F4 is done** (2026-11-25, see the F4 entry above; design doc
 > `F4_box_review.md`). **F5 is done** (2026-11-26, `F5_camera_detection_eval.md`). **F6 is done**
-> (2026-11-26, see the F6 entry above; design doc `F6_six_cameras.md`). Next: the three.js idle-cost
-> item (its own session, before F7), then F7 — its design doc is written at the start of the F7 session.
+> (2026-11-26, see the F6 entry above; design doc `F6_six_cameras.md`). **The three.js idle-cost item
+> is done** (2026-11-26, its own session, see the F6.5 entry above; no design doc). Next: F7 — its
+> design doc is written at the start of the F7 session.
 > Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
 
 ### Why change direction (the gap this closes)
@@ -1542,6 +1622,10 @@ parsing (becomes necessary in F7 when the frame count grows).
 - **From F6 (2026-11-26):**
   - *Before F7 (own session, user decision):* the three.js idle cost above. F6 measured that six
     cameras add no interaction latency of their own — the 3D scene is the whole baseline.
+    **Done 2026-11-26 (F6.5 entry):** nuScenes idle JS 67.7 → 15.0 ms/s, draw calls 119 → 41.
+  - *F7 (from F6.5):* re-measure the idle cost on the larger frames; the scene still renders every
+    animation frame and draws one line object per box (`frameloop="demand"` and `instancedMesh` were
+    looked at and not needed at 40 boxes).
   - *F7:* bound the photo preload (`PRELOAD_FRAMES_AHEAD` in `page.tsx`; today all ten frames =
     8 MB) and measure the memory the preloaded photos hold; the thumbnail row reuses the full
     1600×900 file, which stops being acceptable with hundreds of frames.
@@ -1649,8 +1733,8 @@ F6·F7은 두 기둥이 쓰는 데이터를 넓힌다. 수정(F8)은 인터랙�
 - 2D 전용 라벨 유형(폴리곤, 마스크, 키포인트).
 
 ### 미정 / 보류
-- **F4에서 발견한 것 (2026-11-25):** three.js 상시 비용은 F5 뒤에도 그대로다(사용자가 별도 세션으로 정함. F5에서는
-  모든 조작의 바닥 비용 약 48ms로 측정됨). 불러오기의 `response.ok` 미확인은 **F5-0에서 고쳤다**(`lib/data/fetch-json.ts`).
+- **F4에서 발견한 것 (2026-11-25):** three.js 상시 비용은 **2026-11-26 별도 세션에서 고쳤다**(위 F6.5 항목.
+  nuScenes 가만히 둔 상태의 JS 초당 67.7 → 15.0ms, 그리기 호출 119 → 41). F7에서 프레임이 커지면 다시 잰다. 불러오기의 `response.ok` 미확인은 **F5-0에서 고쳤다**(`lib/data/fetch-json.ts`).
 - **F5에서 넘긴 것 (2026-11-26):** F6에서 자전거 거치대를 다시 확인하고(앞 카메라에는 하나도 없어 규칙이 필요 없었다),
   예측을 카메라별로 다시 돌린다(예측 파일 형식에 카메라 단계가 필요하다). 평가 숫자는 F6 / F7 이후에만 인용한다.
   나중에 할 수 있는 것: 예측에 대한 사람의 판정과 평가 결과 내보내기.

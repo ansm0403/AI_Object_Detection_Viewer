@@ -37,6 +37,7 @@ Post-MVP 기능을 **구현하기 전에** 쓰는 설계 문서 모음이다. �
 | F4 | 3D 박스 검수 | [F4_box_review.md](F4_box_review.md) | **구현 완료 (2026-11-25).** 결과와 계획 대비 달라진 점은 체크리스트 F4 항목, 경계 사례는 `docs/edgecases/Edge_F#4.md`. 시안과 단계별 캡처는 [assets/F4/](assets/F4/README.md) |
 | F5 | 카메라 탐지 평가 | [F5_camera_detection_eval.md](F5_camera_detection_eval.md) | **구현 완료 (2026-11-26).** 결과와 계획 대비 달라진 점은 체크리스트 F5 항목, 경계 사례는 `docs/edgecases/Edge_F#5.md`. 시안과 단계별 캡처는 [assets/F5/](assets/F5/README.md) |
 | F6 | 카메라 6대 | [F6_six_cameras.md](F6_six_cameras.md) | **구현 완료 (2026-11-26).** 결과와 계획 대비 달라진 점은 체크리스트 F6 항목, 경계 사례는 `docs/edgecases/Edge_F#6.md`. 시안과 단계별 캡처는 [assets/F6/](assets/F6/README.md) |
+| F6.5 | three.js 상시 비용 (기능이 아니라 성능 수정) | 없음 (원인을 찾기 전에는 설계할 것이 없어 쓰지 않았다) | **완료 (2026-11-26).** 전후 숫자는 체크리스트 F6.5 항목, 원인과 측정은 `docs/edgecases/Edge_F#6.5.md`. 전후 캡처는 [assets/F6.5/](assets/F6.5/README.md) |
 | F7 | 장면 탐색 | 아직 없음 | |
 | F8 (도전) | 위에서 본 화면에서 3D 박스 수정 | 아직 없음 | |
 

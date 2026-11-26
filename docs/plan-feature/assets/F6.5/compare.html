@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>three.js 상시 비용 — 전후 화면</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; background: #050506; color: #e4e4e7;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
+  .bar { position: sticky; top: 0; z-index: 5; background: #111113; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .row + .row { margin-top: 8px; }
+  .lbl { font-size: 12px; color: #71717a; width: 64px; }
+  button { font: inherit; font-size: 13px; color: #d4d4d8; background: #1f1f23; border: 1px solid #3f3f46;
+    border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: #71717a; }
+  button.on { background: #0c4a6e; border-color: #38bdf8; color: #e0f2fe; }
+  button.flip.on { background: #3f3f46; border-color: #a1a1aa; color: #fff; }
+  button:disabled { opacity: .3; cursor: default; }
+  kbd { font: 600 11px ui-monospace, monospace; border: 1px solid #52525b; border-radius: 3px; padding: 0 4px; color: #a1a1aa; }
+  .note { margin: 10px 0 0; font-size: 14px; line-height: 1.6; color: #d4d4d8; max-width: 1180px; }
+  .note b { color: #fff; }
+  .look { margin: 8px 0 0; padding: 8px 12px; border-left: 3px solid #38bdf8; background: #0b1722; font-size: 14px; line-height: 1.6; max-width: 1160px; }
+  .look b { color: #7dd3fc; }
+  .hint { font-size: 12px; color: #71717a; margin-left: 10px; }
+  .stage { padding: 16px; overflow-x: auto; }
+  .tag { display: inline-block; margin-bottom: 8px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
+  .tag.after { background: #064e3b; color: #a7f3d0; }
+  .tag.before { background: #3f3f46; color: #fff; }
+  img { display: block; border: 1px solid #27272a; cursor: pointer; max-width: none; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <div class="row"><span class="lbl">화면</span><span id="shots"></span>
+    <span class="hint">배포용 빌드의 실제 앱 · 이미지는 실제 크기(1:1) · 2026-11-26 KST</span></div>
+  <div class="row"><span class="lbl">비교</span><button id="flip" class="flip">고치기 전 <kbd>Space</kbd></button>
+    <span class="hint"><kbd>←</kbd> <kbd>→</kbd> 화면 이동 · 고치기 전 그림이 있는 화면에서는 이미지를 클릭하거나 <kbd>Space</kbd></span></div>
+  <p class="note" id="note"></p>
+  <p class="look" id="look"></p>
+</div>
+<div class="stage">
+  <span class="tag after" id="tag"></span>
+  <img id="img" alt="" />
+</div>
+<script>
+const D = '2026-11-26_captures/';
+const SHOTS = [
+  { name: '1 nuScenes 3D', after: 'nuscenes_3d_after.jpg', before: 'nuscenes_3d_before.jpg',
+    note: '<b>nuScenes, 프레임 1, 3D 칸만.</b> 고치기 전 빌드(05:42)와 고친 빌드(13:12)를 각각 새로 띄워 찍었다.',
+    look: '<b>볼 것:</b> Space를 눌러도 아무것도 움직이지 않아야 한다. 원본 PNG 521,088픽셀 가운데 다른 픽셀은 0개였다. 카메라를 세 방향으로 돌린 화면에서도 0개였다.' },
+  { name: '2 COCO 3D', after: 'coco_3d_default_fixed.jpg', before: 'coco_3d_default_old_style.jpg',
+    note: '<b>COCO, 3D 칸만. 여기는 달라진다(승인받은 차이).</b> COCO의 점은 화면을 띄울 때마다 무작위로 흩어지므로, <b>같은 화면에서</b> 클릭용 상자만 옛 방식(그림, 투명도 0)과 지금 방식(그리지 않음)으로 바꿔 가며 찍었다.',
+    look: '<b>볼 것:</b> 박스 뒤쪽의 바닥 격자. 고치기 전에는 보이지 않는 상자가 격자를 가려 박스 안쪽의 격자 줄이 지워져 있었다. 지금은 박스 너머로 격자가 보인다. 선, 점, 색은 그대로다(다른 픽셀 1.6%, 모두 격자 줄).' },
+  { name: '3 COCO 3D (돌린 뒤)', after: 'coco_3d_orbit_fixed.jpg', before: 'coco_3d_orbit_old_style.jpg',
+    note: '<b>COCO, 카메라를 왼쪽으로 돌린 뒤.</b> 2번과 같은 방법.',
+    look: '<b>볼 것:</b> 역시 박스 뒤 격자 줄만 다르다(1.8%). 네 방향 가운데 두 방향에서는 격자가 박스 뒤에 오지 않아 차이가 0이었다.' },
+  { name: '4 검수', after: 'after_review_1440x900.jpg',
+    note: '<b>고친 뒤, nuScenes 검수 모드, 프레임 1, 1440×900.</b>',
+    look: '<b>볼 것:</b> 3D 칸에 박스 40개와 LiDAR 점이 전과 같이 그려진다. 이 화면에서 그리기 호출은 프레임당 119번에서 41번이 됐다(화면에는 차이가 없다).' },
+  { name: '5 선택', after: 'after_review_selected_1440x900.jpg',
+    note: '<b>목록 첫 줄(차 34daad, 22m)을 선택.</b>',
+    look: '<b>볼 것:</b> 3D에서 그 박스가 흰색이 되고 "car" 이름표가 붙는다. 사진은 그 박스가 보이는 오른쪽 뒤 카메라(BR)로 바뀐다. 오른쪽 "3D bbox c […]" 값과 장면 속 박스 위치가 같은지는 스크립트가 확인했다.' },
+  { name: '6 평가 (프레임 6)', after: 'after_evaluate_frame6_1440x900.jpg',
+    note: '<b>평가 모드, 프레임 6.</b> 3D 박스 색은 "어느 카메라에서든 찾음 / 모두 놓침 / 평가 안 함"이다.',
+    look: '<b>볼 것:</b> 초록 28, 빨강 16, 회색 17(스크립트가 실제 장면의 선 색을 세었다). 위쪽 Precision 77%, Recall 66%, 오른쪽 "349 of 456", "349 of 531", F 91/174도 그대로다.' },
+  { name: '7 검수 흐름', after: 'after_review_flow_1440x900.jpg',
+    note: '<b>A(승인) → U(판단 불가) → J → K를 누른 뒤.</b>',
+    look: '<b>볼 것:</b> 위쪽 "Reviewed 2 / 583 · 1 unsure". 키로 옮긴 선택이 3D의 흰 박스와 목록의 강조 줄에 함께 반영된다.' },
+  { name: '8 COCO', after: 'after_coco_selected_1440x900.jpg',
+    note: '<b>COCO로 바꾼 뒤 3D에서 박스를 클릭.</b> COCO 모드는 보류 상태이지만 계속 동작해야 한다.',
+    look: '<b>볼 것:</b> 클릭한 박스가 흰색이 되고 이름표에 점수가 붙는다. 카메라 썸네일 줄과 모드 전환 버튼은 없다.' },
+];
+let i = 0, before = false;
+const $ = (id) => document.getElementById(id);
+function render() {
+  const s = SHOTS[i];
+  if (!s.before) before = false;
+  $('img').src = D + (before ? s.before : s.after);
+  $('tag').textContent = before ? '고치기 전' : '고친 뒤';
+  $('tag').className = 'tag ' + (before ? 'before' : 'after');
+  $('note').innerHTML = s.note;
+  $('look').innerHTML = s.look;
+  $('flip').disabled = !s.before;
+  $('flip').classList.toggle('on', before);
+  [...$('shots').children].forEach((b, k) => b.classList.toggle('on', k === i));
+}
+SHOTS.forEach((s, k) => {
+  const b = document.createElement('button');
+  b.textContent = s.name;
+  b.onclick = () => { i = k; before = false; render(); };
+  $('shots').appendChild(b);
+});
+const flip = () => { if (SHOTS[i].before) { before = !before; render(); } };
+$('flip').onclick = flip;
+$('img').onclick = flip;
+addEventListener('keydown', (e) => {
+  if (e.key === ' ') { e.preventDefault(); flip(); }
+  else if (e.key === 'ArrowRight') { i = (i + 1) % SHOTS.length; before = false; render(); }
+  else if (e.key === 'ArrowLeft') { i = (i - 1 + SHOTS.length) % SHOTS.length; before = false; render(); }
+  else if (/^[1-9]$/.test(e.key) && Number(e.key) <= SHOTS.length) { i = Number(e.key) - 1; before = false; render(); }
+});
+render();
+</script>
+</body>
+</html>

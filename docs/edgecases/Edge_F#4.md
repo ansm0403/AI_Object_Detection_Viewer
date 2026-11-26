@@ -182,6 +182,9 @@ the record made during the failure is in the saved data).
   in software GL), so it is CPU / battery cost rather than visible jank. The 3D scene internals are
   outside F4's scope; this needs its own measured item (which material / object forces the program
   re-evaluation every frame).
+  **→ Resolved 2026-11-26 in its own session: `Edge_F#6.5.md` Case 1** (the pick mesh of every box;
+  nuScenes idle JS 67.7 → 15.0 ms/s as re-measured that day — the absolute numbers above were not
+  reproduced).
 - **A failed data request reports a JSON parse error.** The loader does not check `response.ok`, so
   an HTTP 500 shows "SyntaxError: Unexpected token…" instead of the status. Pre-F4 behaviour; the
   error state itself renders correctly.
