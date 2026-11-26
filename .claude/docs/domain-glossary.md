@@ -118,13 +118,18 @@ screen) into the 3D scene and reports which meshes it intersects, nearest first.
 R3F uses it every pointer move to decide which mesh the cursor is "over". Thin
 line segments are hard to hit, so this project gives each 3D bbox an invisible
 full-volume mesh as the ray target (Step 5 for clicks, reused in F1-B for hover).
+The raycaster tests an object's **layers and geometry, not its `visible` flag** —
+so that mesh can be `visible={false}` (never drawn) and still be clicked (F6.5).
+It does read `material.side`: `DoubleSide` is what lets a click register from
+inside a box.
 
 **Pointer Events (R3F)**
 Mouse/touch events R3F forwards to a mesh based on the raycaster: `onClick`,
 `onPointerOver` (ray enters the mesh), `onPointerOut` (ray leaves it), etc.
 `event.stopPropagation()` stops the event from also reaching meshes behind the
 front one — used in F1-B so only the front box highlights when boxes overlap.
-F1-B's hover state hangs off the same invisible click mesh.
+F1-B's hover state hangs off the same invisible click mesh (not drawn since F6.5;
+see "`visible` vs `opacity: 0`").
 
 **Mesh**
 A 3D object made of geometry (shape) + material (color/texture).
@@ -132,6 +137,76 @@ A 3D object made of geometry (shape) + material (color/texture).
 **InstancedMesh**
 A mesh that renders many copies of the same geometry efficiently in one draw call.
 Useful for many similar objects (e.g., 50 3D bboxes).
+
+**Draw Call**
+One "draw this object now" order sent to the GPU. Roughly one per visible object
+per frame (a transparent double-sided object costs two). Each has a fixed CPU
+price — set the material, set the matrices, issue the call — so the *count*
+matters more than how many triangles each one draws. Read it from
+`renderer.info.render.calls`. This project's nuScenes frame went 119 → 41 in F6.5.
+
+**Shader / Shader Program**
+A shader is a small program that runs on the GPU and decides where each vertex
+lands and what colour each pixel gets. three.js writes one for you from the
+material's settings (lit or not, fog, vertex colours, which side, …) and compiles
+it once. Different settings → a different program; same settings → the same
+program reused. The compile is expensive, so three.js keeps a **program cache**.
+
+**Program Cache Key (`getParameters` / `getProgramCacheKey`)**
+To find a material's program in the cache, three.js first collects every setting
+that could affect the shader (`getParameters`, a long list) and joins them into
+one long string (`getProgramCacheKey`). That look-up is cheap once, but it is pure
+JS work on the main thread — done thousands of times per second it shows up in a
+CPU profile even though no shader is ever recompiled. This was the F6.5 cost.
+
+**`material.needsUpdate` / `material.version`**
+Setting `needsUpdate = true` tells three.js "this material's settings changed —
+check its program again". Internally it just adds 1 to `material.version`; the
+renderer re-does the cache look-up whenever the version differs from the one it
+last saw. A `version` that keeps growing while nothing on screen changes is the
+sign of wasted look-ups (how F6.5 found the cause: 40 materials rose by 2 per frame).
+
+**Two-pass Transparent Rendering (`forceSinglePass`)**
+A see-through object that shows both faces must draw its far side before its
+near side to blend correctly. So for a material that is `transparent` AND
+`side: DoubleSide`, three.js draws the object twice — back faces, then front
+faces — flipping `side` and setting `needsUpdate` each time. Two draw calls and
+two program look-ups per object per frame. `forceSinglePass: true` turns this off
+(one draw, both faces at once).
+
+**`visible` vs `opacity: 0`**
+Two different kinds of "invisible". `opacity: 0` (with `transparent`) is still
+**drawn**: it costs draw calls and still writes depth, it just adds no colour.
+`visible = false` is **not drawn at all** — but it stays in the scene graph, keeps
+its transform, and can still be hit by the raycaster. A click target should be the
+second kind (F6.5).
+
+**Depth Buffer / Depth Write**
+A hidden image where the GPU stores, per pixel, how far away the nearest thing
+drawn so far is. A new fragment is thrown away if something nearer is already
+there — that is how near objects hide far ones. Drawing an object *writes* its
+depth even when its colour is fully transparent, so an `opacity: 0` box can hide
+whatever is drawn after it and behind it. In this project that erased the floor
+grid behind COCO boxes until F6.5.
+
+**Frame Loop (`frameloop`)**
+How often R3F redraws. The default `"always"` redraws every animation frame
+(~60 times a second) whether or not anything changed; `"demand"` redraws only
+when something calls `invalidate()`. This project uses the default because the
+selection pulse, camera damping, the playback tween and the `<Html>` label all
+need continuous frames. The price is an idle cost that scales with the scene.
+
+**Idle Cost**
+What the page spends (CPU, battery) while the user does nothing. For a 3D view it
+is "the cost of one frame × 60 per second", so a small per-object waste becomes a
+permanent load. Invisible on a frame-rate counter as long as each frame still
+fits in 16 ms; visible in a CPU profile.
+
+**Software GL (SwiftShader)**
+WebGL drawn by the CPU instead of a graphics card. The headless Chromium used for
+this project's captures runs it (`--use-angle=swiftshader`), which makes captures
+identical from run to run but makes timings unlike a real GPU's. Measurements
+state which one was used.
 
 ## Real-3D / Coordinate Terms (F2 — nuScenes)
 
