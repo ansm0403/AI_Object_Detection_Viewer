@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { ConfidenceSlider } from './ConfidenceSlider';
 import { DistanceSlider } from './DistanceSlider';
 import { ClassToggles } from './ClassToggles';
@@ -35,6 +36,8 @@ type Props = {
   onToggleClass: (className: string) => void;
   onReset: () => void;
   onDeselect?: () => void;
+  /** (F7.5) Extra controls placed before the count on the right (the bar knows nothing about them). */
+  extra?: ReactNode;
 };
 
 export function Filters({
@@ -54,6 +57,7 @@ export function Filters({
   onToggleClass,
   onReset,
   onDeselect,
+  extra,
 }: Props) {
   // The active metric filter is "default" only when its own control is at rest:
   // confidence at 0, or distance at its max ("All"). The inactive metric is
@@ -95,6 +99,7 @@ export function Filters({
         className="flex items-center gap-3 ml-auto shrink-0"
         onClick={(e) => e.stopPropagation()}
       >
+        {extra}
         <span className="text-xs text-zinc-400 tabular-nums">
           {visibleCount}/{totalCount} {countNoun}
         </span>

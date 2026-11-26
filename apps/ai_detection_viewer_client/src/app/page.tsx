@@ -49,10 +49,24 @@ import {
   type NotEvaluatedBox,
   type WorkMode,
 } from '@/components/evaluation';
+import { SampleBar, SampleList, SamplePanel, useSampleCheck } from '@/components/sample-check';
+import {
+  SAMPLE_SEED,
+  buildSampleExport,
+  nextUnjudged,
+  sampleExportFilename,
+  sampleExportToJson,
+  stepInSample,
+  toReviewVerdict,
+  toSampleVerdict,
+  type SampleVerdict,
+} from '@/lib/sampling';
 import {
   BICYCLE_RACK_CLASS,
   DEFAULT_MIN_SCORE,
   IOU_THRESHOLD,
+  NEAREST_MIN_IOU,
+  cameraOfPredictionId,
   describeOtherViews,
   evaluateFrames,
   evaluateScenes,
@@ -65,6 +79,7 @@ import {
   visibilityText,
   type EvalKind,
   type EvaluationRules,
+  type UnlabelledFalseAlarm,
 } from '@/lib/evaluation';
 import { DISTANCE_MAX } from '@/lib/ui/distance';
 import {
@@ -171,6 +186,9 @@ const DEFAULT_EVALUATION_RULES: EvaluationRules = {
   iouThreshold: IOU_THRESHOLD,
 };
 
+// (F7.5) Verdicts of the sample check live in their own review scope.
+const SAMPLE_SCOPE: ReviewScope = 'nuscenes-false-alarms';
+
 // Set intersection (no Set.prototype.intersection in our target runtimes).
 const intersectIds = (a: Set<string>, b: Set<string>): Set<string> =>
   new Set([...a].filter((id) => b.has(id)));
@@ -267,8 +285,19 @@ export default function Index() {
   // ones (a result row that is "open" simply IS the selected frame).
   const [conditions, setConditions] = useState<SearchCondition[]>([]);
   const [hitOrder, setHitOrder] = useState<HitOrder>('scene');
-  // A frame to open once its scene is on screen (a search result in another scene).
-  const [pendingFrame, setPendingFrame] = useState<{ scene: string; frameId: string } | null>(null);
+  // A frame to open once its scene is on screen (a search result in another
+  // scene). (F7.5) `objectId`: what to select in that frame once it is open —
+  // a sampled model box in another scene.
+  const [pendingFrame, setPendingFrame] = useState<{
+    scene: string;
+    frameId: string;
+    objectId?: string;
+  } | null>(null);
+  // (F7.5) The sample check: judging a random sample of the false alarms that
+  // have no label nearby. A state of evaluate mode (not a fourth mode); a VIEW
+  // setting like the mode itself. Which box is being judged is NOT stored — it
+  // is `selectedObjectId` (Rule #2).
+  const [sampleChecking, setSampleChecking] = useState(false);
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -414,13 +443,21 @@ export default function Index() {
   // (F7) Explore mode is on screen. It searches the dataset's REAL boxes in
   // every scene, so — like evaluate — it is not available on a practice set.
   const exploring = mode === 'explore' && reviewEnabled && plantedErrors === null;
+  // (F7.5) The sample check is on screen.
+  const sampleCheckOn = evaluating && sampleChecking;
 
   // (F6) Which camera the camera cell shows. A VIEW setting (not a selection,
   // Rule #2): it follows the selected object — the photo that shows the box is
   // put on screen — and a thumbnail click overrides it until the selection or
   // the frame changes. The same in both modes: evaluate mode scores every
   // camera's photo, and shows the one on screen.
-  const { activeCamera, setCamera, resetCamera } = useActiveCamera(currentFrame, selectedObjectId);
+  // (F7.5) A selected model box names its own photo (its id carries the camera).
+  const { activeCamera, setCamera, resetCamera } = useActiveCamera(
+    currentFrame,
+    selectedObjectId,
+    true,
+    cameraOfPredictionId(selectedObjectId),
+  );
   // The current frame AS THAT CAMERA SEES IT: its photo and its 2D boxes in
   // the usual fields. Everything that deals with one photo (the 2D viewer,
   // the 2D filter, the details panel's 2D row) takes this frame; everything
@@ -556,9 +593,15 @@ export default function Index() {
   // at the current minimum score. Computed here, at the selector level, from
   // (frames, predictions, score) — nothing is filtered when the file is parsed,
   // so moving the slider re-scores everything. Only computed in evaluate mode.
+  // (F7.5) During the sample check everything on screen is scored at the FIXED
+  // default rules — the rules the sample's population is defined with — so the
+  // sampled box is always a result on screen, whatever the slider was left at.
   const evaluationRules = useMemo<EvaluationRules>(
-    () => ({ minScore: confidenceThreshold, iouThreshold: IOU_THRESHOLD }),
-    [confidenceThreshold],
+    () =>
+      sampleCheckOn
+        ? DEFAULT_EVALUATION_RULES
+        : { minScore: confidenceThreshold, iouThreshold: IOU_THRESHOLD },
+    [sampleCheckOn, confidenceThreshold],
   );
   const evaluation = useMemo(
     () =>
@@ -636,8 +679,10 @@ export default function Index() {
     objectOutcomes: frameEvaluation?.objects ?? null,
     boxFrame: currentFrame,
     selectedId: selectedObjectId,
-    classes: exploring ? NO_CLASS_FILTER : visibleClasses,
-    kinds: exploring ? NO_KIND_FILTER : shownKinds,
+    // (F7.5) The sample check shows no class / outcome controls, so neither
+    // filter may hide the box being judged.
+    classes: exploring || sampleCheckOn ? NO_CLASS_FILTER : visibleClasses,
+    kinds: exploring || sampleCheckOn ? NO_KIND_FILTER : shownKinds,
   });
   // ---- (F7) Evaluate: every scene, once the slider rests ------------------
   // The scene on screen is scored at once (above). Scoring all ten scenes takes
@@ -1040,19 +1085,132 @@ export default function Index() {
     },
     [search, handleOpenHit],
   );
+  // Declared AFTER the scene-change effect above on purpose: that one clears
+  // the selection when another scene comes on screen, and this one then
+  // selects what was asked for in it (effects run in declaration order).
   useEffect(() => {
     if (!pendingFrame || !frames || shownSceneName !== pendingFrame.scene) return;
     if (frames.some((frame) => frame.id === pendingFrame.frameId)) {
       setSelectedFrame(pendingFrame.frameId);
+      if (pendingFrame.objectId) setSelectedObject(pendingFrame.objectId);
     }
     setPendingFrame(null);
-  }, [pendingFrame, frames, shownSceneName, setSelectedFrame]);
+  }, [pendingFrame, frames, shownSceneName, setSelectedFrame, setSelectedObject]);
+
+  // ---- (F7.5) Sample check ------------------------------------------------
+  // The population, the drawn sample and its summary are derived by
+  // `useSampleCheck` (pure functions of lib/sampling); this part only connects
+  // them to the one selection, the scene loader and the review store.
+  const sampleRecords = reviewsByScope[SAMPLE_SCOPE];
+  const sampleCheck = useSampleCheck({
+    active: sampleCheckOn,
+    sceneNames,
+    loaded: sceneLibrary,
+    failed: scenes.library.errors,
+    rules: DEFAULT_EVALUATION_RULES,
+    records: sampleRecords,
+    selectedId: selectedObjectId,
+  });
+  // Open a sampled box: its frame, in whatever scene it is, with the box
+  // selected (the photo follows from the selection — `useActiveCamera`).
+  const handleOpenSampleItem = useCallback(
+    (item: UnlabelledFalseAlarm) => {
+      setIsPlaying(false);
+      if (item.scene === shownSceneName && pendingSceneName === null) {
+        setPendingFrame(null);
+        setSelectedFrame(item.frameId);
+        setSelectedObject(item.predictionId);
+        return;
+      }
+      handleSelectScene(item.scene);
+      setPendingFrame({ scene: item.scene, frameId: item.frameId, objectId: item.predictionId });
+    },
+    [shownSceneName, pendingSceneName, handleSelectScene, setSelectedFrame, setSelectedObject],
+  );
+  // Entering opens the first box that still needs a verdict — once the sample
+  // exists (it needs every scene in memory, which can take a moment).
+  const openFirstSampleItem = useRef(false);
+  const handleEnterSampleCheck = useCallback(() => {
+    openFirstSampleItem.current = true;
+    setSampleChecking(true);
+    setIsPlaying(false);
+  }, []);
+  const handleExitSampleCheck = useCallback(() => {
+    openFirstSampleItem.current = false;
+    setSampleChecking(false);
+  }, []);
+  const sampleReady = sampleCheckOn && sampleCheck.availability.status === 'ready';
+  const sampleItems = sampleCheck.sample;
+  const sampleCurrent = sampleCheck.current;
+  useEffect(() => {
+    if (!sampleReady || !openFirstSampleItem.current) return;
+    openFirstSampleItem.current = false;
+    if (sampleCurrent) return;
+    const first = nextUnjudged(sampleItems, sampleRecords, null) ?? sampleItems[0];
+    if (first) handleOpenSampleItem(first);
+  }, [sampleReady, sampleItems, sampleCurrent, sampleRecords, handleOpenSampleItem]);
+  // A verdict is about a photo standing still; while the sequence plays the
+  // photo changes under the reviewer.
+  const sampleBlocked = isPlaying ? 'Stop playback to judge.' : undefined;
+  const handleSampleVerdict = useCallback(
+    (verdict: SampleVerdict) => {
+      if (!sampleCurrent || isPlaying) return;
+      const { item } = sampleCurrent;
+      setVerdict(SAMPLE_SCOPE, item.frameId, item.predictionId, toReviewVerdict(verdict));
+      // Read the records AFTER the update, then move on to the next box that
+      // has no verdict — in whatever scene it is.
+      const latest = useReviewStore.getState().reviews[SAMPLE_SCOPE];
+      const next = nextUnjudged(sampleItems, latest, item.predictionId);
+      if (next) handleOpenSampleItem(next);
+    },
+    [sampleCurrent, isPlaying, setVerdict, sampleItems, handleOpenSampleItem],
+  );
+  const handleSampleClear = useCallback(() => {
+    if (!sampleCurrent || isPlaying) return;
+    clearReview(SAMPLE_SCOPE, sampleCurrent.item.frameId, sampleCurrent.item.predictionId);
+  }, [sampleCurrent, isPlaying, clearReview]);
+  const handleSampleStep = useCallback(
+    (direction: 1 | -1) => {
+      const next = stepInSample(sampleItems, sampleCurrent?.item.predictionId ?? null, direction);
+      if (next) handleOpenSampleItem(next);
+    },
+    [sampleItems, sampleCurrent, handleOpenSampleItem],
+  );
+  // The sample and its verdicts as a file (built by lib/sampling/export).
+  const samplePopulation = sampleCheck.population;
+  const sampleScenes = sampleCheck.scenes;
+  const handleSampleExport = useCallback(() => {
+    if (samplePopulation === null) return;
+    const now = new Date();
+    const data = buildSampleExport(sampleItems, sampleRecords, {
+      exportedAt: now.toISOString(),
+      seed: SAMPLE_SEED,
+      population: samplePopulation,
+      scenes: sampleScenes,
+      rules: {
+        minScore: DEFAULT_MIN_SCORE,
+        iouThreshold: IOU_THRESHOLD,
+        noLabelWithinIou: NEAREST_MIN_IOU,
+      },
+    });
+    downloadTextFile(sampleExportFilename(now), sampleExportToJson(data), 'application/json');
+  }, [samplePopulation, sampleScenes, sampleItems, sampleRecords]);
 
   // (F4-C) Keyboard shortcuts. `resolveShortcut` (lib/review) decides what a key
   // means; this decides what the action does — always through the same handlers
   // the buttons use, so mouse and keyboard cannot drift apart.
   const handleReviewAction = useCallback(
     (action: ReviewAction) => {
+      // (F7.5) Sample check: the same keys as the label review, applied to the
+      // sampled model box — A / R / U judge it, C clears, J / K walk the sample.
+      // Zoom and camera keys fall through to the shared handling below; every
+      // other key (reject reasons, next frame) does nothing here.
+      if (sampleCheckOn) {
+        if (action.type === 'verdict') return handleSampleVerdict(toSampleVerdict(action.verdict));
+        if (action.type === 'clear') return handleSampleClear();
+        if (action.type === 'step') return handleSampleStep(action.direction);
+        if (action.type !== 'toggle-zoom' && action.type !== 'camera') return;
+      }
       // (F5) Evaluate mode only looks: moving through the list (J / K) and the
       // camera zoom (Z) work; the keys that WRITE a review do nothing, so a
       // stray "A" cannot approve a box whose verdict is not even on screen.
@@ -1110,6 +1268,10 @@ export default function Index() {
       }
     },
     [
+      sampleCheckOn,
+      handleSampleVerdict,
+      handleSampleClear,
+      handleSampleStep,
       evaluating,
       exploring,
       orderedHits,
@@ -1199,6 +1361,7 @@ export default function Index() {
       setQueueOrder('scene'); // (F4) back to the dataset order
       setPractice(false); // (F4-F) practice is a nuScenes-only mode
       setMode('review'); // (F5) evaluate is a nuScenes-only mode
+      setSampleChecking(false); // (F7.5) the sample check is part of evaluate mode
       setShownKinds(new Set()); // (F5) show every outcome again
       resetCamera(); // (F6) back to the default camera
     },
@@ -1219,6 +1382,7 @@ export default function Index() {
       if (next === mode) return;
       if (next !== 'review' && evaluateBlocked) return;
       setMode(next);
+      setSampleChecking(false); // (F7.5) the sample check does not outlive a mode switch
       setConfidenceThreshold(next === 'evaluate' ? DEFAULT_MIN_SCORE : 0);
     },
     [mode, evaluateBlocked, setConfidenceThreshold],
@@ -1311,7 +1475,7 @@ export default function Index() {
           modelName={predictions.set?.model.name}
           basis={
             evaluation
-              ? `${shownSceneName ?? 'This scene'}: all ${evaluation.evaluatedPhotos} evaluated photos (${evaluation.evaluatedFrames} frames × ${evaluation.byCamera.length} camera${evaluation.byCamera.length === 1 ? '' : 's'}), each scored on its own · score ≥ ${confidenceThreshold.toFixed(2)} · IoU ≥ ${IOU_THRESHOLD} · one scene of one drive — see "All scenes" in the panel`
+              ? `${shownSceneName ?? 'This scene'}: all ${evaluation.evaluatedPhotos} evaluated photos (${evaluation.evaluatedFrames} frames × ${evaluation.byCamera.length} camera${evaluation.byCamera.length === 1 ? '' : 's'}), each scored on its own · score ≥ ${evaluationRules.minScore.toFixed(2)} · IoU ≥ ${evaluationRules.iouThreshold} · one scene of one drive — see "All scenes" in the panel`
               : undefined
           }
         />
@@ -1530,7 +1694,19 @@ export default function Index() {
       cameraAspect={cameraAspect}
       topBar={header}
       filterBar={
-        exploring && search ? (
+        sampleCheckOn ? (
+          // (F7.5) The sample is fixed: no score slider, no class chips.
+          <SampleBar
+            population={sampleCheck.population}
+            size={sampleCheck.size}
+            sizes={sampleCheck.sizes}
+            onChangeSize={sampleCheck.setSize}
+            minScore={DEFAULT_MIN_SCORE}
+            onExport={handleSampleExport}
+            canExport={sampleCheck.population !== null}
+            onExit={handleExitSampleCheck}
+          />
+        ) : exploring && search ? (
           <ExploreBar
             conditions={conditions}
             onChange={setConditions}
@@ -1564,11 +1740,41 @@ export default function Index() {
           onToggleClass={toggleClass}
           onReset={evaluating ? handleResetEvaluationFilters : resetFilters}
           onDeselect={() => setSelectedObject(null)}
+          // (F7.5) The way into the sample check, next to the numbers it is about.
+          extra={
+            evaluating ? (
+              <button
+                type="button"
+                onClick={handleEnterSampleCheck}
+                title="Judge a random sample of the false alarms that have no label nearby: is the model wrong, or is the label missing?"
+                className="text-xs px-2 py-0.5 rounded border border-amber-400/30 text-amber-200 hover:border-amber-300/60 hover:text-amber-100 transition-colors whitespace-nowrap"
+              >
+                Sample check
+              </button>
+            ) : undefined
+          }
         />
         )
       }
       list={
-        exploring && search ? (
+        sampleCheckOn ? (
+          // (F7.5) The sample check lists the SAMPLED model boxes, across scenes.
+          <SampleList
+            sample={sampleCheck.sample}
+            records={sampleRecords}
+            summary={sampleCheck.summary}
+            selectedId={sampleCheck.current?.item.predictionId ?? null}
+            onOpen={handleOpenSampleItem}
+            unavailable={
+              sampleCheck.availability.status === 'loading'
+                ? `Loading scenes: ${sampleCheck.availability.loaded} of ${sampleCheck.availability.total}…`
+                : sampleCheck.availability.status === 'unavailable'
+                  ? sampleCheck.availability.reason
+                  : undefined
+            }
+            stepHint={`${SHORTCUT_KEYS.next} / ${SHORTCUT_KEYS.previous} to step`}
+          />
+        ) : exploring && search ? (
           // (F7) Explore mode lists the FRAMES that match the search.
           <ExploreResults
             hits={orderedHits}
@@ -1723,7 +1929,31 @@ export default function Index() {
         ) : undefined
       }
       details={
-        exploring && search && frameSearch ? (
+        sampleCheckOn ? (
+          <SamplePanel
+            status={sampleCheck.availability.status}
+            message={
+              sampleCheck.availability.status === 'loading'
+                ? `The sample is drawn from all scenes: ${sampleCheck.availability.loaded} of ${sampleCheck.availability.total} are loaded.`
+                : sampleCheck.availability.status === 'unavailable'
+                  ? sampleCheck.availability.reason
+                  : undefined
+            }
+            item={sampleCheck.current?.item ?? null}
+            position={sampleCheck.current?.position ?? null}
+            verdict={sampleCheck.current?.verdict ?? null}
+            summary={sampleCheck.summary}
+            onVerdict={handleSampleVerdict}
+            onClear={handleSampleClear}
+            blocked={sampleBlocked}
+            storageFailed={reviewStorageFailed}
+            keys={{
+              verdicts: [SHORTCUT_KEYS.approve, SHORTCUT_KEYS.reject, SHORTCUT_KEYS.unsure],
+              clear: SHORTCUT_KEYS.clear,
+              step: SHORTCUT_KEYS.next,
+            }}
+          />
+        ) : exploring && search && frameSearch ? (
           <SearchPanel
             conditions={conditions}
             frameIndex={frameIndex}
