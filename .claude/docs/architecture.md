@@ -43,27 +43,48 @@ apps/ai_detection_viewer_client/
 ├── src/
 │   ├── app/                # Next.js app router pages
 │   │   └── page.tsx        # per-dataset load (COCO: parseCoco→enrich / nuScenes: parseNuScenes, F2-A) → auto-select frame → Header(switcher+badge) + Filters + Viewer2D + <Viewer3D/> + ObjectList + AnalyticsPanel + Timeline. Derives 2D + 3D visible-id sets (∩ distance filter). F2-C: `tracksAcrossFrames` (nuScenes) drives dataset-aware frame-switch selection (keep vs clear) + dataset-aware `Viewer3D` key (stable vs `frame.id`) + an `isPlaying` autoplay timer (nextFrameIndex @ ~2 Hz). F2-D: a page-level `cameraMode` (`'fixed'|'follow'`, nuScenes-only view flag, reset to fixed on dataset switch) + a `nextFrame` memo (the upcoming keyframe) are threaded to Viewer3D for camera-follow + box-tween. **F3:** renders every state (loading / error / empty / loaded) inside `WorkspaceShell` (one slot per pane; the Header stays live so the dataset switcher works while loading or after an error); `ObjectList` gets the 3D visible set; viewer name tags (`label3D` / `label2D`) are chosen from `Frame.source` (Rule #6).
+│   │                       # F7: nuScenes comes from a scene catalog (useScenes); page state adds requestedScene,
+│   │                       #     search conditions and hit order; three modes (explore | review | evaluate). See
+│   │                       #     "Scenes, Chunked Loading and Search (F7)" below.
 │   ├── components/
 │   │   ├── workspace/      # ✅ F3 — the workspace frame + shared panel look
 │   │   │   ├── WorkspaceShell.tsx  # zone layout only (no state): topBar, filterBar, list, main, camera, details, timeline slots + cameraAspect; exports TIMELINE_ROW_HEIGHT_CLASS
 │   │   │   ├── Panel.tsx           # PANEL_CLASS, SECTION_TITLE_CLASS, PanelTitle, PanelHeader (32px title row), ViewerLabel (viewer corner tag)
 │   │   │   ├── useScrollSelectedIntoView.ts  # ✅ F5 — keep the selected <li> of a scrolling list in view (moved out of ObjectList unchanged; shared with the result list)
 │   │   │   └── index.ts            # barrel
+│   │   ├── dataset/        # ✅ F7 — loading hooks (they hold results; parsing stays in lib/)
+│   │   │   ├── useDataset.ts        # one single-file dataset (COCO): fetch → lib/data/buildFrames; state loading | ready | failed
+│   │   │   ├── useScenes.ts         # nuScenes: catalog → the requested scene first → the other scenes in the background (2 at a time);
+│   │   │   │                        #   returns {status, error, catalog, onScreen, pending, library, retry}; the previous scene stays
+│   │   │   │                        #   on screen until the next is ready; a failed / empty scene never replaces it
+│   │   │   ├── useFramePoints.ts    # the current frame's points file (+ N frames ahead), last `keep` kept; inline | ready | loading | failed
+│   │   │   └── index.ts             # barrel
+│   │   ├── scenes/         # ✅ F7 — choosing the scene
+│   │   │   ├── ScenePicker.tsx      # button + ‹ › + list (day / night, drive, "1 drive · N scenes", frames, boxes, one stat per scene)
+│   │   │   └── index.ts             # barrel
+│   │   ├── explore/        # ✅ F7 — Explore mode UI. Presentation only; all logic is in lib/search
+│   │   │   ├── ExploreBar.tsx       # filter slot: condition chips, "+ condition" dialog, presets, "N of M frames match", Reset
+│   │   │   ├── ExploreResults.tsx   # list slot: one row per hit (thumbnail, scene, frame, value), order select
+│   │   │   ├── SearchPanel.tsx      # details slot: this frame's value per condition, matches per scene, `pinned` slot
+│   │   │   └── index.ts             # barrel
 │   │   ├── camera/         # ✅ F6 — the six-camera UI (see "Six Cameras (F6)" below)
 │   │   │   ├── CameraStrip.tsx      # the thumbnail row: props cameras (CameraThumb {name, imageUrl, marker?, badge?}), activeName, onSelect, shortcutHint?, slots? (fixed cell count). Knows nothing about review / evaluation. + CameraStripPlaceholder (loading)
 │   │   │   ├── useActiveCamera.ts   # which camera the large image shows: follows the selection (pickCamera, decided while rendering), setCamera for a manual choice, resetCamera. View state, not a selection (Rule #2)
-│   │   │   ├── usePhotoPreload.ts   # fetches a list of photo URLs in the background, 2 at a time (the list comes from lib/cameras preloadOrder)
+│   │   │   ├── usePhotoPreload.ts   # fetches a list of photo URLs in the background, 3 at a time (the list comes from lib/cameras/preload).
+│   │   │   │                        #   F7: remembers only the last `keep` photos; no start delay when the list's first photo was already requested
 │   │   │   └── index.ts             # barrel
 │   │   ├── evaluation/     # ✅ F5 — camera-detection evaluation UI (see "Evaluation (F5)" below). Presentation only; all logic is in lib/evaluation
-│   │   │   ├── ModeSwitch.tsx         # top bar: Review | Evaluate (type WorkMode); Evaluate blocked with a reason while practising
+│   │   │   ├── ModeSwitch.tsx         # top bar: Explore | Review | Evaluate (type WorkMode; Explore since F7); Evaluate blocked with a reason while practising
 │   │   │   ├── EvaluationHeadline.tsx # top bar right: model name + overall Precision / Recall (or "Loading…" / "Predictions unavailable")
-│   │   │   ├── EvaluationPanel.tsx    # the details panel in evaluate mode: pinned slot, Precision / Recall with counts, this frame's outcome counts, recall by distance / by class, notes
+│   │   │   ├── EvaluationPanel.tsx    # the details panel in evaluate mode: pinned slot, Precision / Recall with counts, this frame's outcome counts, recall by distance / by class, notes F7: `scope` + the "All scenes" block (SceneScores), `photoNote`.
 │   │   │   ├── SelectedResult.tsx     # pinned strip: outcome + class + distance + visibility, and the one-line reason (describeResult); "Not evaluated" for a box outside the evaluation
 │   │   │   ├── ResultList.tsx         # the list in evaluate mode: one row per result, outcome chips ("Show"), footer "+ N boxes not evaluated"
 │   │   │   ├── OverlayLegend.tsx      # camera legend: "model" (solid) / "label · approx. (projected 3D box)" (dashed)
 │   │   │   ├── BoxColorLegend.tsx     # 3D legend: found / missed / not evaluated
 │   │   │   ├── icons.tsx              # OutcomeIcon (check / cross / exclamation / dash — four shapes, not only four colours)
-│   │   │   ├── usePredictions.ts      # load + parse predictions.json; state none | loading | ready | failed, keyed on the url
+│   │   │   ├── SceneScores.tsx        # ✅ F7 — the "All scenes" block: total, recall per scene (row opens the scene), day / night with drives, limits
+│   │   │   ├── useSettledValue.ts     # ✅ F7 — a value that follows its input only after it has rested N ms (all-scenes scoring waits for the slider)
+│   │   │   ├── predictions-state.ts   # type only: none | loading | ready | failed. (F7: usePredictions.ts removed — predictions arrive with their scene)
 │   │   │   ├── useFrameResults.ts     # memoises the per-frame derivations (order, queue, selected result, overlay, 3D colours)
 │   │   │   └── index.ts               # barrel
 │   │   ├── review/         # ✅ F4 — 3D box review UI (see "Review (F4)" below). Presentation only; all logic is in lib/review
@@ -71,7 +92,7 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── EvidenceStrip.tsx      # one line above the buttons: LiDAR point count, visibility, in camera
 │   │   │   ├── ReviewProgress.tsx     # top bar: reviewed / total + bar; "Not saved" when storage fails
 │   │   │   ├── QueueBar.tsx           # under the list title: order dropdown + "N to review"
-│   │   │   ├── ExportMenu.tsx         # top bar: Download JSON / CSV, two-click Reset
+│   │   │   ├── ExportMenu.tsx         # top bar: Download JSON / CSV, two-click Reset F7: counts the records of ALL scenes (`scope`), `exportNote` when the file cannot cover everything.
 │   │   │   ├── PracticeScoreCard.tsx  # practice mode: found / missed / false alarms, Reveal answers
 │   │   │   ├── icons.tsx              # StatusIcon (verdict) + EvidenceBars (LiDAR points) for list rows
 │   │   │   ├── labels.ts              # UI wording for verdicts / reasons / block messages
@@ -98,8 +119,9 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── DistanceSlider.tsx    # ✅ F2-A — metres range input (shown for nuScenes; swapped with ConfidenceSlider by filterMode)
 │   │   │   ├── ClassToggles.tsx      # color chips per class
 │   │   │   └── index.ts              # barrel
-│   │   ├── timeline/       # ✅ Step 8 — horizontal thumbnail strip
+│   │   ├── timeline/       # ✅ Step 8 — the frame row. Two variants: `thumbnails` (COCO) and `scrubber` (nuScenes, F7)
 │   │   │   ├── Timeline.tsx     # (F5: optional `badges` Map<frameId, TimelineBadge {text, title?, tone}> → shown instead of the count; evaluate mode passes "N missed" / "no preds") (F4: optional reviewCounts → thumbnail badge "reviewed/total") props: frames, selectedFrameId, onSelectFrame; (F2-C) optional isPlaying/onTogglePlay → play/pause button (nuScenes only); (F2-D-1) optional cameraMode/onToggleCameraMode → Fixed/Follow toggle (nuScenes only). F3: one 84px row (title + Play/Reset/Follow left, 96×56 thumbnails right); badge = detections3D count
+│   │   │   │                    # F7: `variant`, `leading` slot (the scene picker), bars from lib/ui/timeline-bars, thumbnail on hover, tone `match`
 │   │   │   └── index.ts         # barrel
 │   │   ├── header/         # ✅ Step 9.5 Phase 2 — app title + frame meta line
 │   │   │   ├── Header.tsx       # props: frameIndex, frameCount, detectionCount, datasetId, onSelectDataset, source?, children?, practiceActive?, practiceRequested?, onTogglePractice?. F3: flush 44px app bar; meta hidden when frameCount is 0 (loading/error). F4: `children` slot at the right (review progress + Export); Practice toggle + "Practice · labels modified" badge; below 1280px the "N detections" text yields when children are present. F5: `modeSwitch` slot after the badge; the practice badge reads "Practice" below 1280px (full text in the tooltip); the left group wraps on phone widths
@@ -141,8 +163,13 @@ apps/ai_detection_viewer_client/
 │   │   │   └── index.ts                     # barrel
 │   │   ├── nuscenes/       # ✅ F2 (parser+types) — prepped nuScenes static JSON → internal Frame[]
 │   │   │   ├── parser.ts                     # ✅ parseNuScenes: prepped JSON → Frame[] (NOT raw relational tables)
-│   │   │   ├── parser.test.ts                # 23 tests — id share (Rule #1), source/confidence, behind-camera 2D drop, defensive, LiDAR; F4: annotation info (token / LiDAR points / visibility, optional + per-field tolerant), projected corners
+│   │   │   ├── parser.test.ts                # 49 tests (F7: + 1.3 frames, points files, wrong-frame rejection) — id share (Rule #1), source/confidence, behind-camera 2D drop, defensive, LiDAR; F4: annotation info (token / LiDAR points / visibility, optional + per-field tolerant), projected corners
 │   │   │   ├── types.ts                      # ✅ prepped-JSON schema (nuScenes-native: quat [w,x,y,z], size [w,l,h], global)
+│   │   │   ├── catalog.ts                    # ✅ F7 — parseSceneCatalog (scenes.json → SceneCatalog / SceneInfo), isNightDescription
+│   │   │   ├── catalog.test.ts               # 8 tests
+│   │   │   ├── scene-files.test.ts           # ✅ F7 — 13 tests on the SHIPPED files: 10 / 404 / 18,538 / 2,424; the ten reference frames
+│   │   │   │                                 #   still give 349/182/107/180 and 91/83/13/26; all scenes 6,726/5,292/3,514/5,278; night = one drive
+│   │   │   ├── test-helpers.ts               # readPublicJson, readReferenceFramesRaw / PredictionsRaw (first ten frames of scene-0916)
 │   │   │   └── index.ts                      # barrel
 │   │   ├── selectors/      # ✅ Step 7 — pure store derivations
 │   │   │   ├── visible-detections.ts        # filter by threshold + visibleClasses (2D ids; + selectVisibleDetectionIds3D for the 3D viewer, F2-A)
@@ -163,17 +190,21 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── display-id.test.ts           # 5 tests — 32-char → 6, COCO unchanged, ≤8 kept, >8 shortened, empty
 │   │   │   ├── class-label.ts               # ✅ after F6 — classLabel(name): short display name of an unmapped class ("static_object.bicycle_rack" → "bicycle_rack"); used by the filter chips, full name kept as tooltip
 │   │   │   ├── class-label.test.ts          # 4 tests
-│   │   │   ├── class-label.ts               # ✅ after F6 — classLabel(name): short display name of an unmapped class ("static_object.bicycle_rack" → "bicycle_rack"); used by the filter chips, full name kept as tooltip
-│   │   │   ├── class-label.test.ts          # 4 tests
+│   │   │   ├── timeline-bars.ts             # ✅ F7 — timelineBars(frames, {reviewCounts, badges}) → one bar per frame (height, tone); timelineTicks
+│   │   │   ├── timeline-bars.test.ts        # 15 tests
 │   │   │   └── image-overlay.ts             # ✅ F5 — types only: ImageRect {key, bbox, color, dashed, emphasis, caption?, selectId?}, ImageOverlay {rects, focus}. The contract between "what to draw" (lib/evaluation/overlay) and Viewer2D
 │   │   ├── data/           # ✅ F5-0 — loading helpers
 │   │   │   ├── fetch-json.ts                # fetchJson(url, {signal, fetchImpl}): rejects with "HTTP <status> while loading <url>" on a non-2xx answer (used for the dataset AND the predictions)
-│   │   │   └── fetch-json.test.ts           # 5 tests
+│   │   │   ├── fetch-json.test.ts           # 5 tests
+│   │   │   ├── build-frames.ts              # ✅ F7 — buildFrames(kind, raw, {practice?}) → {frames, planted}: the parse / enrich pipeline out of page.tsx
+│   │   │   ├── build-frames.test.ts         # 6 tests
+│   │   │   ├── bounded-cache.ts             # ✅ F7 — BoundedCache<K, V>: keeps the most recently used N entries (points, preloaded photos)
+│   │   │   └── bounded-cache.test.ts        # 10 tests
 │   │   ├── cameras/        # ✅ F6 — reading a frame through its cameras, all pure. See "Six Cameras (F6)" below
 │   │   │   ├── names.ts          # DEFAULT_CAMERA, CAMERA_DISPLAY_ORDER (BL FL F FR BR B), cameraShortName, inDisplayOrder
 │   │   │   ├── views.ts          # cameraViews, frameAsCamera, camerasSeeing, camerasByObject, detectionInCamera, hasCamera, defaultCameraName, SINGLE_VIEW
 │   │   │   ├── pick.ts           # visibleFraction, camerasByBestView, bestViewsByObject, pickCamera, stepCamera
-│   │   │   ├── preload.ts        # preloadOrder(frames, index, framesAhead)
+│   │   │   ├── preload.ts        # preloadOrder(frames, index, framesAhead); F7: upcomingFrames(frames, index, ahead), shared with the points loader
 │   │   │   ├── test-helpers.ts   # view / multiCameraFrame / singleImageFrame / cornersOf builders
 │   │   │   ├── *.test.ts         # 62 tests — names 7, views 18, pick 20, preload 8, sample-data 9 (the shipped file: 60 photos, boxes per camera, seen by 1 / 2 / 0 cameras)
 │   │   │   └── index.ts          # barrel
@@ -185,6 +216,7 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── match.ts          # evaluateFrame (greedy, same class, IoU ≥ IOU_THRESHOLD 0.3; visibility v0-40 not scored), DEFAULT_MIN_SCORE 0.25, findResult, selectionIdOf, countResults
 │   │   │   ├── metrics.ts        # ratio (null when the denominator is 0), precisionOf, recallOf, summarize (totals + recall by 10 m band + by class)
 │   │   │   ├── evaluate.ts       # evaluateFrames(frames, predictionSet, rules): per-frame map + summary; a frame with no entry in the file is left out (not "all missed")
+│   │   │   ├── scenes.ts         # ✅ F7 — evaluateScenes(scenes, rules) → per scene, total, day / night (with the number of drives). 11 tests
 │   │   │   ├── outcomes.ts       # EVAL_KINDS (display order), OUTCOME_LABEL / HINT / COLOR, NOT_EVALUATED_COLOR, CONTEXT_COLOR, countOf, formatPercent (null → "—")
 │   │   │   ├── list.ts           # orderResults, ResultFilter, isResultVisible, resultQueue (ids J / K walk)
 │   │   │   ├── overlay.ts        # buildOverlay → ImageOverlay (labels dashed, model boxes solid, outcome colours, companion box, focus), unionBox
@@ -201,11 +233,22 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── evidence.ts       # evidenceLevel / isWeakEvidence from the LiDAR point count (WEAK_EVIDENCE_MAX_POINTS = 4)
 │   │   │   ├── availability.ts   # getReviewBlock: playing / no-selection / not-in-frame / hidden
 │   │   │   ├── shortcuts.ts      # resolveShortcut(event) → ReviewAction | null; isTypingTarget; SHORTCUT_KEYS
-│   │   │   ├── export.ts         # buildReviewExport, reviewExportToJson / ToCsv, reviewExportFilename
+│   │   │   ├── export.ts         # buildReviewExport, reviewExportToJson / ToCsv, reviewExportFilename. F7: buildSceneReviewExport → format review@2 (a `scene` on every row)
 │   │   │   ├── persisted.ts      # sanitizeReviews: validate what was read back from storage
 │   │   │   ├── practice.ts       # makePracticeSet (seeded box errors on the RAW prepped data) + scorePractice
 │   │   │   ├── test-helpers.ts   # makeBox / makeFrame builders for the tests below
 │   │   │   ├── *.test.ts         # records 16, progress 7, queue 30, evidence 10 (evidence + availability + verdictsOfFrame), shortcuts 19, export 17, persisted 9, practice 24
+│   │   │   └── index.ts          # barrel
+│   │   ├── scenes/         # ✅ F7 — which scenes to load, and loading one. Pure apart from the injected fetch
+│   │   │   ├── load-order.ts     # SCENE_LOAD_CONCURRENCY (2), scenesToRequest (requested scene first, then catalog order), stepScene (wraps), countSceneStates
+│   │   │   ├── load-scene.ts     # loadScene(scene, {signal, fetchImpl}) → frames + predictions in parallel, never rejects; loadPracticeScene
+│   │   │   ├── *.test.ts         # 29 tests — load-order 20, load-scene 9
+│   │   │   └── index.ts          # barrel
+│   │   ├── search/         # ✅ F7 — search conditions, all pure (no React / Zustand / DOM). See "Explore mode and search"
+│   │   │   ├── conditions.ts     # SearchCondition (objects | no-lidar | model | time), conditionValue, conditionBoxIds, matchesCondition,
+│   │   │   │                     #   highlightedBoxIds, needsEvaluation, normalizeCondition, describeCondition / describeValue, sameCondition, resultsForConditions
+│   │   │   ├── search.ts         # searchScenes → SearchResult {hits, frames, byScene, scenesWithMatches}, sortHits, stepHit, SEARCH_PRESETS (5)
+│   │   │   ├── *.test.ts         # 49 tests — conditions 29, search 20 (incl. the shipped data: 177 frames / 7 scenes, 135 frames)
 │   │   │   └── index.ts          # barrel
 │   │   ├── sequence/       # ✅ F2-C — keyframe-sequence playback logic (pure; no React/Three.js)
 │   │   │   ├── autoplay.ts                   # nextFrameIndex(index, count, {loop}) + AUTOPLAY_INTERVAL_MS (~2 Hz)
@@ -226,13 +269,15 @@ apps/ai_detection_viewer_client/
 │   └── sample-data/        # sample COCO JSON + frame images
 │       ├── sample.json
 │       ├── frame_001.jpg ~ frame_010.jpg
-│       └── nuscenes/       # ✅ F2 — offline-generated (scripts/prep_nuscenes.py)
-│           ├── nuscenes.json    # prepped (scene-0916, 10 keyframes, 583 boxes + ~6.5k LiDAR pts/frame); NuScenesPrepped schema. Compact (no indent) — the inline lidar.points arrays dominate size (~1.5 MB). Format 1.1 since F4: each annotation also carries annotationToken / numLidarPts / visibility.
-│           ├── predictions.json # ✅ F5 — YOLOv8n predictions for the 10 CAM_FRONT images (scripts/predict_nuscenes.py): 428 predictions, score ≥ 0.05, ~32 KB. Format "ai-detection-viewer/predictions@1": { format, camera, model {name, weights, library, imageSize, minScore, nmsIou}, frames [{ token, predictions [{ class, score, bbox [x,y,w,h] }] }] }
-│           ├── cam_front/       # 10 CAM_FRONT keyframe jpgs
-│           └── cam_front_left/ cam_front_right/ cam_back/ cam_back_left/ cam_back_right/   # ✅ F6 — 10 keyframe jpgs each (60 photos, 8.04 MB in all)
-│                                # F6: nuscenes.json is format 1.2 (each frame has cameras[] — photo + that photo's ego_pose + calibration; top-level fields unchanged), ~1.5 MB.
-│                                #     predictions.json is format "…/predictions@2" (per frame: cameras { name: [predictions] }), 1,597 predictions on the 60 photos, 120 KB.
+│       └── nuscenes/       # ✅ F2 — offline-generated (scripts/prep_nuscenes.py). F7: all of nuScenes-mini, split files
+│           ├── scenes.json           # ✅ F7 — the catalog (10 scenes): name, description, log, frameCount, boxCount, file paths
+│           └── scenes/<scene>/       # ✅ F7 — per scene (format 1.3). 3,253 files, 152.49 MB in total
+│               ├── frames.json       #   boxes + six cameras per frame; points are NOT here (lidar: {path, pointCount})
+│               ├── predictions.json  #   predictions@2 — YOLOv8n on the ORIGINAL 1600×900 photos
+│               ├── points/           #   one self-contained points file per frame
+│               ├── cam_<channel>/    #   six photos per frame, 960×540 WebP
+│               └── thumb/            #   front camera, 192×108 WebP
+│                                     # (F2–F6: one nuscenes.json + predictions.json + cam_*/ jpgs for ten frames — removed in F7.)
 └── vitest.config.ts        # include: src/**/*.test.ts + tests/**/*.test.ts
 
 scripts/                    # ✅ F2 — offline, build-time only (repo root, like Step 11's
@@ -246,11 +291,17 @@ scripts/                    # ✅ F2 — offline, build-time only (repo root, li
                             #   Re-running is deterministic (verified: output identical apart from the new fields).
                             #   F6: exports all six cameras per frame as cameras[] (photo + its own ego_pose + calibration; format 1.2)
                             #   and copies their photos into cam_<channel>/. Still no coordinate math. Run twice → identical file.
+                            #   F7: exports ALL scenes of the download as split files (scenes.json + scenes/<scene>/…, format 1.3):
+                            #   frames without points, one points file per frame, photos reduced to 960×540 WebP and a 192×108
+                            #   thumbnail (needs Pillow — the only non-stdlib import). Options --scenes, --out, --skip-photos.
+                            #   Still no coordinate math. Run twice → identical files.
   predict_nuscenes.py       # ✅ F5 — runs YOLOv8n (ultralytics, CPU, imgsz 1280, conf 0.05) on the images listed in
                             #   nuscenes.json and writes predictions.json. Copies the model's output only: no class
                             #   filtering, no scoring (that is lib/evaluation's job, Rule #3). No timestamp in the file;
                             #   re-running is deterministic (verified: byte-identical). NOT a runtime backend.
                             #   F6: runs every camera's photo listed in nuscenes.json (60) and writes format predictions@2.
+                            #   F7: reads scenes.json, opens the ORIGINAL photos (image.source under --dataroot) and writes one
+                            #   predictions.json per scene. Options --data, --dataroot, --scenes.
 ```
 
 Path alias `@/*` resolves to `apps/ai_detection_viewer_client/src/*`
@@ -360,6 +411,13 @@ The Zustand store holds UI state only. Frame data lives in React state at the pa
 (F4 adds a SECOND store, `review-store`, for review records — the only persisted state. It holds no
 selection: see "Review (F4)".)
 
+**F7 — nuScenes no longer arrives as one file.** The pipeline above is still what turns raw JSON
+into `Frame[]` (`lib/data/buildFrames`), but it runs per scene, and the frames of a scene arrive
+without their point cloud: scene catalog → the scene on screen → the other scenes in the background;
+points and photos per frame, a few frames ahead. Frame data still lives in React state at the page
+level (inside the `useScenes` / `useFramePoints` hooks); the store is unchanged. See "Scenes, Chunked
+Loading and Search (F7)".
+
 ## Zustand Store Schema
 
 ```ts
@@ -434,8 +492,14 @@ For the full rationale, see `docs/edgecases/Edge_#4.md` Case 2.
   must be explicitly disposed — R3F only auto-disposes JSX-declared geometries.
   Pattern: `useEffect(() => () => geometry.dispose(), [geometry])`.
 - Wrap heavy 3D components in `<Suspense>` where appropriate.
-- Use `instancedMesh` if rendering many similar 3D bboxes. (Not used so far: re-measured at 40 boxes
-  in F6.5, no hot spot. Re-measure when F7 grows the frames.)
+- Use `instancedMesh` if rendering many similar 3D bboxes. (Not used so far. Re-measured at 40 boxes
+  in F6.5: no hot spot. Re-measured in F7 on the largest frame, 156 boxes, one draw call per box:
+  integrated GPU 60 fps / 159 ms of JS per second at idle, software GL 53 fps / 583 ms. Merging the
+  box lines into one draw call is a recorded follow-up, not done — Edge_F#7 "Measured and NOT changed".)
+- **Compare builds in one session.** Absolute idle numbers on the development machine drift by
+  several times between days (the pre-F7 build measured 57 ms/s on the frame recorded as 34 ms/s in
+  F6.5). To say "no regression", build the previous commit next to the new one and measure them
+  alternately (F7: `git archive` into a temporary folder, second port).
 - **A pick-only mesh is `visible={false}`, never "transparent with `opacity={0}`"** (F6.5). The
   raycaster ignores `visible` (it tests layers and geometry) and still reads `material.side`, so
   clicks and hover work on a mesh that is never drawn. `opacity: 0` is still drawn, still writes
@@ -452,7 +516,10 @@ For the full rationale, see `docs/edgecases/Edge_#4.md` Case 2.
 
 <!-- KO (move to a localized file)
 - `instancedMesh`: 비슷한 3D 박스가 많으면 쓴다. (아직 쓰지 않았다. F6.5에서 박스 40개로 다시 쟀는데 두드러진 비용이
-  없었다. F7에서 프레임이 커지면 다시 잰다.)
+  없었다. F7에서 가장 큰 프레임(박스 156개, 박스마다 그리기 호출 1번)을 쟀다: 내장 GPU 60 fps / 가만히 있을 때 JS 초당
+  159 ms, 소프트웨어 렌더링 53 fps / 583 ms. 박스 선을 한 번에 그리도록 합치는 일은 후속 작업으로 적어 두고 하지 않았다.)
+- **빌드끼리 비교할 때는 같은 자리에서 번갈아 잰다.** 이 컴퓨터의 절대 숫자는 날마다 몇 배씩 달라진다(F6.5에서 34 ms/s로
+  적은 프레임을 F7 이전 빌드로 다시 재니 57 ms/s였다). "느려지지 않았다"고 말하려면 이전 커밋을 따로 빌드해 번갈아 잰다.
 - **클릭만 받는 mesh는 `visible={false}`로 한다. "투명 + `opacity={0}`"으로 안 보이게 하지 않는다** (F6.5).
   클릭 판정(raycaster)은 `visible`을 보지 않고 `material.side`는 읽으므로, 그리지 않는 mesh도 클릭과 마우스 올림을 받는다.
   `opacity: 0`은 여전히 그려지고, 깊이 값을 쓰고(박스 뒤 격자를 지웠다), 그리기 호출을 쓴다.
@@ -1214,6 +1281,255 @@ F6(2026-11-26)부터 nuScenes 작업 화면은 차량의 카메라 6대를 모�
 모델 성능이 아니라 분석이 동작한다는 시연이다.**
 -->
 
+## Scenes, Chunked Loading and Search (F7) — current
+
+F7 (2026-11-27) grows the nuScenes side from ten frames of one scene to all of nuScenes-mini:
+**10 scenes, 404 keyframes, 18,538 boxes, 2,424 photos.** Nothing is loaded "all at once" any more,
+the scene on screen can be chosen, and frames can be found by condition in a third mode, **Explore**.
+Review (F4), evaluation (F5) and the six cameras (F6) keep their structure. COCO is untouched.
+Design: `docs/plan-feature/F7_scene_exploration.md`; edge cases: `Edge_F#7.md`. **Where this section
+and the F4 / F5 / F6 sections above disagree about how much data there is or how it is loaded, this
+section is current** (those describe the ten-frame, single-file state they were written in).
+
+### Files (prepped format 1.3)
+
+```
+public/sample-data/nuscenes/
+├── scenes.json                  # the catalog: per scene — name, description, log (the drive it was cut
+│                                #   from: name, location, date), frameCount, boxCount, the two file paths
+└── scenes/<scene>/
+    ├── frames.json              # every frame's boxes + six cameras. NO points: `lidar: {path, pointCount}`
+    ├── predictions.json         # predictions@2 for this scene's photos (YOLOv8n, run on the ORIGINAL photos)
+    ├── points/<frame>.json      # one frame's LiDAR points + the pose / calibration needed to place them
+    ├── cam_<channel>/*.webp     # six photos per frame, reduced to 960×540 (WebP q75)
+    └── thumb/<frame>.webp       # front camera, 192×108 — the timeline's hover preview, search result rows
+```
+
+3,253 files, 152.49 MB (photos 98.33, points 42.39, boxes 7.45, predictions 3.22, thumbnails 1.09).
+
+- **Pixel coordinates stay those of the original photo (1600×900).** `image.width / height` in
+  `frames.json` are the original size; the reduced photo is only what is *displayed* (the SVG overlay
+  scales with its viewBox). So projected boxes, predictions and IoU are unchanged by the reduction.
+  `image.source` is the original's path in the nuScenes download — used only by
+  `predict_nuscenes.py`, never by the app.
+- **A points file is self-contained:** `{token, frameEgoPose, lidar: {egoPose, calibratedSensor,
+  points}}`. `parseNuScenesPoints(raw, expectedToken)` turns it into `Point3D[]` with the same
+  conversion the single file used, and **rejects a file that names another frame** (measured points of
+  one moment are never drawn under another moment's boxes — Rule #6, Edge_F#7 Case 3).
+- `next.config.js` sends `Cache-Control: public, max-age=86400` for `/sample-data/nuscenes/scenes/*`
+  (the files only change when the prep script is re-run).
+- Day / night is **not a nuScenes field**: `isNightDescription` reads the scene description
+  ("Night, …"). Three scenes are night scenes, and all three were cut from **one drive** (one log).
+
+### Loading (`components/dataset/`, `lib/scenes/`, `lib/data/`)
+
+```
+scenes.json ──parseSceneCatalog──▶ SceneCatalog                       (useScenes)
+   │
+   ├─ the scene on screen FIRST: frames.json + predictions.json in parallel
+   │      loadScene → buildFrames('nuscenes') + parsePredictions → LoadedScene {frames, predictions}
+   └─ then every other scene, in the background, two at a time (SCENE_LOAD_CONCURRENCY)
+          → `library`: what search and the all-scenes evaluation read
+
+frame on screen ──useFramePoints──▶ its points file (+ the next 3 frames'), last 24 kept (BoundedCache)
+frame on screen ──usePhotoPreload─▶ the next 3 frames' photos, 3 at a time, last 72 kept
+```
+
+- `lib/scenes/load-order.ts` (pure) decides WHICH scenes to request next: the requested scene always,
+  regardless of the limit; the rest in catalog order. `lib/scenes/load-scene.ts` fetches one scene
+  and never rejects (a failed scene is a state, not an exception). Parsing stays in `lib/nuscenes`
+  and `lib/evaluation` (Rule #3); the hooks only hold the results.
+- `useScenes(catalogUrl, requested, defaultScene, practice)` returns `{status, error, catalog,
+  onScreen, pending, library, retry}`. **`onScreen` is the last scene that finished loading** — while
+  another scene is requested, the previous one stays on screen and `pending` names the one on its way
+  (or its error). A scene that fails, or has no frames, never replaces the scene on screen.
+- `Frame.pointCloud` is `[]` for a 1.3 frame and `Frame.pointCloudSource {url, count}` says where the
+  points are. `page.tsx` builds `frame3D` = the frame + the fetched points and gives that to the 3D
+  viewer; the tag in the 3D cell says "loading points…" / "points unavailable" otherwise. Points are
+  stored by frame id and only returned for the frame on screen, so a late answer for an earlier frame
+  cannot be drawn.
+- Practice mode builds its set per scene (`loadPracticeScene`, same seeded errors as F4).
+- React development mode runs effects twice; each file is still requested once (a per-catalog
+  "requested" set; results are accepted only while their catalog is current).
+
+### Changing the scene
+
+`requestedScene` is page state (not the store — it is not selection and not a filter). The scene
+picker (`components/scenes/ScenePicker`, in the timeline's leading slot) shows the scene, ‹ › and a
+list with day / night, drive, frames, boxes and one number per scene (review progress, or recall in
+evaluate mode). Scenes cut from one drive carry a "1 drive · N scenes" badge.
+
+When the new scene is ready: selection is cleared, playback stops, the frame index goes to 0 (or to
+the frame a search result asked for), filters and mode are kept. **The 3D canvas is not re-created.**
+`Viewer3D` takes `framingKey` (the scene name); when it changes, `CameraPlacement` (inside the
+canvas, `useThree`) moves the existing camera to the new scene's framing. A class that is switched on
+in the filter but absent from the new scene keeps its chip, so the filter can still be undone.
+
+### Timeline: the scrubber
+
+`Timeline` has two variants. COCO keeps `thumbnails` (ten pictures). nuScenes uses `scrubber`: one
+cell per frame with a bar, so 41 frames fit the row without scrolling (cells 30 / 28 / 24 / 18 px at
+1536 / 1440 / 1280 / 1024 px). `lib/ui/timeline-bars.ts` (pure) computes each cell: bar height from
+the box count, tone from the mode (`boxes` · review progress `good` · evaluation `alert` · search
+`match` · `muted` for frames that do not match), and the tick labels. The thumbnail appears on hover
+(`position: fixed`, the panel clips). Below 1024 px the cells stack under the controls.
+
+### Explore mode and search (`lib/search/`, `components/explore/`)
+
+`WorkMode = 'explore' | 'review' | 'evaluate'`. Explore answers "where in the data is …?".
+
+- **A condition measures one number on a frame and compares it with a minimum** — and the same
+  function names the boxes that were counted. So the number in the result list, the number in the
+  panel and the coloured boxes in 3D cannot disagree.
+
+  | `kind` | Counts | Example chip |
+  |---|---|---|
+  | `objects {class, within, min}` | 3D boxes of a class within a distance of the car (same distance as the filter, inclusive) | `person within 20 m ≥ 5` |
+  | `no-lidar {min}` | boxes with 0 LiDAR points | `no-LiDAR boxes ≥ 10` |
+  | `model {what, min}` | evaluation results of the frame's six photos: `missed`, `false-alarm`, or `unlabelled` (a false alarm with no label nearby) | `model missed ≥ 15` |
+  | `time {night}` | the scene's day / night | `night scene` |
+
+- Conditions are AND-ed. `searchScenes(scenes, conditions, evaluations)` walks the scenes already in
+  memory with these functions — no precomputed index (measured: 105 ms from click to paint for a
+  label condition, 198 ms the first time a model condition scores all ten scenes).
+- **Model conditions use fixed rules** (`DEFAULT_EVALUATION_RULES`: score ≥ 0.25, IoU ≥ 0.3), not the
+  evaluate mode's slider — a search result must not change because a slider elsewhere moved.
+- A hit is `{scene, frameId, frameIndex, values}`. `sortHits` orders by scene or by value; `stepHit`
+  is what J / K walk — across scenes (opening a hit in another scene requests that scene and lands on
+  the frame once it is ready). `SEARCH_PRESETS` are five ready-made condition sets.
+- On screen: `ExploreBar` (chips, "+ condition", presets, "N of 404 frames match", Reset) in the
+  filter slot; `ExploreResults` (rows with thumbnail and value) in the list slot; `SearchPanel` (this
+  frame's value per condition, matches per scene) in the details slot. In 3D the boxes a condition
+  counts keep their class colour and the rest are dimmed. With a model condition the photo draws only
+  the results that condition counts, and each camera thumbnail carries its count.
+- Search state (`conditions`, `hitOrder`) is page state. **`selectedObjectId` is untouched by Explore
+  (Rule #2)**; the search highlight is a separate, derived colour map.
+- Locked by tests on the shipped data: "person within 20 m ≥ 5" → 177 of 404 frames in 7 scenes;
+  "model missed ≥ 15" → 135.
+
+### Evaluation over all scenes (`lib/evaluation/scenes.ts`)
+
+`evaluateScenes(scenes, rules)` → `{scenes: SceneScore[], notEvaluated, total, day, night}`; the day
+and night groups carry `scenes` and `drives` (how many logs). The evaluation panel shows the scene on
+screen as before, plus an "All scenes" block: the total, recall per scene (a row opens the scene),
+day vs night **with the number of drives**, and the limits in words.
+
+- The scene on screen is scored at once on every slider step. All scenes are re-scored only when the
+  rules have rested for 250 ms (`useSettledValue`); meanwhile the block is dimmed (`aria-busy`).
+  `useDeferredValue` was tried and measured: the deferred pass still ran after every step and blocked
+  the next paint (Edge_F#7 Case 8).
+- At the default rules, all 404 frames (2,424 photos): **6,726 found / 5,292 missed / 3,514 false
+  alarms / 5,278 not scored → Precision 65.7%, Recall 56.0%.** Day 5,711 of 8,916 labels (64%), night
+  1,015 of 3,102 (33%). The first ten frames of scene-0916 still give 349 / 182 / 107 / 180 and, front
+  camera only, 91 / 83 / 13 / 26 (tests on the shipped files).
+- **How these may be worded** (design doc §9): the day / night difference was *observed*; the night
+  scenes are one drive, so it is not "the model is worse at night"; the total is not "the model's
+  performance" (ten scenes, one small general-purpose model, labels projected from 3D boxes); no cause
+  is claimed. The panel says the same.
+
+### Review across scenes
+
+Records are still keyed by frame id + object id in `review-store` (`reviewKey`, unchanged; a nuScenes
+frame id is unique across scenes), so they survive scene changes. The top-bar progress is per scene. The export covers every scene:
+`buildSceneReviewExport` writes format **`ai-detection-viewer/review@2`** — each row names its scene,
+`frameIndex` counts within the scene, the file lists the scenes it covers; the CSV gains a leading
+`scene` column. The export / reset menu counts the records of all scenes and says "in all scenes"
+(Edge_F#7 Case 2); while some scenes are still loading it says the file cannot cover them yet.
+
+### Measured (production build, 2026-11-27, headless Chromium; medians of three)
+
+| | 20 Mbps | 9 Mbps |
+|---|---|---|
+| First screen (boxes, photo) | 0.97 s | 1.62 s |
+| Points drawn | 1.34 s | 2.01 s |
+| All ten scenes' boxes in memory | 2.6 s | 5.3 s |
+| Photos late during playback (24 frames) | 0 | 11 (≤ 0.32 s) |
+
+First screen needs 210 KB of data (compressed). JS heap after visiting all ten scenes: 53.8 MB.
+3D idle cost on the 40-box frame equals the pre-F7 build when the two are measured alternately in
+one session (integrated GPU: 57 vs 64 ms/s of JS, 42 draw calls, 60 fps both). On the largest frame
+(156 boxes): integrated GPU 60 fps / 159 ms/s, software GL 53 fps / 583 ms/s — the box lines were
+NOT merged (user decision; follow-up in HANDOFF §4, Edge_F#7 "Measured and NOT changed").
+Not verified: a Vercel deployment with these 152 MB.
+
+<!-- KO (move to a localized file)
+## 장면, 나눠 받기, 검색 (F7) — 현재
+
+F7(2026-11-27)부터 nuScenes 쪽은 장면 하나의 프레임 10개가 아니라 nuScenes-mini 전체를 쓴다:
+**장면 10개, 프레임 404개, 박스 18,538개, 사진 2,424장.** 한꺼번에 받지 않고, 보는 장면을 고를 수 있고,
+세 번째 모드 **Explore**에서 조건으로 프레임을 찾는다. 검수(F4), 평가(F5), 카메라 6대(F6)의 구조는 그대로다.
+COCO는 그대로다. **이 절과 위의 F4·F5·F6 절이 데이터 양이나 받는 방법을 다르게 말하면 이 절이 현재 상태다.**
+
+### 파일 (형식 1.3)
+
+- `scenes.json`: 장면 목록(이름, 설명, 주행 기록(log), 프레임 수, 박스 수, 파일 경로).
+- `scenes/<장면>/frames.json`: 프레임마다 박스와 카메라 6대. 점은 없고 "점 파일이 어디 있는지"만 있다.
+- `scenes/<장면>/predictions.json`: 그 장면 사진의 예측(YOLOv8n, **원본 사진**으로 돌림).
+- `scenes/<장면>/points/<프레임>.json`: 프레임 하나의 LiDAR 점 + 그 점을 제자리에 놓는 데 필요한 값.
+- `cam_<채널>/*.webp`: 960×540으로 줄인 사진. `thumb/*.webp`: 앞 카메라 192×108.
+- 파일 3,253개, 152.49 MB.
+- **픽셀 좌표는 원본 사진(1600×900) 기준 그대로다.** 줄인 사진은 화면에 보이는 그림일 뿐이라, 투영한 박스·예측·IoU는
+  바뀌지 않는다.
+- **점 파일은 혼자서 완결된다.** `parseNuScenesPoints(raw, expectedToken)`은 다른 프레임의 파일이면 거절한다
+  (한 순간의 측정 점을 다른 순간의 박스 밑에 그리지 않는다 — 규칙 6).
+- 낮/밤은 nuScenes에 있는 값이 아니다. 장면 설명("Night, …")에서 읽는다. 밤 장면 3개는 모두 **주행 한 번**에서 잘라낸 것이다.
+
+### 받기
+
+- 목록 → **화면에 띄울 장면 먼저** → 나머지 장면은 뒤에서 두 개씩. 뒤에서 받은 장면들이 검색과 전체 장면 평가의 재료다.
+- 점은 지금 프레임과 다음 3개만 받고 최근 24개를 기억한다. 사진은 다음 3프레임 것을 3장씩 받고 최근 72장을 기억한다.
+- `useScenes`의 `onScreen`은 **마지막으로 다 받은 장면**이다. 다른 장면을 받는 동안 이전 장면이 화면에 남는다.
+  실패하거나 프레임이 없는 장면은 화면의 장면을 밀어내지 않는다.
+- 어느 장면을 먼저 받을지는 순수 함수(`lib/scenes/load-order.ts`)가 정한다. 변환은 `lib/nuscenes`, `lib/evaluation`에
+  그대로 있다(규칙 3). 훅은 결과만 들고 있다.
+
+### 장면 바꾸기
+
+- `requestedScene`은 page의 상태다(선택도 필터도 아니므로 store에 넣지 않는다).
+- 새 장면이 준비되면: 선택 해제, 재생 멈춤, 첫 프레임(또는 검색 결과가 가리킨 프레임)으로. 필터와 모드는 유지.
+- **3D 캔버스를 다시 만들지 않는다.** `framingKey`가 바뀌면 캔버스 안의 `CameraPlacement`가 기존 카메라를 옮긴다.
+
+### 타임라인: 눈금 막대
+
+- COCO는 썸네일 10장 그대로. nuScenes는 프레임마다 막대가 있는 칸 하나(`scrubber`) — 41개가 스크롤 없이 들어간다.
+- 칸의 높이·색은 순수 함수 `lib/ui/timeline-bars.ts`가 계산한다. 썸네일은 마우스를 올리면 나온다.
+
+### Explore 모드와 검색
+
+- **조건 하나는 프레임에서 숫자 하나를 재고 최솟값과 비교한다.** 같은 함수가 "센 박스"도 알려 준다. 그래서 목록의 숫자,
+  패널의 숫자, 3D에서 색이 남은 박스가 어긋날 수 없다.
+- 조건 종류: 물체(클래스·거리·최소 개수), LiDAR 점 0개 박스, 모델(놓침 / 헛짚음 / 근처에 정답 없는 헛짚음), 밤 장면.
+  여러 조건은 "모두 만족"이다.
+- 미리 만든 색인 없이, 메모리에 있는 장면을 화면이 쓰는 함수로 그대로 훑는다(측정: 105 ms, 모델 조건 첫 번째 198 ms).
+- **모델 조건은 고정 규칙(점수 0.25, IoU 0.3)으로 계산한다.** 평가 모드의 슬라이더를 움직였다고 검색 결과가 바뀌면 안 된다.
+- J / K는 결과를 장면을 넘나들며 이동한다.
+- **Explore는 `selectedObjectId`를 건드리지 않는다(규칙 2).** 검색 강조는 따로 계산한 색 지도다.
+- 실제 데이터로 잠근 값: "20 m 안 보행자 5명 이상" → 404개 중 177개(장면 7개), "모델이 15개 이상 놓침" → 135개.
+
+### 전체 장면 평가
+
+- `evaluateScenes`가 장면별·전체·낮/밤을 계산한다. 낮/밤에는 **주행이 몇 번인지**를 함께 낸다.
+- 화면의 장면은 슬라이더를 움직일 때마다 바로 채점하고, 전체 장면은 슬라이더가 250 ms 멈춘 뒤에 한 번 채점한다
+  (`useSettledValue`). `useDeferredValue`는 재 보니 매 단계마다 돌아서 화면을 막았다(Edge_F#7 Case 8).
+- 기본 규칙, 404프레임(사진 2,424장): 찾음 6,726 / 놓침 5,292 / 헛짚음 3,514 / 채점 제외 5,278 → Precision 65.7%,
+  Recall 56.0%. 낮 64%, 밤 33%. scene-0916의 첫 10프레임은 여전히 349 / 182 / 107 / 180, 앞 카메라 91 / 83 / 13 / 26.
+- **표현 방침:** 낮/밤 차이는 "관찰됐다"고 쓴다. 밤 장면은 주행 1회라는 단서를 붙인다. 전체 숫자를 "모델 성능"이라
+  부르지 않는다. 원인을 주장하지 않는다. 화면에도 같은 말이 있다.
+
+### 장면을 넘는 검수
+
+- 기록은 그대로 "프레임 ID + 물체 ID"로 저장한다(nuScenes의 프레임 ID는 장면이 달라도 겹치지 않는다). 그래서 장면을 바꿔도 남는다. 위쪽 진행률은 장면별이다.
+- 내보내기는 전체 장면을 담는다(`review@2`: 줄마다 장면 이름, CSV 맨 앞에 `scene` 열). 메뉴의 개수도 전체 장면 기준이다.
+
+### 측정 (배포용 빌드, 2026-11-27)
+
+- 첫 화면 0.97초(20 Mbps) / 1.62초(9 Mbps). 점 1.34 / 2.01초. 장면 10개 전부 2.6 / 5.3초. 첫 화면 데이터 210 KB.
+- 재생 중 늦은 사진: 20 Mbps 0프레임, 9 Mbps 11프레임(0.32초 이하).
+- 박스 40개 프레임의 3D 비용은 F7 이전 빌드와 같다(같은 자리에서 번갈아 잼). 박스 156개 프레임: 내장 GPU 60 fps,
+  소프트웨어 렌더링 53 fps. 박스 선을 합치지 않았다(사용자 결정, 후속 작업으로 기록).
+- 확인하지 못한 것: 152 MB를 실은 Vercel 배포.
+-->
+
 ### Layout (after Step 9.5) — superseded by F3
 
 Kept as history. Proposal B was the adopted layout from Phase 3 until F3. `page.tsx`
@@ -1480,6 +1796,14 @@ The accompanying `frame_001.jpg ~ frame_010.jpg` files are downloaded copies
 of those upstream images, kept under `public/sample-data/` so the dev server
 can serve them without an internet round-trip.
 
+**nuScenes sample (F7).** `public/sample-data/nuscenes/` holds all of **nuScenes-mini** in the
+prepped, split form described in "Scenes, Chunked Loading and Search (F7)": 10 scenes, 404
+keyframes, 18,538 boxes, 2,424 photos — 3,253 files, 152.49 MB. Generated by
+`scripts/prep_nuscenes.py` and `scripts/predict_nuscenes.py` from the download at
+`C:\data\sets\nuscenes` (outside the repo); both scripts are deterministic. nuScenes is licensed
+CC BY-NC-SA 4.0 (non-commercial); the attribution is in the README. The photos are reduced copies
+(960×540 WebP) — the originals are not in the repo.
+
 ## Testing Boundaries
 
 Tests follow the same layer boundaries as "Separation of Concerns". Each layer has a designated test style.
@@ -1490,6 +1814,8 @@ Tests follow the same layer boundaries as "Separation of Concerns". Each layer h
 | `lib/geometry/`  | Unit                      | 2D bbox → 3D bbox / point cloud math correctness                |
 | `lib/selectors/` | Unit                      | Filter semantics; locked invariants (e.g. permissive-empty)     |
 | `lib/review/`    | Unit                      | (F4) Record transitions, progress, queue / next box, shortcuts key map, export text, stored-data validation, practice set determinism + scoring |
+| `lib/search/`, `lib/scenes/`, `lib/data/` | Unit | (F7) Condition value = the boxes it names; normalisation; hits, order, stepping across scenes; which scenes to request next (a hanging scene does not block the others); cache eviction order |
+| Shipped data     | Unit (reads `public/`)    | (F5–F7) The numbers the docs quote are computed from the shipped files (`sample-data.test.ts`, `scene-files.test.ts`): if the data or the rules change, the test says which number moved |
 | `store/`         | Unit                      | Actions update state correctly; selectors return expected data. (F4) `review-store`: built per test with an in-memory storage backend (`createReviewStore(backend)`) — save / load / validate / storage failure |
 | `components/`    | (MVP) none                | Rendering is verified manually. Only extracted pure functions are tested |
 | Integration      | Starting Step 5           | store + 2D + 3D respond to the same `selectedObjectId`          |

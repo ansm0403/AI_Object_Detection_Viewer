@@ -719,3 +719,133 @@ moments, not sixty.
 **Preloading (미리 받기)** *(F6)*
 Fetching photos before they are needed, so a frame switch or playback shows them at once. One frame
 is six photos (about 0.8 MB); playback advances every 0.5 s.
+
+---
+
+## Scene Terms (F7 — scene exploration)
+
+**Scene (장면)** *(F7)*
+One continuous clip of driving in nuScenes, about 20 seconds long. A scene has about 40
+[[Keyframe (키프레임)]]s (2 per second). nuScenes-mini has 10 scenes (404 keyframes). The app opens
+one scene at a time; the timeline shows that scene's frames.
+
+**Keyframe (키프레임)** *(F7)*
+A moment for which nuScenes provides hand-checked 3D boxes: 2 per second. The sensors record much
+faster (cameras 12 photos per second, LiDAR 20 sweeps), but only keyframes are annotated. Every
+"frame" in this app is a keyframe.
+
+**Log / drive (주행 기록, 주행)** *(F7)*
+One recording session of the car: one day, one place, one vehicle. Several scenes can be cut from
+the same log. Scenes of one log are NOT independent samples — the same streets, light and weather.
+In nuScenes-mini the three night scenes come from a single log (one evening in Holland Village),
+the seven day scenes from seven different logs. So "night" in this data means "one drive", and the
+independent units are 8 drives, not 10 scenes or 404 frames.
+
+**Independent sample (독립 표본)** *(F7)*
+A measurement that does not repeat information another measurement already gave. Frames 0.5 s
+apart show mostly the same objects (an object appears in 20 frames on average here), so 404 frames
+are far fewer than 404 independent looks at a detector. A number built on few independent samples
+can be stated as "observed here", not as a general property of the model.
+
+**Scene catalog (목차 파일, `scenes.json`)** *(F7)*
+The small file the app fetches first: every scene's name, description, drive, frame and box counts,
+and where its own files are. It holds no boxes. From it the app builds the scene picker and knows
+which files to fetch next.
+
+**Frames file (`frames.json`)** *(F7)*
+One per scene: the boxes and the camera calibration of every frame of that scene — everything
+except the LiDAR points and the photos. All ten together are about 7.5 MB (1.3 MB compressed), so
+the app can hold every scene's boxes in memory and search them directly.
+
+**Points file (점 파일)** *(F7)*
+One per frame: that frame's LiDAR points plus the calibration needed to align them to the boxes.
+Fetched when the frame is opened. Points are about 85 % of the data, which is why they are not
+shipped together with the boxes.
+
+**Lazy loading (지연 로딩, 나눠 받기)** *(F7)*
+Fetching a piece of data only when it is needed, instead of everything up front. Here: the catalog
+first, then the open scene's frames file, then the points and photos of the frame on screen.
+The opposite, "eager", is what the app did with ten frames (one file with everything).
+
+**Reduced photo vs original (줄인 사진, 원본)** *(F7)*
+The photos the app shows are 960×540 WebP copies of the 1600×900 originals (about a quarter of the
+bytes). Box coordinates, camera intrinsics and model predictions stay in ORIGINAL pixels; the viewer
+stretches the smaller file onto that coordinate system, so boxes land in the right place. The
+detector was run on the originals, not on the copies.
+
+**WebP** *(F7)*
+An image file format that is smaller than JPEG at similar quality (about 40 % smaller in this
+project's measurement). Every current browser reads it.
+
+**Thumbnail (썸네일, 작은 사진)** *(F7)*
+A 192×108 copy of a frame's front-camera photo (about 3 KB), used where many frames are shown at
+once (timeline preview, search results) so that the full photos need not be fetched.
+
+**Camera plane / behind the camera (카메라 평면, 카메라 뒤)** *(F7)*
+The flat surface through the camera, at right angles to the direction it looks. A point behind it
+cannot be projected into the photo. A large object right beside the car can have some corners in
+front of the plane and some behind; the app then makes NO 2D label for it in that photo (77 such
+cases in the 404 frames, 10 objects). Such a box is neither found nor missed there, and a model box
+on it counts as a false alarm — a known limit, not yet changed.
+
+**Explore mode (탐색 모드)** *(F7)*
+The third way of working in the nuScenes workspace, next to Review and Evaluate. It answers "where
+in the data is …?": conditions go in, the frames that meet them come out — from every scene, not
+only the one on screen. It changes nothing: no verdicts, no scores.
+
+**Search condition (검색 조건)** *(F7)*
+One question asked of a frame, of the form "how many X are there — at least N?". For example
+"pedestrians within 20 m ≥ 5". A condition measures ONE number on a frame and compares it with a
+minimum; the same function also names the boxes it counted, which is why the number in the result
+list, the number in the panel and the boxes left coloured in 3D always agree. Several conditions are
+combined with AND (a frame must meet all of them).
+
+**Hit (검색 결과 한 건)** *(F7)*
+A frame that meets every condition: its scene, its position in that scene, and the value of each
+condition there. J / K step through the hits, across scenes.
+
+**Preset (프리셋, 미리 만든 조건)** *(F7)*
+A ready-made set of conditions behind one button ("Crowded", "Night", "Model missed ≥ 15" …), so a
+useful search is one click away and shows what conditions look like.
+
+**False alarm with no label nearby ("Unlabelled?")** *(F7)*
+A model box that matched no label AND does not overlap any label of any class. Two very different
+things end up here: the model seeing something that is not there, and the model correctly seeing an
+object that nuScenes did not label (labels in a photo are made from 3D boxes, and not everything has
+one). The app cannot tell which — hence the question mark. 1,452 of the 3,514 false alarms in the
+404 frames (41 %) are of this kind. A few dozen are explained by known limits (design doc F7 §2.7);
+for the remaining ~1,380 nobody has counted how many are real objects.
+
+**Scrubber (눈금 막대 타임라인)** *(F7)*
+A timeline that shows each frame as a narrow cell with a bar instead of a picture. 41 frames fit in
+one row without scrolling; the bar's height is the number of boxes and its colour depends on the
+mode (review progress, missed labels, search matches). The picture appears when the pointer rests
+on a cell.
+
+**Concurrency limit (동시에 받는 개수)** *(F7)*
+How many files are being fetched at the same moment. Scenes load two at a time in the background,
+photos three at a time. Too few and one slow file holds up everything queued behind it (that
+happened with "one at a time"); too many and the files the screen needs right now wait behind files
+it may never need.
+
+**Bounded cache / least recently used (크기 제한 캐시)** *(F7)*
+A store that remembers only the last N things it was asked for and forgets the one unused for the
+longest time when a new one arrives. The app keeps 24 point clouds and 72 photos this way, so memory
+stays flat however many frames are visited (measured: 53.8 MB after all ten scenes, against 267 MB
+when everything was loaded at once).
+
+**Settle delay / debounce (멈춘 뒤에 계산하기)** *(F7)*
+Doing an expensive computation only after its input has stopped changing for a short time (here
+250 ms), instead of on every change. While the score slider is being dragged only the scene on
+screen is re-scored; all ten scenes are re-scored once, when the slider rests. The "All scenes" block
+is dimmed in between so stale numbers are not read as current.
+
+**Cache header (`Cache-Control`)** *(F7)*
+A line the server sends with a file that tells the browser how long it may reuse its saved copy
+without asking again. The scene files are sent with one day (`max-age=86400`): a second visit does
+not download them again. The files only change when the prep script is re-run.
+
+**Same-session A/B measurement (같은 자리에서 번갈아 재기)** *(F7)*
+Measuring two builds alternately, minutes apart, on the same machine — instead of comparing today's
+number with one written down last week. On this machine the same build measured 34 ms/s one day and
+57 ms/s another; only the alternating comparison could say that F7 did not make the 3D view slower.
