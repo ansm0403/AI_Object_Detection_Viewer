@@ -73,7 +73,16 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── usePhotoPreload.ts   # fetches a list of photo URLs in the background, 3 at a time (the list comes from lib/cameras/preload).
 │   │   │   │                        #   F7: remembers only the last `keep` photos; no start delay when the list's first photo was already requested
 │   │   │   └── index.ts             # barrel
+│   │   ├── sample-check/   # ✅ F7.5 — the false-alarm sample check (see "Trustworthy Evaluation (F7.5)" below)
+│   │   │   ├── useSampleCheck.ts            # derived state only: availability, population → seeded order → sample, summary, the current box (= selectedObjectId)
+│   │   │   ├── useSampleCheckController.ts  # useSampleCheck + the actions (enter / exit, open, judge → next unjudged, clear, step, exportFile); SAMPLE_SCOPE; MIN_LOOK_MS
+│   │   │   ├── SampleBar.tsx / SampleList.tsx / SamplePanel.tsx / icons.tsx   # filter-bar, list and details slots during the check. Presentation only
+│   │   │   └── index.ts
 │   │   ├── evaluation/     # ✅ F5 — camera-detection evaluation UI (see "Evaluation (F5)" below). Presentation only; all logic is in lib/evaluation
+│   │   │   ├── IouChoice.tsx          # ✅ F7.5 — Min overlap (IoU) 0.3 | 0.5, in the filter bar's `afterMetric` slot
+│   │   │   ├── EvaluationReport.tsx   # ✅ F7.5 — the report over the list + 3D view: conditions, totals, false alarms / sample estimate; hosts the two tables
+│   │   │   ├── DriveTable.tsx         # ✅ F7.5 — recall per drive (8 rows on the shipped data)
+│   │   │   ├── DayNightByDistance.tsx # ✅ F7.5 — day vs night per 10 m band, "night = 1 drive", the distance-mix sentence
 │   │   │   ├── ModeSwitch.tsx         # top bar: Explore | Review | Evaluate (type WorkMode; Explore since F7); Evaluate blocked with a reason while practising
 │   │   │   ├── EvaluationHeadline.tsx # top bar right: model name + overall Precision / Recall (or "Loading…" / "Predictions unavailable")
 │   │   │   ├── EvaluationPanel.tsx    # the details panel in evaluate mode: pinned slot, Precision / Recall with counts, this frame's outcome counts, recall by distance / by class, notes F7: `scope` + the "All scenes" block (SceneScores), `photoNote`.
@@ -216,7 +225,12 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── match.ts          # evaluateFrame (greedy, same class, IoU ≥ IOU_THRESHOLD 0.3; visibility v0-40 not scored), DEFAULT_MIN_SCORE 0.25, findResult, selectionIdOf, countResults
 │   │   │   ├── metrics.ts        # ratio (null when the denominator is 0), precisionOf, recallOf, summarize (totals + recall by 10 m band + by class)
 │   │   │   ├── evaluate.ts       # evaluateFrames(frames, predictionSet, rules): per-frame map + summary; a frame with no entry in the file is left out (not "all missed")
-│   │   │   ├── scenes.ts         # ✅ F7 — evaluateScenes(scenes, rules) → per scene, total, day / night (with the number of drives). 11 tests
+│   │   │   ├── scenes.ts         # ✅ F7 — evaluateScenes(scenes, rules) → per scene, total, day / night (with the number of drives). F7.5: + byDistance, scoredObjects, combineScores
+│   │   │   ├── unlabelled.ts     # ✅ F7.5 — isUnlabelledFalseAlarm, listUnlabelledFalseAlarms (fixed order: scene → frame → camera → result)
+│   │   │   ├── drives.ts         # ✅ F7.5 — summarizeDrives(sceneScores): one row per drive, oldest first
+│   │   │   ├── distance-compare.ts # ✅ F7.5 — compareByDistance(a, b, {minLabels}) (rows + standardised recall), distanceGap
+│   │   │   ├── iou-choices.ts    # ✅ F7.5 — IOU_CHOICES [0.3, 0.5], BENCHMARK_IOU, describeIouChoice
+│   │   │   ├── model-info.ts     # ✅ F7.5 — describeWeights (release file name → "not fine-tuned"), describeModelConditions
 │   │   │   ├── outcomes.ts       # EVAL_KINDS (display order), OUTCOME_LABEL / HINT / COLOR, NOT_EVALUATED_COLOR, CONTEXT_COLOR, countOf, formatPercent (null → "—")
 │   │   │   ├── list.ts           # orderResults, ResultFilter, isResultVisible, resultQueue (ids J / K walk)
 │   │   │   ├── overlay.ts        # buildOverlay → ImageOverlay (labels dashed, model boxes solid, outcome colours, companion box, focus), unionBox
@@ -225,6 +239,14 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── test-helpers.ts   # box / makeFrame / makePrediction builders
 │   │   │   ├── *.test.ts         # 207 tests after F6 and its follow-up fix (139 after F5): + per-photo / per-object evaluation, the bicycle-rack rule, predictions@1 and @2, six-camera numbers of the shipped sample. F5 breakdown was: iou 8, classes 5, parse 11, match 30, metrics 10, evaluate 6, outcomes 6, list 11, overlay 21, describe 9, box-colors 6, sample-data 16 (the SHIPPED files: 91 found / 83 missed / 13 false alarms / 26 not scored)
 │   │   │   └── index.ts          # barrel
+│   │   ├── sampling/       # ✅ F7.5 — drawing and reporting a sample, all pure. See "Trustworthy Evaluation (F7.5)" below
+│   │   │   ├── order.ts          # SAMPLE_SEED, drawOrder(items, seed) (seeded Fisher–Yates), sampleOf(order, n) = the first n
+│   │   │   ├── estimate.ts       # estimateShare(count, judged, population) → share + 95 % Wilson interval with finite-population correction; null when nothing judged
+│   │   │   ├── sample-check.ts   # SampleVerdict ↔ review Verdict, summarizeSample, nextUnjudged, stepInSample, sampleSizeForRecords, SAMPLE_SIZES
+│   │   │   ├── availability.ts   # sampleAvailability(scenes): ready only when EVERY scene is loaded with predictions
+│   │   │   ├── describe.ts       # the wording: "41 of 100 sampled boxes → about 32–50% of all 1,452"; verdict labels / hints
+│   │   │   ├── export.ts         # buildSampleExport → `ai-detection-viewer/false-alarm-sample@1`
+│   │   │   └── *.test.ts         # 71 tests incl. the shipped data (population 1,452, same at IoU 0.5, the first five sampled boxes)
 │   │   ├── review/         # ✅ F4 — review logic, all pure (no React / Zustand / DOM). See "Review (F4)" below
 │   │   │   ├── types.ts          # Verdict, RejectReason (+ REJECT_REASONS order = keys 1–6), ReviewRecord, ReviewMap, ReviewScope
 │   │   │   ├── records.ts        # reviewKey, getReview, withVerdict / withReasonToggled / withNote / withoutReview (return the SAME map on a no-op)
@@ -1528,6 +1550,185 @@ COCO는 그대로다. **이 절과 위의 F4·F5·F6 절이 데이터 양이나 
 - 박스 40개 프레임의 3D 비용은 F7 이전 빌드와 같다(같은 자리에서 번갈아 잼). 박스 156개 프레임: 내장 GPU 60 fps,
   소프트웨어 렌더링 53 fps. 박스 선을 합치지 않았다(사용자 결정, 후속 작업으로 기록).
 - 확인하지 못한 것: 152 MB를 실은 Vercel 배포.
+-->
+
+## Trustworthy Evaluation (F7.5) — current
+
+F7.5 (2026-11-27) adds nothing to WHAT is evaluated. It makes what evaluate mode already shows
+checkable: a sample check of the false alarms that have no label nearby, a choice of the IoU
+threshold, a report with the per-drive table and the day / night comparison at equal distance, and
+the conditions next to every number. **No scoring rule changed** — every number locked before F7.5
+is unchanged. Design: `docs/plan-feature/F7.5_trustworthy_evaluation.md`; edge cases: `Edge_F#7.5.md`.
+
+### What is fixed and what follows the controls
+
+| | Rules |
+|---|---|
+| Evaluate mode (scene on screen, "All scenes", the report's totals and tables) | `{ minScore: slider, iouThreshold: IoU choice }` |
+| Explore's model conditions (F7) | `DEFAULT_EVALUATION_RULES` (0.25 / 0.3) — unchanged |
+| The sample check: its population, AND everything on screen while it is open | `DEFAULT_EVALUATION_RULES` |
+| The report's "1,452 of 3,514" block | `DEFAULT_EVALUATION_RULES` (it says so) |
+
+`page.tsx`: `evaluationRules = sampleCheckOn ? DEFAULT_EVALUATION_RULES : { minScore, iouThreshold }`.
+`iouThreshold` is page state (a view setting; `IOU_THRESHOLD` by default, reset by Reset and by a
+dataset switch, kept across mode switches). The store is untouched. The slider's value is never
+written by the sample check, so it is where it was on leaving.
+
+### The sample check
+
+```
+all scenes in memory (useScenes.library) ── sampleAvailability ──▶ ready | loading n/N | unavailable(reason)
+        │ ready
+        ▼
+evaluateFrames(scene, DEFAULT rules) per scene ─▶ listUnlabelledFalseAlarms   (POPULATION, fixed order: 1,452)
+        ▼ drawOrder(population, SAMPLE_SEED)                                   (one seeded shuffle)
+        ▼ sampleOf(order, size)                                               (SAMPLE = the first 100 / 200 / 300)
+review-store.reviews['nuscenes-false-alarms']["frameId/predictionId"] = ReviewRecord
+        ├─ summarizeSample ─▶ counts + estimateShare per verdict (Wilson 95 %, finite population)
+        ├─ nextUnjudged ────▶ auto-advance after a verdict (across scenes)
+        └─ buildSampleExport ─▶ false-alarm-sample@1 (JSON)
+```
+
+- **Population** = false alarms with `nearest === null` (IoU < `NEAREST_MIN_IOU` 0.1 with every label
+  of the photo) at the default rules. It is the same set at IoU 0.3 and 0.5 (a box that overlaps
+  nothing cannot be matched or absorbed at either), so the IoU choice cannot move the sample. Locked
+  by tests: 1,452 boxes, equal to Explore's "unlabelled" count.
+- **The sample exists only when every scene of the catalog is loaded with predictions.** Drawn from a
+  part of the population it would be another list, and stored verdicts would silently stop matching.
+  Until then: "n of N are loaded…"; a failed scene or a scene without predictions → no sample, with
+  the reason (never "the other nine").
+- **Order, not a subset.** The population is shuffled once; the sample of size N is its first N. So
+  200 starts with the 100 already judged. The size is page-hook state; before the user picks one it
+  is `sampleSizeForRecords` — the smallest offered size that contains every stored verdict.
+- **Selection (Rule #2).** A sampled box is selected like any false alarm: `selectedObjectId` =
+  its prediction id. There is no "box being judged" state — `current` is the sampled item whose id is
+  selected. `useActiveCamera(frame, selectedId, enabled, preferred)` got `preferred =
+  cameraOfPredictionId(selectedId)`: a model box belongs to exactly one photo and its id names it, so
+  selecting it from anywhere shows that photo.
+- **Opening a box** in another scene uses the same path as a search hit: `handleOpenHit({scene,
+  frameId, objectId})` → request the scene, remember `pendingFrame`, and once that scene is on screen
+  select the frame AND the object. The pending effect is declared after the scene-change effect that
+  clears the selection (effects run in declaration order).
+- **Verdicts** are ordinary review records in a third scope. `approved` / `rejected` / `unsure` read
+  as a review of the model's box: real object with no label / model wrong / unclear
+  (`toSampleVerdict`, spelled out in words in the export). Nothing that reads the two label scopes
+  reads this one; the `storage` sync and `sanitizeReviews` cover it unchanged. A record whose box is
+  not in the current sample is ignored.
+- **Keys:** `resolveShortcut` unchanged; while the check is on, the page routes `verdict` / `clear` /
+  `step` to the controller and ignores reasons and next-frame.
+- **`MIN_LOOK_MS` = 400:** a verdict is accepted only after its box has been current for that long
+  (Edge_F#7.5 Case 1). Blocked entirely while the sequence plays.
+- **Wording (Rule #6):** `lib/sampling/describe.ts` builds every sentence — always "N of M" and, for
+  the population, "about X–Y %". Never a count of the whole set, never "≈ N boxes".
+- **What is NOT done with the verdicts:** nothing is re-scored. Precision still counts all 1,452 as
+  false alarms; the panel and the report say so.
+
+### IoU choice and the conditions line
+
+- `IouChoice` sits in `Filters`' new `afterMetric` slot (`afterMetricIsDefault` keeps Reset honest).
+  `Filters` also has an `extra` slot on the right (the "Sample check" entry). The bar still knows
+  nothing about evaluation.
+- `EvaluationPanel` renders `ConditionsLine` between the pinned result and the scrolling area:
+  `describeModelConditions(model)` + score (the file minimum when the slider is below it) + IoU. "no
+  fine-tuning" appears only when `describeWeights(model.weights)` recognises an Ultralytics release
+  file name; any other name is shown as `weights <name>` with no claim. The panel header now states
+  what was scored ("6 cameras · 246 photos").
+- At IoU 0.5 the notes add why the benchmark value is strict for projected labels.
+
+### The report
+
+`WorkspaceShell` has an `overlay` slot: a grid item in the same cells as the list and the 3D view
+(columns 1–2, row 1; `order-first` when stacked), above them (`z-20`). The zones underneath stay
+mounted — the canvas is not re-created — and the review shortcuts are off while it is open.
+`EvaluationReport` (role `dialog`, Esc closes, opened from the top bar's "Report" or the link under
+"All scenes"):
+
+| Block | From |
+|---|---|
+| "Measured with" chips | `describeModelConditions` + the rules in effect |
+| Total (one decimal), "N labels are M distinct objects … in D drives" | `evaluateScenes(...).total` (`scoredObjects`, `drives`) |
+| False alarms: "1,452 of 3,514 (41%)" + "Not checked yet" / the sample's progress and estimate | `useSampleCheck` (fixed rules) |
+| Recall by drive | `summarizeDrives(scenes)` |
+| Day vs night at the same distance | `compareByDistance(day.byDistance, night.byDistance)`, `distanceGap` |
+
+- `evaluateScenes` now also returns, per scene and per group, `byDistance` (the 10 m recall bands) and
+  `scoredObjects` (distinct object ids with a scored label; scenes also carry the id set so a group
+  counts the union). `SceneInput` takes `driveDate` / `driveLocation` for the drive rows.
+- Bands are listed up to the last one with ≥ 50 labels in BOTH groups; everything beyond is one
+  open-ended row. The sentence under the table subtracts the percentages AS PRINTED.
+- Columns: three from 1536 px, two from 1280 px, one below; the tables keep a minimum width and
+  scroll sideways inside their block on a phone.
+
+### Numbers (shipped data, default rules unless said; locked by tests)
+
+- Population 1,452 of 3,514 false alarms (41 %). By scene 0103: 445, 0655: 260, 0757: 154, 0553: 140,
+  0061: 122, 0916: 94, 1094: 94, 1100: 62, 0796: 53, 1077: 28. By class car 1,129, person 238, bus 34,
+  truck 30, bicycle 21.
+- IoU 0.5: 5,462 / 6,556 / 5,231 / 5,278 → P 51.1 %, R 45.4 %; day 52.3 %, night 25.9 %.
+- 12,018 scored labels = 654 distinct objects (483 day, 171 night) in 8 drives.
+- Day vs night recall per band (found/labels): 0–10 m 838/1108 vs 154/280 … 80–90 m 42/115 vs 1/56,
+  90 m+ 15/80 vs 3/77. Night recall re-weighted to the day distance mix: 33.9 % (plain 32.7 %; day
+  64.1 %) — the distance mix accounts for 1.2 of the 31.4 points.
+- `estimateShare(41, 100, 1452)` → 32.2–50.5 %.
+
+<!-- KO (move to a localized file)
+## 믿을 수 있는 평가 (F7.5) — 현재
+
+F7.5(2026-11-27)는 무엇을 평가하는지에는 아무것도 더하지 않는다. 평가 모드가 이미 보여 주는 것을 확인할 수 있게 한다:
+근처에 정답이 없는 헛짚음의 표본 검수, IoU 기준 고르기, 주행 단위 표와 같은 거리끼리의 낮/밤 비교가 든 보고서,
+모든 숫자 옆의 조건. **채점 규칙은 바뀌지 않았다.** F7.5 전에 잠긴 숫자는 모두 그대로다.
+
+### 고정된 것과 조작을 따르는 것
+- 평가 모드(화면의 장면, "All scenes", 보고서의 전체 숫자와 표): 슬라이더의 점수 + 고른 IoU.
+- Explore의 모델 조건(F7): 기본 규칙(0.25 / 0.3) 그대로.
+- 표본 검수의 모집단, 그리고 표본 검수가 열려 있는 동안 화면의 모든 것: 기본 규칙.
+- 보고서의 "1,452 of 3,514" 블록: 기본 규칙(그렇게 적혀 있다).
+- `iouThreshold`는 page의 화면 설정이다(기본 0.3, Reset과 데이터셋 전환으로 되돌아가고 모드 전환에는 유지). store는
+  바뀌지 않았다. 표본 검수는 슬라이더 값을 쓰지 않으므로 나올 때 그대로다.
+
+### 표본 검수
+- 흐름: 모든 장면이 메모리에 있는가(`sampleAvailability`) → 장면별 기본 규칙 채점 → `listUnlabelledFalseAlarms`
+  (모집단, 고정된 순서, 1,452개) → `drawOrder`(고정 시드로 한 번 섞음) → `sampleOf`(앞의 100 / 200 / 300개).
+  판정은 `review-store`의 `nuscenes-false-alarms` 구역에 (프레임 ID, 예측 ID)로 저장된다. `summarizeSample`이 개수와
+  추정(Wilson 95%, 유한 모집단 보정)을, `nextUnjudged`가 판정 뒤의 다음 박스를, `buildSampleExport`가 내보내기를 만든다.
+- 모집단은 기본 규칙에서 `nearest === null`인 헛짚음이다. IoU 0.3과 0.5에서 같은 집합이라 IoU 고르기가 표본을 바꿀 수 없다.
+- 표본은 목차의 모든 장면이 예측과 함께 올라왔을 때만 있다. 일부만으로 뽑으면 다른 목록이 되고 저장된 판정이 조용히
+  어긋난다. 그 전에는 "n of N are loaded…", 장면이 실패했거나 예측이 없으면 이유와 함께 표본 없음.
+- 부분집합이 아니라 순서다: 한 번 섞은 순서의 앞 N개가 표본이라, 200개는 이미 판정한 100개로 시작한다. 크기를 고르기
+  전에는 저장된 판정을 모두 담는 가장 작은 크기로 연다(`sampleSizeForRecords`).
+- 선택(불변 규칙 #2): 표본의 박스도 `selectedObjectId`에 예측 ID를 넣어 고른다. "판정 중인 박스"라는 상태는 없다.
+  `useActiveCamera`가 `preferred = cameraOfPredictionId(selectedId)`를 받는다(모델 박스는 한 사진에만 있고 ID에 카메라가
+  들어 있다).
+- 다른 장면의 박스 열기는 검색 결과를 여는 길과 같다(`handleOpenHit({scene, frameId, objectId})`). 장면이 올라온 뒤
+  프레임과 물체를 함께 선택한다. 선택을 지우는 장면 전환 효과보다 뒤에 선언돼 있다(효과는 선언 순서로 실행된다).
+- 판정은 세 번째 구역의 보통 검수 기록이다. `approved` / `rejected` / `unsure`를 모델 박스에 대한 판정으로 읽는다
+  (진짜 물체인데 정답 없음 / 모델이 틀림 / 애매함). 정답 박스 구역을 읽는 코드는 이 구역을 읽지 않는다.
+- 키: `resolveShortcut`은 그대로다. 표본 검수 중에는 page가 판정 / 지우기 / 이동을 컨트롤러로 보내고 사유와 다음
+  프레임 키는 무시한다.
+- `MIN_LOOK_MS` = 400: 박스가 화면에 그만큼 있은 뒤에만 판정을 받는다(Edge_F#7.5 Case 1). 재생 중에는 막는다.
+- 문구(불변 규칙 #6): 모든 문장을 `lib/sampling/describe.ts`가 만든다. 항상 "N of M", 모집단에 대해서는 "about X–Y %".
+- 판정으로 하지 않는 것: 다시 채점하지 않는다. Precision은 여전히 1,452개를 모두 헛짚음으로 센다(그렇게 적혀 있다).
+
+### IoU 고르기와 조건 한 줄
+- `IouChoice`는 `Filters`의 새 자리 `afterMetric`에 들어간다(`afterMetricIsDefault`로 Reset이 켜지고 꺼진다).
+  오른쪽의 `extra` 자리에는 "Sample check" 버튼이 있다. `Filters`는 여전히 평가를 모른다.
+- `EvaluationPanel`의 `ConditionsLine`: 모델, 학습, 입력 크기, 점수(슬라이더가 파일의 최솟값 아래면 그 최솟값), IoU.
+  "no fine-tuning"은 가중치 파일 이름이 알려진 배포 파일일 때만 나온다. 패널 제목 옆은 무엇을 채점했는지를 말한다.
+
+### 보고서
+- `WorkspaceShell`의 `overlay` 자리: 목록과 3D 화면과 같은 칸에 놓이고 그 위에 그려진다. 밑의 칸은 그대로 있어 캔버스가
+  다시 만들어지지 않고, 열려 있는 동안 검수 단축키는 꺼진다.
+- `EvaluationReport`: 조건 칩, 전체(소수 한 자리)와 "정답 N개는 서로 다른 물체 M개, 주행 D번", 헛짚음("1,452 of 3,514"와
+  "Not checked yet" 또는 표본의 진행과 추정), 주행 표(`summarizeDrives`), 같은 거리끼리의 낮/밤(`compareByDistance`,
+  `distanceGap`).
+- `evaluateScenes`가 장면과 무리마다 `byDistance`와 `scoredObjects`도 준다. 구간은 두 무리 모두 정답 50개 이상인 마지막
+  구간까지 따로, 그 밖은 한 줄로 합친다. 표 아래 문장은 화면에 찍힌 퍼센트끼리 뺀다.
+- 칸: 1536px부터 세 칸, 1280px부터 두 칸, 그 아래 한 칸. 휴대폰에서는 표가 그 칸 안에서 옆으로 스크롤된다.
+
+### 숫자 (실린 데이터, 테스트가 잠금)
+- 모집단 1,452 / 헛짚음 3,514(41%). IoU 0.5: 5,462 / 6,556 / 5,231 / 5,278 → Precision 51.1%, Recall 45.4%, 낮 52.3%,
+  밤 25.9%. 채점된 정답 12,018개 = 서로 다른 물체 654개(낮 483, 밤 171), 주행 8번. 거리 분포를 낮에 맞춘 밤 Recall
+  33.9%(그대로는 32.7%, 낮 64.1%). `estimateShare(41, 100, 1452)` → 32.2~50.5%.
 -->
 
 ### Layout (after Step 9.5) — superseded by F3

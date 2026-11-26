@@ -849,3 +849,97 @@ not download them again. The files only change when the prep script is re-run.
 Measuring two builds alternately, minutes apart, on the same machine — instead of comparing today's
 number with one written down last week. On this machine the same build measured 34 ms/s one day and
 57 ms/s another; only the alternating comparison could say that F7 did not make the 3D view slower.
+
+---
+
+## Evaluation-Trust Terms (F7.5 — making the results checkable)
+
+**Population (모집단)** *(F7.5)*
+The whole set a question is about. Here: the 1,452 false alarms that have no label nearby. Looking
+at all of them one by one would take hours; so a part is looked at instead (a sample).
+
+**Sample / random sample (표본 / 무작위 표본)** *(F7.5)*
+A part of the population, chosen by chance, that is looked at instead of the whole. "By chance" is
+the point: every box must have had the same chance of being picked. If a person picked the boxes
+that look interesting, what they find would say something about their taste, not about the 1,452.
+The app shuffles the population once and takes the first 100.
+
+**Seed (시드)** *(F7.5)*
+The starting number of a random-number generator. The same seed gives the same "random" order every
+time, on every machine — so the sample is random (nobody chose it) AND reproducible (reopening the
+app shows the same 100 boxes in the same order, and someone else can check them). The practice mode
+of F4 uses the same idea.
+
+**Estimate (추정)** *(F7.5)*
+What a sample says about the whole set. "41 of the 100 sampled boxes were real objects" is a count;
+"so about 41 % of all 1,452 are" is an estimate — a careful guess, never a count. An estimate is
+always stated with the sample size and a range.
+
+**Confidence interval / range (신뢰 구간, 범위)** *(F7.5)*
+The "give or take" of an estimate: a range built so that, in about 95 of 100 samples drawn this way,
+the true value lies inside it. 41 of 100 → about 32–50 %. A small sample gives a wide range (5 of 12
+→ 19–68 %), a large one a narrow range, and doubling the sample does not halve it (100 → ±9 points,
+200 → ±6, 300 → ±5). The app uses the Wilson interval (it never leaves 0–100 %) with the
+finite-population correction.
+
+**Finite-population correction (유한 모집단 보정)** *(F7.5)*
+When the population has a known size and the sample is taken without putting boxes back, the more of
+it has been looked at, the less is left to be uncertain about. With all 1,452 judged there would be no
+uncertainty at all — the range shrinks to the count.
+
+**Independent (독립)** *(F7.5)*
+Two observations are independent when knowing one tells nothing about the other. Frames 0.5 s apart
+are not: they show the same cars again. So 12,018 scored labels are really 654 distinct objects, and
+the 1,452 boxes include the same parked car boxed again in the next frame. Numbers computed as if
+everything were independent look more certain than they are — which is why the UI says "per box" and
+"the true range is somewhat wider".
+
+**Drive / log (주행)** *(F7.5; first mentioned in F7)*
+One outing of the recording car. nuScenes cuts several 20-second scenes out of one drive; scenes of
+the same drive share the day, the streets, the weather and the light. The independent units of
+nuScenes-mini are therefore its 8 drives, not its 10 scenes or 404 frames — and "night" is ONE drive
+(three scenes). The report has one row per drive for this reason.
+
+**Distinct objects (서로 다른 물체 수)** *(F7.5)*
+How many different objects (nuScenes instance ids) stand behind a number of labels. 12,018 scored
+labels are 654 distinct objects, each photographed about 18 times.
+
+**Distance-matched comparison (거리 구간을 맞춘 비교)** *(F7.5)*
+Comparing two groups inside the same distance band instead of overall. Far objects are found less
+often, so a group whose objects are simply farther away would have a lower overall recall for that
+reason alone. Band by band, that reason is taken out: in 0–50 m the night scenes' recall is lower in
+every band.
+
+**Standardisation / re-weighting (분포 맞추기)** *(F7.5)*
+Answering "what would group B's recall be if its objects were at the same distances as group A's?" by
+weighting B's per-band recall with A's label counts. Night re-weighted to the day mix: 33.9 % instead
+of 32.7 % (day: 64.1 %) — the distance mix accounts for 1.2 of the 31.4 points. What accounts for the
+rest, this cannot say.
+
+**IoU threshold: 0.3 vs 0.5 (겹침 기준)** *(F7.5; IoU itself: F5)*
+How much a model box must overlap a label to count as having found it. 0.5 is the value benchmarks
+usually report. This tool's default is 0.3 because its labels are 3D boxes projected into the photo
+and looser than the object. Switching between the two moves the totals by 10–15 points — the choice
+of threshold is part of every number.
+
+**Fine-tuning (추가 학습)** *(F7.5)*
+Training an already-trained model further on new data so it does better on that kind of data. The
+YOLOv8n used here is NOT fine-tuned: it is the released file, trained on COCO (everyday photos), run
+as it is on nuScenes street scenes. A fine-tuned model would score higher, so "no fine-tuning" is
+part of the conditions next to every number.
+
+**Input size (입력 크기)** *(F7.5; chosen in F5)*
+The size a photo is resized to before the model sees it (here: longer side 1280 px; YOLO's default is
+640). Larger input keeps distant objects from shrinking to a few pixels and raises recall — a chosen
+condition, so it is stated.
+
+**Center-distance matching (중심 거리로 짝짓기)** *(F7.5)*
+How the official nuScenes detection benchmark decides that a predicted 3D box "is" a labelled one:
+by the distance between the two box centres on the ground (0.5 / 1 / 2 / 4 m), not by overlap. It
+evaluates 3D boxes; this tool evaluates 2D boxes in photos by IoU. Different objects, different
+rule — so this tool's numbers cannot be put next to the benchmark's leaderboard.
+
+**Sample check (표본 검수)** *(F7.5)*
+The screen where a person judges the sampled model boxes one by one: real object with no label /
+model wrong / unclear. It reuses the keys and the storage of the label review (F4), but what is
+reviewed is the model's box, not the dataset's label.

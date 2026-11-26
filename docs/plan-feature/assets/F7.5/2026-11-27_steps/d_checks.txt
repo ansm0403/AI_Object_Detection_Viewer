@@ -5,7 +5,7 @@ PASS  the report covers exactly the list and the 3D view (1112×508) and leaves 
 PASS  the 3D view is still mounted underneath (same canvas)
 PASS  conditions: yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3 · labels are projected 3D boxes  — ["yolov8n","no fine-tuning","input 1280","score ≥ 0.25","IoU ≥ 0.3","labels = 3D boxes projected into the photo (approximate)"]
 PASS  the conditions sit above the numbers
-PASS  title: all 10 scenes · 404 frames · 2,424 photos  — Evaluation reportall 10 scenes · 404 frames · 2,424 photos Close Esc Measured with yolov8n no fine-tuning input 1280 sco
+PASS  title: all 10 scenes · 404 frames · 2,424 photos  — Evaluation report all 10 scenes · 404 frames · 2,424 photos Close Esc Measured with yolov8n no fine-tuning input 1280 sc
 PASS  total: Precision 65.7% (6,726 of 10,240), Recall 56.0% (6,726 of 12,018)
 PASS  total: "654 distinct objects … in 8 drives" and "not “the model’s performance”"
 PASS  drive table: 8 rows with the measured numbers, oldest first, the night drive last with 3 scenes  — ["2018-07-24 singapore-onenorth | 1 | 86 | 46.2% | 759/1,644","2018-08-01 boston-seaport | 1 | 106 | 71.9% | 1,200/1,670","2018-08-27 boston-seaport | 1 | 100 | 76.2% | 1,010/1,326","2018-08-28 boston-seaport | 1 | 35 | 55.7% | 643/1,155","2018-08-30 boston-seaport | 1 | 23 | 65.8% | 314/477","2018-10-02 singapore-queenstown | 1 | 43 | 66.6% | 421/632","2018-10-08 singapore-queenstown | 1 | 90 | 67.8% | 1,364/2,012","2018-11-21 · night singapore-hollandvillage | 3 | 171 | 32.7% | 1,015/3,102"]
@@ -33,7 +33,7 @@ PASS  1024×768 (report 640×576): no text is cut
 PASS  1024×768: nothing sticks out of the report and no table cells overlap
 PASS  1024×768: the report scrolls inside itself and its last table row can be reached  — {"cut":[],"outside":[],"overlaps":false,"scrolls":true,"lastDrive":805,"lastBand":1169,"bottom":668,"size":"640×576"}
 PASS  1024×768: the top bar (with the Report button) is one line (44px); no page scroll
-PASS  IoU 0.5 with the report open: Precision 51.1%, Recall 45.4%, chip "IoU ≥ 0.5"  — Evaluation reportall 10 scenes · 404 frames · 2,424 photos Close Esc Measured with yolov8n no fine-tuning input 1280 score ≥ 0.25 IoU ≥ 0.5 labels = 3D boxes projected into the photo (approximate) TOTAL Precision 51.1% 5,462 of 10,693 model boxes matched a lab
+PASS  IoU 0.5 with the report open: Precision 51.1%, Recall 45.4%, chip "IoU ≥ 0.5"  — Evaluation report all 10 scenes · 404 frames · 2,424 photos Close Esc Measured with yolov8n no fine-tuning input 1280 score ≥ 0.25 IoU ≥ 0.5 labels = 3D boxes projected into the photo (approximate) TOTAL Precision 51.1% 5,462 of 10,693 model boxes matched a la
 PASS  IoU 0.5: day 52.3% (4,659 / 8,916), night 25.9% (803 / 3,102)
 PASS  IoU 0.5: the false-alarm block still reads 1,452 of 3,514 at its fixed rules
 PASS  with the report open, J / A do nothing underneath

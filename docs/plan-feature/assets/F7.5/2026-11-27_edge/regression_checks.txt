@@ -1,0 +1,32 @@
+PASS  review mode (default): 41 frame cells in the scrubber, no page scroll, scene-0916
+PASS  review mode: the filter bar has the distance slider and no IoU control or "Sample check" (those are evaluate-only)
+PASS  F4: A approves the selected box (label scope) and moves to the next unreviewed one  — ["approved"]
+PASS  F4: R rejects and stays; 1 toggles the first reason  — {"frameId":"b5989651183643369174912bc5641d3b","objectId":"ca5b3ca5aea745ee8fe12b0f74d77f8e","verdict":"rejected","reasons":["wrong_class"],"note":"","reviewedAt":"2026-11-26T23:17:22.071Z"}
+PASS  F4: typing "aru jk" in the note is text, not shortcuts  — [["approved",""],["rejected","aru jk"]]
+PASS  F4: the sample-check scope holds nothing after a label review
+PASS  F4: the top bar shows the progress "Reviewed 2 / …"  — AI Detection Viewer COCO nuScenes MEASURED Explore Review Evaluate Practice Frame 1/41 · 40 detections Reviewed 2 / 2424 1 rejected 0 unsure Export ▼
+PASS  F4 / F7: the label-review export is still review@2 with 2 rows naming their scene — no sample records in it  — ai-detection-viewer/review@2 2
+PASS  F4: N goes to the next frame with unreviewed boxes  — AI Detection Viewer COCO nuScenes MEASURED Explore Review Evaluate Practice Frame 2/41 · 44 detections Reviewed 2 / 2424
+PASS  F6: ] shows the next camera  — CAM_FRONT_RIGHT, sees the selected box → CAM_BACK_RIGHT, sees the selected box
+PASS  F6: selecting a box that the back-right camera sees switches the photo to it  — carBR13 m6dafc1 → CAM_BACK_RIGHT, sees the selected box
+PASS  F4-F: practice mode says the labels are modified  — AI Detection Viewer COCO nuScenes PRACTICE · LABELS MODIFIED Explore Review Evaluate Practice Frame 2/41 · 44 detections Reviewed 0 / 2424 0 rejected 0 unsure E
+PASS  F5: Evaluate is blocked while practising (no evaluate controls appear)
+PASS  F5: evaluate mode shows the model and Precision 77% / Recall 68% for scene-0916  — view Evaluate Frame 1/41 · 40 detections Report yolov8n Precision 77% Recall 68%
+PASS  F5: the outcome chip filters the list to false alarms  — 3
+PASS  F5: a false alarm can be selected (prediction id) and explains itself  — EVALUATION 6 cameras · 246 photos False alarm model box: car · score 0.70 2D only closest label: car · IoU 0.27 — under the IoU 0.3 needed y
+PASS  F5: A in evaluate mode (outside the sample check) writes no review of any kind
+PASS  F5: raising Min score to 0.50 raises precision and lowers recall  — 1/41 · 40 detections Report yolov8n Precision 93% Recall 56%
+PASS  F5: Reset returns the score to 0.25 (77% / 68%)
+PASS  F5: back in review the distance filter is there and untouched by the evaluate Reset
+PASS  F7: "Crowded" matches 177 of 404 frames in 7 of 10 scenes  — AI Detection Viewer COCO nuScenes MEASURED Explore Review Evaluate Frame 1/41 · 40 detections 177 of 404 frames match · 7 of 10 scenes
+PASS  F7: opening the last search hit ("#40 8 21 boxes") loads another scene (scene-1100) and lands on the hit's frame (40)  — row 177 of 177; Frame 40/40
+PASS  F7: opening a search hit selects NO object (the shared open-frame path only selects when asked)
+PASS  F7: K steps to the previous hit  — row 176 of 177
+PASS  the 3D canvas was not re-created through review, practice, evaluate, explore and scene changes
+PASS  F7: the scene picker's › changes the scene and keeps the canvas
+PASS  F4: the two label verdicts survive a reload
+PASS  COCO: no modes, the confidence slider, the Estimated badge — as before  — AI Detection Viewer COCO nuScenes ESTIMATED Frame 1/10 · 5 detections
+PASS  COCO: no page scroll
+PASS  no page errors
+
+reg: 30 / 30 passed

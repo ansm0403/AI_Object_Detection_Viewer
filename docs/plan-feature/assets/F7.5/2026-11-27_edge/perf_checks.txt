@@ -1,0 +1,8 @@
+PASS  1440×900: the 40-box frame (scene-0916 frame 1) draws in 41 calls — the floor is 41  — 41
+PASS  1536×700: the 40-box frame (scene-0916 frame 1) draws in 42 calls — the floor is 42  — 42
+PASS  1536×700: evaluate mode on the same frame: 42 draw calls (the report and the sample check add no 3D objects)  — 42
+PASS  1536×700: with the report open the scene underneath still draws 42 calls (nothing added, nothing re-created)  — 42
+INFO  open the report: 98 ms · enter the sample check (score all scenes, draw the sample, open box 1 in another scene): 159 ms · verdict → next box in ANOTHER scene: 32 ms · verdict → next box in the SAME scene: 25 ms
+PASS  the new interactions respond within a second each (indicative, software GL)  — 98 / 159 / 32 / 25
+
+perf: 5 / 5 passed

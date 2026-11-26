@@ -1,0 +1,50 @@
+PASS  E1 slow scenes: the panel says it is preparing the sample and how many scenes are in  — SAMPLE CHECK Preparing the sample… The sample is drawn from all scenes: 1 of 10 are loaded…
+PASS  E1: the list shows the same message, not an empty list  — SAMPLE J / K to step The sample is drawn from all scenes: 1 of 10 are loaded…
+PASS  E1: Export is disabled while there is no sample
+PASS  E1: once every scene is in, the sample appears and box 1 opens by itself
+PASS  E2 a scene fails to load: the sample is NOT drawn from the other nine scenes — the panel says why  — SAMPLE CHECK The sample cannot be drawn scene-0655 could not be loaded. The sample is drawn from all 10 scenes, so it is not drawn from the rest.
+PASS  E2 a scene fails to load: no sampled boxes are listed, Export is disabled
+PASS  E2 a scene fails to load: the reason is fully inside the panel (not cut)
+PASS  E2 a scene fails to load: the report opens and its false-alarm block gives the same reason instead of a number  — FALSE ALARMS scene-0655 could not be loaded. The sample is drawn from all 10 scenes, so it is not drawn from the rest. RECALL BY DRIVE 7 drives · the independent units date · place scenes objects recall found / l
+PASS  E2: the report says the numbers are not complete (a scene is missing)  — Evaluation report 9 of 10 scenes loaded · 363 frames · 2,178 photos Close Esc Measured with yolov8n no fine-tuning input 1280 score ≥ 0.25 IoU ≥ 0.3 labels = 3D boxes projected into the photo (approxi
+PASS  E3 a scene has no predictions: the sample is NOT drawn from the other nine scenes — the panel says why  — SAMPLE CHECK The sample cannot be drawn scene-0655 has no model predictions, so the false alarms of all 10 scenes cannot be listed.
+PASS  E3 a scene has no predictions: no sampled boxes are listed, Export is disabled
+PASS  E3 a scene has no predictions: the reason is fully inside the panel (not cut)
+PASS  E3 a scene has no predictions: the report opens and its false-alarm block gives the same reason instead of a number  — FALSE ALARMS scene-0655 has no model predictions, so the false alarms of all 10 scenes cannot be listed. RECALL BY DRIVE 7 drives · the independent units date · place scenes objects recall found / labels 2018-07-
+PASS  E3: the report lists the scene as not evaluated
+PASS  E4 A then R at once (next box is in another scene): box 1 keeps "Real object", R did not overwrite it  — Real object, label missing
+PASS  E4: the R that arrived before box 2 was on screen was not applied to box 2 unseen  — Not judged
+PASS  E4: still on box 2  — 2
+PASS  E5 Korean input (key "ㄱ", physical R): judged "Model is wrong" and moved on  — Model is wrong
+PASS  E6 mouse click on "Unclear", then Space / Enter: box 3 is unclear and box 4 was NOT judged by the lingering button  — Unclear / Not judged / at 4
+PASS  E7 a 3D box (or nothing) selected instead of a sampled box: A writes nothing anywhere
+PASS  E7: the panel says no sampled box is selected and the buttons are disabled (or the sampled box is still selected)  — SAMPLE CHECK No sampled box is selected. Pick a row in the list, or press J for the next box without a verdict. A Real o
+PASS  E7: J resumes at the first box without a verdict (4), not at box 1  — 4
+PASS  E8 size 200 → 100 while box 150 is on screen: 100 rows, no crash, the panel does not claim box 150 of 100  — SAMPLE CHECK No sampled box is selected. Pick a row in the list, or press J for the next box without a verdict. A Real object R Model wrong 
+PASS  E8: the verdict given to box 150 is not counted in the sample of 100  — 3 of 100 judged — not final Real objects without a label: 1 of 3 sampled boxes → about 6–79% of all 1,452
+PASS  E9 reload with a verdict on box 150: the sample opens at 200 so that verdict is not hidden  — 4 of 200 judged
+PASS  E10 two tabs: a verdict given in tab B (box 4) shows in tab A without a reload  — Real object, label missing
+PASS  E10: tab A then saves its own verdict without losing tab B's  — 6
+PASS  E11 dataset switch during the sample check: COCO shows its normal screen (confidence slider, no sample bar)
+PASS  E11: back on nuScenes / Evaluate the sample check is off (it does not reopen by itself)
+PASS  E11: with the report open the scene picker still opens (the report does not cover the timeline)
+PASS  E12 slider at 0 + IoU 0.5 at 1536×700: the line says "score ≥ 0.05 (file minimum) · IoU ≥ 0.5", inside the panel, not cut (39px tall)  — {"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.05 (file minimum) · IoU ≥ 0.5","inside":true,"cut":false,"height":39}
+PASS  E12 at 1536×700: Precision and Recall are still visible without scrolling the panel
+PASS  E12 slider at 0 + IoU 0.5 at 1024×768: the line says "score ≥ 0.05 (file minimum) · IoU ≥ 0.5", inside the panel, not cut (39px tall)  — {"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.05 (file minimum) · IoU ≥ 0.5","inside":true,"cut":false,"height":39}
+PASS  E12 at 1024×768: Precision and Recall are still visible without scrolling the panel
+PASS  E13 1536×640 (minimum height): the report (448px) stays above the timeline, scrolls inside; no page scroll  — {"above":true,"head":true,"h":448}
+PASS  E13 1024×640 (minimum height): the report (448px) stays above the timeline, scrolls inside; no page scroll  — {"above":true,"head":true,"h":448}
+PASS  E13 390×844 (phone, stacked): evaluate mode has no horizontal overflow
+PASS  E13 390×844: the report is at the top of the page (374px wide), nothing overflows sideways, no cell is cut  — {"top":266,"width":374,"cut":[]}
+PASS  E13 390×844: the sample check has no horizontal overflow
+PASS  E13 390×844: the three verdict buttons are not cut  — [{"cut":false,"w":112},{"cut":false,"w":112},{"cut":false,"w":112}]
+PASS  E14 300 rows at 1024px: no column of any row is cut
+PASS  no page errors in the normal context
+PASS  E15 storage full: the verdict still works for this visit and nothing throws
+PASS  E15: the panel warns that verdicts will be lost on reload — and the warning is visible, not cut or below the fold  — {"visible":true,"cut":false} SAMPLE CHECK box 2 of 100 · scene-0655 · frame 26 · FR The model says car, score
+PASS  E16 stored data with a valid, a stale and two broken sample records: loads without an error
+PASS  E16: the valid record shows on box 1; the stale one (a box not in the sample) is not counted  — Model is wrong / 1 of 100 judged
+PASS  E16: it opened on the first unjudged box (2), not on the judged one  — 2
+PASS  E16 data saved before F7.5 (two scopes): a sample verdict is saved and the old label record is still there  — ["nuscenes","nuscenes-practice","nuscenes-false-alarms"]
+
+edge: 48 / 48 passed

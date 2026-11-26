@@ -1686,6 +1686,238 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 - Edge refs: Edge_F#7 Case 1~9, "F7이 만든 것이 아닌 것", "측정하고 바꾸지 않은 것", "확인하지 못한 것".
 -->
 
+## F7.5 — Evaluation you can trust ✅ Done (2026-11-27; F7.5-A … F7.5-F)
+- **What this is:** not a new evaluation feature. F7 made the app score all of nuScenes-mini, and some
+  of what it then showed could not be vouched for — above all 1,452 of the 3,514 false alarms (41 %)
+  that have no label nearby: model mistakes, or real objects nuScenes did not label? "The limit is
+  written down" is honest but does not make the result usable. F7.5 is "bundle A" of the re-check in
+  `F7_scene_exploration.md` §13.1. The number 7.5 keeps "F8 = bird's-eye box editing" unchanged
+  (as F6.5 did).
+- **Design doc:** `docs/plan-feature/F7.5_trustworthy_evaluation.md` (approved 2026-11-27: decision 1 =
+  start with a sample of 100, decision 2 = layout B, a report window; the other twelve built as
+  recommended and adjusted from captures). Mockups, per-step captures, edge captures and the raw
+  pass / fail output: `docs/plan-feature/assets/F7.5/` (`compare.html`, `steps.html`).
+- **Goal:** make what the evaluation already shows trustworthy — without changing a scoring rule.
+- **Scope (as built):**
+  - **F7.5-A — logic** (no visual change): `lib/sampling` (seeded order and its first N, the 95 %
+    interval of a share, verdict summary and "next unjudged", availability, wording, the export
+    format `false-alarm-sample@1`); `lib/evaluation` (`listUnlabelledFalseAlarms` in a fixed order,
+    `summarizeDrives`, `compareByDistance` + `distanceGap`, `describeWeights` /
+    `describeModelConditions`, `cameraOfPredictionId`, `IOU_CHOICES`); `evaluateScenes` also returns
+    the recall bands and the distinct scored objects of every scene and group; a third review scope
+    `nuscenes-false-alarms`.
+  - **F7.5-B — sample check:** "Sample check" in evaluate mode. A seeded random 100 of the 1,452 (the
+    same boxes in the same order every time; 200 / 300 extend the same order), one box at a time: the
+    scene, frame and camera of the box open and the photo zooms on it. `A` real object, label missing
+    / `R` model wrong / `U` unclear (the F4 keys), auto-advance to the next unjudged box across scenes,
+    `C`, `J` / `K`, export. Every result is worded as a sample: "41 of 100 sampled boxes → about
+    32–50 % of all 1,452".
+  - **F7.5-C — IoU choice + conditions line:** `Min overlap (IoU) [0.3 | 0.5]` next to the score
+    slider (default 0.3, so no existing number moves); one line in the panel: `yolov8n · no
+    fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3`.
+  - **F7.5-D — report window:** "Report" in the top bar → laid over the list and the 3D view (canvas
+    kept), Esc closes: conditions first, totals with "654 distinct objects in 8 drives", the
+    unchecked false alarms / the sample's estimate, recall per drive (8 rows), day vs night at the
+    same distance (10 rows, "night = 1 drive", how much of the gap the distance mix accounts for).
+  - **F7.5-E — README:** a "카메라 탐지 평가 결과" section (conditions, totals at both IoUs, the drive
+    table, day / night incl. per class and per band, the sample check's method, ten limits, the
+    relation to the official nuScenes evaluation) and the stale parts (tests 386 → 985, single camera
+    / single scene, structure, future work). A résumé one-liner was drafted for the user (three
+    options; the user decides).
+  - **F7.5-F — edge review** (run before fixing; two real problems, Edge_F#7.5 Cases 1–2, and a third —
+    the report title cut at 390 px — found by eye in an edge capture), then these documents.
+- **Done when (design doc §8) — met, verified by driving the real app with Playwright on the final
+  production build** (B 135, C 74, D 51, edge 48, floor cost 5, and 30 regression checks of the F4–F7
+  flows = 343 checks):
+  - Every number locked before F7.5 is unchanged: scene-0916 first ten frames 91 / 83 / 13 / 26 (front)
+    and 349 / 182 / 107 / 180 (60 photos), frame 6 in 3D 28 / 16 / 17, all 404 frames 6,726 / 5,292 /
+    3,514 / 5,278, "person within 20 m ≥ 5" 177 frames in 7 scenes, "model missed ≥ 15" 135.
+  - Newly locked by tests on the shipped files: the population is 1,452 boxes and is the SAME set at
+    IoU 0.3 and 0.5 (and equals Explore's "unlabelled" count); IoU 0.5 → 5,462 / 6,556 / 5,231 /
+    5,278, P 51.1 % / R 45.4 %, day 4,659 / 8,916, night 803 / 3,102 — the values the F7 probe
+    reported; 654 distinct scored objects (483 day, 171 night); the eight drive rows; the ten distance
+    rows; night recall re-weighted to the day distance mix 33.9 % (plain 32.7 %); the first five boxes
+    of the sample.
+  - The sample is the same after a reload, another slider position or another IoU choice; verdicts
+    survive a reload and never appear in the label review, its progress or the `review@2` export.
+  - With IoU 0.5 chosen, Explore still finds 135 / 177 frames.
+  - The 3D canvas is never re-created: entering / leaving the sample check, stepping across scenes,
+    changing the IoU, opening / closing the report.
+  - Text is checked BY POSITION at 1536×700, 1440×900, 1280×720, 1024×768 (and 390×844, 1536×640,
+    1024×640 in the edge review): nothing cut (`scrollWidth ≤ clientWidth`), nothing outside its
+    panel, the verdict buttons, the estimate sentence and the scene's precision / recall visible
+    without scrolling, bars one line, no page scroll.
+  - 3D floor cost unchanged: the 40-box frame draws in 41 calls (1440×900) / 42 (1536×700), also in
+    evaluate mode and with the report open.
+  - The F4–F7 flows that share code F7.5 touched still work (30 checks written for this, since the
+    F7 scripts did not survive the session change): label verdicts / reasons / note / N / export
+    (`review@2`, no sample records) / reload, `]` and the automatic camera, practice blocking
+    evaluate, the outcome chip, a false-alarm selection, the score slider and Reset, "Crowded" 177,
+    opening a hit in another scene (lands on its frame, selects nothing), K, the scene picker, COCO.
+  - Tests **861 → 985**. `tsc --noEmit` 0 errors. CI lint 0 errors (19 pre-existing warnings).
+    Production build passes.
+- **Measurements (production build, software GL, 2026-11-27, ONE run each — indicative):** open the
+  report 94 ms; enter the sample check (score all scenes, draw the sample, open box 1 in another scene)
+  139 ms; verdict → next box in another scene 41 ms, in the same scene 24 ms.
+- **Changes from the plan, and why:**
+  1. **The photo follows a model box through `useActiveCamera(…, preferred)` + `cameraOfPredictionId`,
+     not through `lib/cameras/pick.ts`** as the design listed. `lib/evaluation` already imports
+     `lib/cameras`; the reverse import would be a cycle.
+  2. **`match.ts` was touched in one word:** `NEAREST_MIN_IOU` is exported (it is the definition of "no
+     label nearby", which the export states). Its value and use are unchanged; the design said the
+     file would not be touched.
+  3. **Verdict captions are `Real object` / `Model wrong` / `Unclear`** (full names in tooltips and the
+     status line). The first captions ("Real · label missing") were cut at every width — the step
+     script passed, the capture showed it. The script then got a check for truncated text.
+  4. **The report has three columns only from 1536 px** (design: 1400), two from 1280, one below; a
+     drive row is two lines (date / place); on a phone the tables scroll sideways inside their block.
+     The place names ("singapore-hollandvillage") did not fit the planned single-line cell.
+  5. **Entry points** (the design did not place them): "Sample check" in the filter bar and in the
+     report; "Report" in the top bar and as a link under the panel's "All scenes".
+  6. **Cost of the IoU control and the entry button: the class chips have less room** — 368 px at
+     1024 px (measured; about 570 before, computed). Below 1280 px the captions shorten ("IoU",
+     "Sample"), the notes show from 1440 px, and the 0.5 note is "benchmark value" (the long
+     explanation is in the tooltip and the panel).
+  7. **A verdict is accepted only after its box has been on screen for 400 ms** (not in the design).
+     Edge review: "A" then "R" with no pause judged the second box unseen (Edge_F#7.5 Case 1).
+  8. **J / K with no sampled box selected resume at the first box without a verdict** (was: box 1).
+  9. **The sample-check handlers moved to `useSampleCheckController`** after the first cut put ~330
+     lines into `page.tsx` against the design's own rule; the user approved the move. `page.tsx` is
+     2,132 lines (1,904 before F7.5): the hook call, the mode flags and the slot wiring remain.
+     "Open a frame and select something in it" is the one `handleOpenHit` for search hits and sampled
+     boxes.
+  10. **The distance sentence subtracts the PRINTED percentages** ("1.2 of the 31.4 points"): the
+      unrounded difference is 31.3, which a reader subtracting 64.1 − 32.7 would see as an error.
+  11. **The panel header now says what was scored** ("6 cameras · 246 photos"); how it was scored is
+      the conditions line.
+  12. **One existing test changed its expectation:** "the review store starts with two empty scopes"
+      → three.
+  13. **The README states the sample check's method but not its result** — the user had not judged
+      the sample when the feature closed; the line says so.
+- **Kept as designed:** simple random sample from a fixed order with a fixed seed; population at the
+  FIXED default rules (never the slider's); the F4 keys and the review store (third scope); a separate
+  export format (`review@2` untouched); estimates always with sample size and range, all three
+  verdicts over the same denominator, no "≈ N boxes" conversion; a state of evaluate mode, not a
+  fourth mode; judging on the shipped 960×540 photos; two IoU values, not a slider; "objects" =
+  distinct objects with a scored label; bands need ≥ 50 labels in both groups; "no fine-tuning" read
+  from the weights file name and claimed only for a known release; no re-scoring from the verdicts;
+  no new library; `viewer-store`, `lib/search`, the data files and both scripts untouched.
+- **Open / deferred:**
+  - **The sample has not been judged** (the user does it; whether the result goes into the README is
+    the user's decision). Verdicts live in the browser of the port they were given on — export them.
+  - **Vercel deployment still unverified** (carried from F7; the user reported no status).
+  - The evaluation panel's "… model boxes matched a la…" line is cut at 1024 px — present before F7.5
+    (`truncate` at a 360 px panel), reported, not changed.
+  - The official nuScenes evaluation removes rack bikes from BOTH labels and predictions; this tool
+    removes predictions only (Edge_F#7.5 "Found, not caused by F7.5"). A scoring rule — not changed.
+  - No "clear all sample verdicts" control and no import of an exported file.
+  - The README's eight animated captures at the top show the pre-F3 screen; Lighthouse was not
+    re-measured.
+  - Bundles B and C of `F7_scene_exploration.md` §13.1 (PR curve / AP, confusion matrix, rule changes,
+    2D drawing, prediction upload; night scenes from other drives, 3D predictions) — not started.
+  - COCO mode: still on hold.
+- **Edge refs:** Edge_F#7.5 Cases 1–4 + "Checked, no change needed" + "Found, not caused by F7.5" +
+  "Could not be verified".
+
+<!-- KO (move to a localized file)
+## F7.5 — 평가 결과를 믿을 수 있게 ✅ 완료 (2026-11-27; F7.5-A ~ F7.5-F)
+- 무엇인가: 새 평가 기능이 아니다. F7로 nuScenes-mini 전체를 채점하게 됐는데, 화면이 보여 주는 결과 중 맞는지 모르는 것이
+  있었다. 가장 큰 것이 헛짚음 3,514개 중 "근처에 정답이 없는" 1,452개(41%)다: 모델이 틀린 것인지, nuScenes에 정답이 빠진
+  실제 물체인지. "한계를 적어 두었다"는 정직하지만 결과를 쓸 수 있게 하지는 않는다. F7.5는 `F7_scene_exploration.md`
+  13.1의 "묶음 가"다. 번호 7.5는 "F8 = 위에서 본 화면에서 3D 박스 수정"을 그대로 두기 위한 것이다(F6.5의 전례).
+- 설계 문서: `docs/plan-feature/F7.5_trustworthy_evaluation.md`(2026-11-27 승인. 결정 1 = 표본 100개로 시작, 결정 2 = 배치
+  B(보고서 창), 나머지 12개는 추천안으로 만들고 캡처를 보며 조정). 시안, 단계별 캡처, 엣지 캡처, 통과/실패 출력 원문:
+  `docs/plan-feature/assets/F7.5/`.
+- 목표: 평가가 이미 보여 주는 결과를 믿을 수 있게 한다. 채점 규칙은 바꾸지 않는다.
+- 범위(만든 것):
+  - F7.5-A 로직(화면 변화 없음): `lib/sampling`(고정 시드로 섞은 순서와 그 앞 N개, 비율의 95% 범위, 판정 요약과 "다음
+    미판정", 표본을 만들 수 있는지, 문구, 내보내기 형식 `false-alarm-sample@1`), `lib/evaluation`(고정된 순서의
+    `listUnlabelledFalseAlarms`, `summarizeDrives`, `compareByDistance` + `distanceGap`, `describeWeights` /
+    `describeModelConditions`, `cameraOfPredictionId`, `IOU_CHOICES`). `evaluateScenes`가 장면과 무리마다 거리 구간과
+    채점된 서로 다른 물체도 준다. 검수 기록의 세 번째 구역 `nuscenes-false-alarms`.
+  - F7.5-B 표본 검수: 평가 모드의 "Sample check". 1,452개 중 고정 시드로 뽑은 100개(다시 열어도 같은 박스, 같은 순서.
+    200 / 300은 같은 순서를 이어 쓴다)를 한 장씩: 그 박스의 장면, 프레임, 카메라가 열리고 사진이 그 박스로 확대된다.
+    `A` 진짜 물체인데 정답 빠짐 / `R` 모델이 틀림 / `U` 애매함(F4의 키), 장면을 넘어 다음 미판정 박스로 자동 이동, `C`,
+    `J` / `K`, 내보내기. 결과는 항상 표본으로 쓴다: "41 of 100 sampled boxes → about 32–50% of all 1,452".
+  - F7.5-C IoU 고르기와 조건 한 줄: 점수 슬라이더 옆 `Min overlap (IoU) [0.3 | 0.5]`(기본 0.3이라 기존 숫자는 그대로),
+    패널의 한 줄 `yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3`.
+  - F7.5-D 보고서 창: 맨 위 줄의 "Report" → 목록과 3D 화면 위에 뜬다(캔버스 유지), Esc로 닫는다. 조건이 먼저, 전체 숫자와
+    "서로 다른 물체 654개, 주행 8번", 확인되지 않은 헛짚음 / 표본의 추정, 주행별 Recall 8줄, 같은 거리끼리의 낮/밤 10줄
+    ("night = 1 drive", 차이 중 거리 분포가 설명하는 몫).
+  - F7.5-E README: "카메라 탐지 평가 결과" 절(조건, 두 IoU의 전체 숫자, 주행 표, 낮/밤(클래스별, 구간별 포함), 표본 검수
+    방법, 한계 10가지, nuScenes 공식 평가와의 관계)과 낡은 부분(테스트 386 → 985, 단일 카메라 / 단일 장면, 구조, 향후
+    방향). 이력서 한 줄 초안 3개를 사용자에게 보였다(정하는 것은 사용자).
+  - F7.5-F 엣지 검증(고치기 전에 먼저 돌림. 진짜 문제 2건, Edge_F#7.5 Case 1~2. 그리고 엣지 캡처를 눈으로 보다 찾은 세 번째:
+    390px에서 보고서 제목이 잘림), 그리고 이 문서들.
+- 완료 기준(설계 문서 8장): 충족. 마지막 배포용 빌드에서 실제 앱을 조작해 확인(B 135, C 74, D 51, 엣지 48, 바닥 비용 5
+  = 313항목, 그리고 F4~F7의 기존 흐름 확인 30항목 = 343항목).
+  - F7.5 전에 잠긴 숫자는 모두 그대로다: scene-0916 첫 10프레임 91 / 83 / 13 / 26(앞), 349 / 182 / 107 / 180(60장),
+    6번 프레임 3D 28 / 16 / 17, 전체 404프레임 6,726 / 5,292 / 3,514 / 5,278, 검색 177프레임(장면 7개) / 135프레임.
+  - 새로 잠근 것(실제 파일로 계산): 모집단 1,452개이고 IoU 0.3과 0.5에서 같은 박스들이다(Explore의 "unlabelled" 수와도
+    같다). IoU 0.5 → 5,462 / 6,556 / 5,231 / 5,278, Precision 51.1% / Recall 45.4%, 낮 4,659 / 8,916, 밤 803 / 3,102
+    (F7 때 조사한 값). 채점된 서로 다른 물체 654개(낮 483, 밤 171). 주행 8줄. 거리 구간 10줄. 거리 분포를 낮에 맞춘 밤
+    Recall 33.9%(그대로는 32.7%). 표본의 첫 다섯 박스.
+  - 표본은 새로 고쳐도, 슬라이더를 옮겨도, IoU를 바꿔도 같다. 판정은 새로 고쳐도 남고, 정답 박스 검수와 그 진행률,
+    `review@2` 내보내기에는 나타나지 않는다.
+  - IoU 0.5를 고른 채로도 Explore는 135 / 177프레임을 찾는다.
+  - 3D 캔버스는 다시 만들어지지 않는다: 표본 검수 여닫기, 장면을 넘는 넘김, IoU 바꾸기, 보고서 여닫기.
+  - 글자는 위치로 확인했다(1536×700, 1440×900, 1280×720, 1024×768. 엣지 검증에서 390×844, 1536×640, 1024×640): 잘린
+    글자 없음(`scrollWidth ≤ clientWidth`), 패널 밖으로 나간 것 없음, 판정 버튼과 추정 문장과 이 장면의 Precision /
+    Recall이 스크롤 없이 보임, 줄들이 한 줄, 페이지 스크롤 없음.
+  - 3D 바닥 비용 그대로: 박스 40개 프레임의 그리기 호출 41번(1440×900) / 42번(1536×700). 평가 모드와 보고서를 연
+    상태에서도 같다.
+  - F7.5가 건드린 코드를 함께 쓰는 F4~F7의 흐름이 그대로다(이번에 새로 만든 30항목. F7 때의 스크립트는 세션이 바뀌며 남아
+    있지 않았다): 정답 박스 판정 / 사유 / 메모 / N / 내보내기(`review@2`, 표본 기록 없음) / 새로 고침, `]`와 자동 카메라,
+    연습 중 평가 막힘, 결과 칩, 헛짚음 선택, 점수 슬라이더와 Reset, "Crowded" 177, 다른 장면의 검색 결과 열기(그 프레임으로
+    가고 아무것도 선택하지 않음), K, 장면 고르기, COCO.
+  - 테스트 861 → 985. `tsc --noEmit` 오류 0. CI 린트 오류 0(기존 경고 19개). 배포용 빌드 성공.
+- 측정(배포용 빌드, 소프트웨어 렌더링, 2026-11-27, 각각 한 번씩 잰 참고값): 보고서 열기 94ms, 표본 검수 들어가기(전체
+  장면 채점, 표본 뽑기, 다른 장면의 1번 박스 열기) 139ms, 판정 → 다른 장면의 다음 박스 41ms, 같은 장면 24ms.
+- 계획과 달라진 점과 이유:
+  1. 사진이 모델 박스의 카메라를 따라가게 하는 것을 `lib/cameras/pick.ts`가 아니라 `useActiveCamera(…, preferred)` +
+     `cameraOfPredictionId`로 했다. `lib/evaluation`이 이미 `lib/cameras`를 불러오고 있어 반대 방향은 순환이 된다.
+  2. `match.ts`를 한 단어 건드렸다: `NEAREST_MIN_IOU`를 export 했다("근처에 정답 없음"의 정의이고 내보내기 파일이 그 값을
+     적는다). 값과 쓰임은 그대로다. 설계는 이 파일을 건드리지 않는다고 했다.
+  3. 판정 버튼 이름을 `Real object` / `Model wrong` / `Unclear`로 줄였다(풀어 쓴 이름은 툴팁과 상태 줄에). 처음 이름은
+     모든 폭에서 잘렸다. 단계 스크립트는 통과했고 캡처를 눈으로 보다 찾았다. 그 뒤 스크립트에 잘린 글자 검사를 더했다.
+  4. 보고서의 세 칸 배치는 1536px부터다(설계는 1400). 1280부터 두 칸, 그 아래 한 칸. 주행 표의 한 줄은 두 줄 높이(날짜 /
+     장소)이고, 휴대폰에서는 표가 그 칸 안에서 옆으로 스크롤된다. 장소 이름이 계획한 한 줄 칸에 들어가지 않았다.
+  5. 들어가는 자리(설계가 정하지 않았다): "Sample check"는 위쪽 줄과 보고서에, "Report"는 맨 위 줄과 패널의 "All
+     scenes" 아래 링크에.
+  6. IoU 버튼과 들어가는 버튼의 대가: 클래스 칩의 자리가 줄었다. 1024px에서 368px(잰 값. 그 전은 약 570px, 계산값).
+     1280px 아래에서는 이름을 줄이고("IoU", "Sample"), 설명 글은 1440px부터 보이며, 0.5의 설명은 "benchmark value"다.
+  7. 판정은 그 박스가 화면에 400ms 있은 뒤에만 받는다(설계에 없던 것). 엣지 검증: "A" 다음 바로 "R"을 누르면 두 번째
+     박스가 보이기도 전에 판정됐다(Edge_F#7.5 Case 1).
+  8. 표본의 박스가 선택돼 있지 않을 때 J / K는 판정이 없는 첫 박스로 간다(전에는 1번).
+  9. 표본 검수의 핸들러를 `useSampleCheckController`로 옮겼다. 처음에는 약 330줄이 `page.tsx`에 들어가 설계 문서의
+     규칙을 어겼고, 사용자가 옮기는 것을 승인했다. `page.tsx`는 2,132줄(F7.5 전 1,904줄)이다. "프레임을 열고 그 안의 것을
+     선택"은 검색 결과와 표본의 박스가 `handleOpenHit` 하나를 쓴다.
+  10. 거리 문장은 화면에 찍힌 퍼센트끼리 뺀다("31.4점 중 1.2점"). 반올림 전의 차이는 31.3이라, 64.1 − 32.7을 해 본
+      사람에게는 틀린 숫자로 보인다.
+  11. 패널 제목 옆은 무엇을 채점했는지("6 cameras · 246 photos")를 말한다. 어떻게 채점했는지는 조건 한 줄이다.
+  12. 기존 테스트 한 곳의 기대값이 바뀌었다: "검수 저장소는 빈 구역 2개로 시작" → 3개.
+  13. README에는 표본 검수의 방법만 있고 결과는 없다. 기능을 마칠 때까지 사용자가 표본을 판정하지 않았다(그렇게 적었다).
+- 설계대로 둔 것: 고정된 순서에서 고정 시드로 뽑는 단순 무작위 표본, 모집단은 고정 규칙(슬라이더의 값이 아님), F4의 키와
+  검수 저장소(세 번째 구역), 별도의 내보내기 형식(`review@2`는 그대로), 추정에는 항상 표본 크기와 범위, 세 판정의 분모는
+  같음, "약 N개"로 환산하지 않음, 평가 모드 안의 상태(네 번째 모드 아님), 실린 960×540 사진으로 판정, IoU는 두 값
+  (슬라이더 아님), "물체 수"는 채점된 서로 다른 물체, 구간은 두 무리 모두 정답 50개 이상, "추가 학습 없음"은 가중치 파일
+  이름으로 읽고 알려진 배포 파일일 때만 말함, 판정 결과로 다시 채점하지 않음, 새 라이브러리 없음, `viewer-store`와
+  `lib/search`와 데이터 파일과 스크립트 두 개는 건드리지 않음.
+- 남은 것 / 미룬 것:
+  - 표본은 아직 판정하지 않았다(사용자가 한다. README에 넣을지도 사용자가 정한다). 판정은 그 포트의 브라우저에만 있다.
+    내보내 둘 것.
+  - Vercel 배포는 여전히 확인하지 못했다(F7에서 넘어온 것. 사용자가 결과를 알려 주지 않았다).
+  - 평가 패널의 "… model boxes matched a la…" 줄이 1024px에서 잘린다. F7.5 전부터 있던 것(360px 패널의 말줄임)이라 알리고
+    고치지 않았다.
+  - nuScenes 공식 평가는 거치대 안의 자전거를 정답과 예측 양쪽에서 뺀다. 이 도구는 예측만 뺀다(Edge_F#7.5). 채점 규칙이라
+    바꾸지 않았다.
+  - "표본 판정 모두 지우기"와 내보낸 파일 다시 불러오기는 없다.
+  - README 맨 위의 움직이는 그림 8장은 F3 전의 화면이다. Lighthouse는 다시 재지 않았다.
+  - `F7_scene_exploration.md` 13.1의 묶음 나, 묶음 다는 시작하지 않았다.
+  - COCO 모드: 계속 보류.
+- Edge refs: Edge_F#7.5 Case 1~4, "확인했고 바꿀 것이 없던 것", "F7.5가 만든 것이 아닌 것", "확인하지 못한 것".
+-->
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -1701,8 +1933,10 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 > `F4_box_review.md`). **F5 is done** (2026-11-26, `F5_camera_detection_eval.md`). **F6 is done**
 > (2026-11-26, see the F6 entry above; design doc `F6_six_cameras.md`). **The three.js idle-cost item
 > is done** (2026-11-26, its own session, see the F6.5 entry above; no design doc). **F7 is done**
-> (2026-11-27, see the F7 entry above; design doc `F7_scene_exploration.md`). Next: F8 — its design
-> doc is written at the start of the F8 session.
+> (2026-11-27, see the F7 entry above; design doc `F7_scene_exploration.md`). **F7.5 is done**
+> (2026-11-27, "evaluation you can trust" — see the F7.5 entry above; design doc
+> `F7.5_trustworthy_evaluation.md`). Next: F8 — its design doc is written at the start of the F8
+> session.
 > Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
 
 ### Why change direction (the gap this closes)
@@ -1872,7 +2106,8 @@ one). Binary point clouds and Web Worker parsing were measured and NOT done: a p
 > **설계 문서:** 각 기능의 구현 전 설계는 `docs/plan-feature/F#_*.md`에 쓴다(목록:
 > `docs/plan-feature/README.md`). 기능 하나에 문서 하나이며, 그 기능을 시작하기 직전에 쓴다. F3 문서가
 > 있고 **F3은 구현 완료**(2026-11-25, 위 F3 항목 참고). 그 뒤 F4(2026-11-25), F5·F6·F6.5(2026-11-26),
-> **F7(2026-11-27)까지 구현 완료**(각각 위의 항목 참고). 다음은 F8이며, 설계 문서는 F8 세션을 시작할 때 쓴다.
+> **F7(2026-11-27), F7.5(2026-11-27, 평가 결과를 믿을 수 있게)까지 구현 완료**(각각 위의 항목 참고). 다음은 F8이며,
+> 설계 문서는 F8 세션을 시작할 때 쓴다.
 > 큰 기능 하나를 세션 하나에서 진행한다. **`docs/plan-feature/HANDOFF.md`부터 읽는다.**
 
 ### 방향을 바꾸는 이유
