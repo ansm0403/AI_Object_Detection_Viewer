@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { Detection2D, Frame } from '@/lib/types';
 import { BOX_EDGES, BOX_FRONT_FACE, zoomRegion, type ImageRegion } from '@/lib/geometry';
 import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
+import { classLabel } from '@/lib/ui/class-label';
 import type { ImageOverlay, ImageRect } from '@/lib/ui/image-overlay';
 import { frameHasConfidence } from '@/lib/selectors';
 import { PANEL_CLASS, ViewerLabel } from '@/components/workspace';
@@ -201,9 +202,10 @@ export function Viewer2D({
         const strokeWidth = isSelected ? SELECTED_STROKE_WIDTH : DEFAULT_STROKE_WIDTH;
         // Measured (nuScenes) frames: class only — the 1.0 is a parser
         // placeholder, not a score (Rule #6). Same flag as the 3D label pill.
+        // (F7) Short class name: "movable_object.trafficcone" would cover the box.
         const labelText = showConfidence
-          ? `${d.class} ${d.confidence.toFixed(2)}`
-          : d.class;
+          ? `${classLabel(d.class)} ${d.confidence.toFixed(2)}`
+          : classLabel(d.class);
         // 글자당 약 7px로 fontSize=12 sans-serif를 근사. 의도적으로 약간 크게 잡아
         // 불확실할 때 end-anchor 쪽으로 치우치게 함; 오판해도 시각적으로 표시 안 남.
         const estLabelWidth = labelText.length * 7;

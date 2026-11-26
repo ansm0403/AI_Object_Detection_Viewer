@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Grid, OrbitControls } from '@react-three/drei';
+import { useThree } from '@react-three/fiber';
 import type { Detection3D, Frame } from '@/lib/types';
 import { frameHasConfidence } from '@/lib/selectors';
 import { PointCloud } from './PointCloud';
@@ -27,6 +28,11 @@ type Props = {
   playing?: boolean;
   // (F5) Wire colour per box id, replacing the class colour (see Viewer3D).
   boxColors?: ReadonlyMap<string, string>;
+  // (F7) Camera position for the current framing, and the key of that framing.
+  // The Canvas sets the initial position itself; this only acts when the key
+  // CHANGES (a different scene), see `CameraPlacement`.
+  cameraPosition?: readonly [number, number, number];
+  placementKey?: string;
 };
 
 // Roughly the midpoint of MIN_Z..MAX_Z in bbox-estimator.ts. Both the camera
@@ -48,6 +54,8 @@ export function Scene({
   nextFrame,
   playing = false,
   boxColors,
+  cameraPosition,
+  placementKey,
 }: Props) {
   const visibleDetections3D = visibleIds
     ? frame.detections3D.filter((d) => visibleIds.has(d.id))
@@ -134,6 +142,9 @@ export function Scene({
         );
       })}
 
+      {cameraPosition && (
+        <CameraPlacement position={cameraPosition} placementKey={placementKey} />
+      )}
       <OrbitControls
         target={target}
         enableDamping
@@ -144,6 +155,42 @@ export function Scene({
       />
     </>
   );
+}
+
+/**
+ * (F7) Move the existing camera to a new framing when the scene changes.
+ *
+ * `<Canvas camera={{ position }}>` only applies the position when the Canvas is
+ * created, and the Canvas is deliberately kept across frames and scenes (its
+ * WebGL context, buffers and shaders are expensive to rebuild, and rebuilding
+ * makes the view flash). So a new scene's framing is applied here, by hand:
+ * the camera is moved, and OrbitControls — which received the new `target`
+ * through its prop in the same render — is asked to re-aim.
+ *
+ * Nothing happens on mount (the Canvas already placed the camera) and nothing
+ * happens while the key stays the same, so frame switches, playback and the
+ * user's own orbiting are left alone. Renders nothing; adds no 3D object.
+ */
+function CameraPlacement({
+  position,
+  placementKey,
+}: {
+  position: readonly [number, number, number];
+  placementKey: string | undefined;
+}) {
+  const camera = useThree((state) => state.camera);
+  const controls = useThree((state) => state.controls) as { update?: () => void } | null;
+  const invalidate = useThree((state) => state.invalidate);
+  const applied = useRef(placementKey);
+  const [x, y, z] = position;
+  useEffect(() => {
+    if (applied.current === placementKey) return;
+    applied.current = placementKey;
+    camera.position.set(x, y, z);
+    controls?.update?.();
+    invalidate();
+  }, [placementKey, x, y, z, camera, controls, invalidate]);
+  return null;
 }
 
 export { SCENE_CENTER_Z };

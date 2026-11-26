@@ -5,6 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Detection3D } from '@/lib/types';
 import { getClassColor, SELECTED_COLOR } from '@/lib/ui/class-colors';
+import { classLabel } from '@/lib/ui/class-label';
 import { lerpVec3, slerpQuat } from '@/lib/geometry';
 import { AUTOPLAY_INTERVAL_MS } from '@/lib/sequence';
 import { BBoxLabel } from './BBoxLabel';
@@ -226,7 +227,7 @@ export function BBox3D({
       {showLabel && (
         <BBoxLabel
           position={[0, sy / 2 + LABEL_Y_PAD, 0]}
-          label={detection.class}
+          label={classLabel(detection.class)}
           confidence={showConfidence ? detection.confidence : undefined}
           color={baseColor}
         />

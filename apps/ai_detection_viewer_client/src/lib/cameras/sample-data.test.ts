@@ -1,12 +1,14 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseNuScenes } from '@/lib/nuscenes';
+import { readReferenceFramesRaw } from '@/lib/nuscenes/test-helpers';
 import { CAMERA_DISPLAY_ORDER, DEFAULT_CAMERA } from './names';
 import { pickCamera, visibleFraction } from './pick';
 import { camerasByObject, camerasSeeing, frameAsCamera } from './views';
 
 /**
- * The six cameras of the SHIPPED sample (`nuscenes.json`, format 1.2).
+ * The six cameras of the REFERENCE sample (the first ten frames of scene-0916;
+ * until F7 they were the whole shipped file `nuscenes.json`).
  *
  * The expected counts were measured independently on the original nuScenes-mini
  * tables (a Python re-implementation of the projection, 2026-11-26, design doc
@@ -14,9 +16,8 @@ import { camerasByObject, camerasSeeing, frameAsCamera } from './views';
  * or the projection rule changes, this fails and the change is visible.
  */
 const PUBLIC_DIR = new URL('../../../public/', import.meta.url);
-const frames = parseNuScenes(
-  JSON.parse(readFileSync(new URL('sample-data/nuscenes/nuscenes.json', PUBLIC_DIR), 'utf-8')),
-);
+// (F7) The same ten frames as before, now the first ten of scene-0916.
+const frames = parseNuScenes(readReferenceFramesRaw());
 const DATASET_ORDER = [
   'CAM_FRONT',
   'CAM_FRONT_LEFT',
@@ -47,8 +48,13 @@ describe('shipped sample: six cameras', () => {
     expect(views).toHaveLength(60);
     expect(new Set(views.map((v) => v.imageUrl)).size).toBe(60);
     for (const view of views) {
+      // 1600×900 is the ORIGINAL photo's size — the coordinate system of the
+      // boxes. (F7) The file served is a smaller WebP copy in the scene's folder.
       expect([view.imageWidth, view.imageHeight]).toEqual([1600, 900]);
-      expect(view.imageUrl.startsWith(`/sample-data/nuscenes/${view.name.toLowerCase()}/`)).toBe(true);
+      expect(
+        view.imageUrl.startsWith(`/sample-data/nuscenes/scenes/scene-0916/${view.name.toLowerCase()}/`),
+      ).toBe(true);
+      expect(view.imageUrl.endsWith('.webp')).toBe(true);
       expect(existsSync(new URL(view.imageUrl.slice(1), PUBLIC_DIR))).toBe(true);
     }
   });

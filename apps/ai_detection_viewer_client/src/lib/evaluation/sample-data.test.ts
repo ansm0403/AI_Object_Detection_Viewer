@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseNuScenes } from '@/lib/nuscenes';
+import { readReferenceFramesRaw, readReferencePredictionsRaw } from '@/lib/nuscenes/test-helpers';
 import { frameAsCamera } from '@/lib/cameras';
 import { boxOutcomeColors } from './box-colors';
 import { evaluateFrames } from './evaluate';
@@ -11,21 +11,20 @@ import { isPredictionId, parsePredictions } from './parse';
 import type { EvalSummary, EvaluationRules, PredictionSet } from './types';
 
 /**
- * The evaluation of the SHIPPED sample: the real `nuscenes.json` against the
- * real `predictions.json`. It locks the numbers the UI shows (and the design
- * docs quote) to the data files — if a file is regenerated with a different
- * model version, or a rule changes, this fails and the change is visible.
+ * The evaluation of the REFERENCE sample: the first ten frames of scene-0916
+ * against the model's predictions for them. Until F7 these ten frames were the
+ * whole shipped dataset (`nuscenes.json` + `predictions.json`); they are now
+ * read out of the scene's files, and every expected number below is unchanged.
+ * It locks the numbers the UI shows (and the design docs quote) to the data
+ * files — if a file is regenerated with a different model version, or a rule
+ * changes, this fails and the change is visible.
  *
  * The expected values were measured independently before the code existed: a
  * Python re-implementation of the projection and the matching, on CAM_FRONT
  * (2026-11-25, F5) and on all six cameras (2026-11-26, F6 design doc §2.4).
  */
-const SAMPLE_DIR = new URL('../../../public/sample-data/nuscenes/', import.meta.url);
-const readJson = (name: string): unknown =>
-  JSON.parse(readFileSync(new URL(name, SAMPLE_DIR), 'utf-8'));
-
-const frames = parseNuScenes(readJson('nuscenes.json'));
-const predictions = parsePredictions(readJson('predictions.json')) as PredictionSet;
+const frames = parseNuScenes(readReferenceFramesRaw());
+const predictions = parsePredictions(readReferencePredictionsRaw()) as PredictionSet;
 const CAMERAS = [
   'CAM_FRONT',
   'CAM_FRONT_LEFT',

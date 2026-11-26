@@ -11,11 +11,14 @@ import {
   type EvaluationRules,
   type FrameCamerasEvaluation,
   type PredictionModelInfo,
+  type ScenesEvaluation,
 } from '@/lib/evaluation';
 import { cameraShortName } from '@/lib/cameras';
 import { getClassColor } from '@/lib/ui/class-colors';
+import { classLabel } from '@/lib/ui/class-label';
 import { PANEL_CLASS, PanelHeader, SECTION_TITLE_CLASS } from '@/components/workspace';
 import { OutcomeIcon } from './icons';
+import { SceneScores } from './SceneScores';
 
 type Props = {
   /** State of the predictions file. Anything but `ready` shows a message instead of numbers. */
@@ -34,6 +37,24 @@ type Props = {
   rules: EvaluationRules;
   /** A block pinned above the scrolling area (the selected result). */
   pinned?: ReactNode;
+  /**
+   * (F7) Set when the photos on screen are reduced copies: what the model
+   * actually looked at, e.g. "the original 1600×900 photos (shown here: 960×540 copies)".
+   */
+  photoNote?: string;
+  /**
+   * (F7) What `evaluation` covers, e.g. "scene-0916". The headline numbers are
+   * one scene's; the scope is written next to them so they are not read as
+   * "the dataset" or "the model".
+   */
+  scope?: string;
+  /** (F7) Every scene's score, for the "All scenes" block. Omitted / `null` → no block. */
+  scenes?: ScenesEvaluation | null;
+  /** (F7) Scenes in the catalog (more than `scenes` covers while some are loading). */
+  scenesTotal?: number;
+  /** (F7) `scenes` is catching up with the score slider. */
+  scenesStale?: boolean;
+  onOpenScene?: (scene: string) => void;
 };
 
 /**
@@ -59,6 +80,12 @@ export function EvaluationPanel({
   model,
   rules,
   pinned,
+  scope,
+  scenes,
+  scenesTotal = 0,
+  scenesStale = false,
+  onOpenScene,
+  photoNote,
 }: Props) {
   // The file only holds predictions down to the score it was written with
   // (`model.minScore`). A slider setting below that cannot bring in anything
@@ -90,11 +117,20 @@ export function EvaluationPanel({
         <>
           {pinned}
           <div className="flex-1 min-h-0 overflow-y-auto">
-            <Scores evaluation={evaluation} />
+            <Scores evaluation={evaluation} scope={scope} />
             <FrameCounts frameEvaluation={frameEvaluation} frameIndex={frameIndex} />
+            {scenes && scenes.scenes.length > 0 && (
+              <SceneScores
+                evaluation={scenes}
+                scenesTotal={scenesTotal}
+                stale={scenesStale}
+                currentScene={scope}
+                onOpenScene={onOpenScene}
+              />
+            )}
             <RecallBars
               title="Recall by distance"
-              note={sampleNote(evaluation)}
+              note={sampleNote(evaluation, scope)}
               empty="No scored label in the camera image."
               rows={evaluation.summary.byDistance.map((bin) => ({
                 key: String(bin.from),
@@ -122,7 +158,8 @@ export function EvaluationPanel({
               empty="No scored label in the camera image."
               rows={evaluation.summary.byClass.map((c) => ({
                 key: c.class,
-                label: c.class,
+                label: classLabel(c.class),
+                title: c.class,
                 found: c.found,
                 total: c.total,
                 color: getClassColor(c.class),
@@ -137,6 +174,7 @@ export function EvaluationPanel({
               photosWithoutPredictions={evaluation.photosWithoutPredictions}
               ignored={evaluation.ignored}
               multiCamera={cameras.length > 1}
+              photoNote={photoNote}
             />
           </div>
         </>
@@ -160,15 +198,19 @@ export function EvaluationPanel({
   );
 }
 
-// One scene, a handful of frames: more photos of the same moments are not
-// more evidence about the model. The note stays whatever the photo count.
-const sampleNote = (evaluation: DatasetEvaluation): string =>
-  evaluation.evaluatedPhotos > evaluation.evaluatedFrames
-    ? `${evaluation.evaluatedPhotos} photos of ${evaluation.evaluatedFrames} frames · small sample`
-    : `${evaluation.evaluatedFrames} frame${evaluation.evaluatedFrames === 1 ? '' : 's'} · small sample`;
+// What the breakdowns below cover. One scene is ~20 s of one drive: more photos
+// of the same moments are not more evidence about the model, so the note names
+// the scope ("one scene") rather than suggesting a large sample.
+const sampleNote = (evaluation: DatasetEvaluation, scope?: string): string => {
+  const size =
+    evaluation.evaluatedPhotos > evaluation.evaluatedFrames
+      ? `${evaluation.evaluatedPhotos} photos of ${evaluation.evaluatedFrames} frames`
+      : `${evaluation.evaluatedFrames} frame${evaluation.evaluatedFrames === 1 ? '' : 's'}`;
+  return scope ? `${scope} · ${size} · one scene` : `${size} · one scene`;
+};
 
 /** Precision and Recall over every evaluated frame, each with the counts behind it. */
-function Scores({ evaluation }: { evaluation: DatasetEvaluation }) {
+function Scores({ evaluation, scope }: { evaluation: DatasetEvaluation; scope?: string }) {
   const { summary } = evaluation;
   const reported = summary.found + summary.falseAlarm;
   const scored = summary.found + summary.missed;
@@ -176,6 +218,11 @@ function Scores({ evaluation }: { evaluation: DatasetEvaluation }) {
   const perPhoto = evaluation.byCamera.length > 1;
   return (
     <section className="px-3 pt-2 pb-1.5">
+      {scope && (
+        <p className="mb-0.5 text-[11px] text-zinc-500">
+          This scene <span className="text-zinc-300 tabular-nums">{scope}</span>
+        </p>
+      )}
       <dl className="grid grid-cols-[auto_auto_1fr] items-baseline gap-x-3 gap-y-0.5">
         <dt
           className={SECTION_TITLE_CLASS}
@@ -351,7 +398,9 @@ function Notes({
   photosWithoutPredictions,
   ignored,
   multiCamera,
+  photoNote,
 }: {
+  photoNote?: string;
   rules: EvaluationRules;
   /** Set when the slider is below what the predictions file contains. */
   fileMinScore: number | null;
@@ -376,6 +425,12 @@ function Notes({
         {rules.iouThreshold}. Labels less than 40% visible are not scored — as rated by nuScenes for
         the object as a whole, over all six cameras, not for one photo.
       </p>
+      {photoNote && (
+        <p>
+          <span className="text-zinc-400">The model was run on {photoNote}.</span> Box coordinates
+          are in the original photo&apos;s pixels either way.
+        </p>
+      )}
       {multiCamera && (
         <p>
           <span className="text-zinc-400">Each photo is scored on its own.</span> An object two

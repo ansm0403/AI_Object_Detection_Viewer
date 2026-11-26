@@ -1,7 +1,8 @@
 'use client';
 
 /**
- * What the workspace is used for (F5).
+ * What the workspace is used for (F5, F7).
+ *  - `explore`  — find frames by condition, across all scenes (F7).
  *  - `review`   — judge the dataset's 3D labels (F4).
  *  - `evaluate` — score a camera detector's predictions against those labels.
  *
@@ -9,9 +10,10 @@
  * object, shown for a different job. It is not a second selection
  * (Immutable Rule #2).
  */
-export type WorkMode = 'review' | 'evaluate';
+export type WorkMode = 'explore' | 'review' | 'evaluate';
 
 const MODES: { id: WorkMode; label: string; hint: string }[] = [
+  { id: 'explore', label: 'Explore', hint: 'Find frames by condition, across all scenes' },
   { id: 'review', label: 'Review', hint: 'Review the 3D labels' },
   {
     id: 'evaluate',
@@ -28,15 +30,23 @@ type Props = {
    * disabled button). Omitted → it can.
    */
   evaluateBlocked?: string;
+  /** (F7) The same for explore mode. */
+  exploreBlocked?: string;
 };
 
 /** Segmented control in the top bar, styled like the dataset switcher. */
-export function ModeSwitch({ mode, onSelect, evaluateBlocked }: Props) {
+export function ModeSwitch({ mode, onSelect, evaluateBlocked, exploreBlocked }: Props) {
   return (
     <div role="group" aria-label="Mode" className="flex items-center rounded-md bg-zinc-800 p-0.5">
       {MODES.map((m) => {
         const active = m.id === mode;
-        const blocked = m.id === 'evaluate' && !active ? evaluateBlocked : undefined;
+        const blocked = active
+          ? undefined
+          : m.id === 'evaluate'
+            ? evaluateBlocked
+            : m.id === 'explore'
+              ? exploreBlocked
+              : undefined;
         return (
           <button
             key={m.id}

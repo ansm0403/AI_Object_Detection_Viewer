@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { __testing, parseNuScenes } from './parser';
+import { __testing, parseNuScenes, parseNuScenesPoints } from './parser';
 import type { Detection2D, Frame } from '@/lib/types';
 import type { NuScenesAnnotation, NuScenesLidar, NuScenesPrepped } from './types';
 
@@ -438,5 +438,158 @@ describe('parseNuScenes cameras (F6)', () => {
   it('a camera that sees nothing still gets an (empty) view', () => {
     const [frame] = parseNuScenes(withCameras([FORWARD, REAR], [FRONT]));
     expect(camerasOf(frame)[1].detections2D).toEqual([]);
+  });
+});
+
+describe('parseNuScenes scene files (F7, format 1.3)', () => {
+  const POINTS_PATH = '/sample-data/nuscenes/scenes/scene-x/points/sample-token-1.json';
+  const THUMB_PATH = '/sample-data/nuscenes/scenes/scene-x/thumb/sample-token-1.webp';
+
+  // The same frame as `preppedWith`, as a scene's frames file writes it: the
+  // LiDAR entry is a reference, and there is a thumbnail.
+  function sceneFile(lidar: unknown, extra: Record<string, unknown> = {}): unknown {
+    const base = preppedWith([FRONT, BEHIND]);
+    return {
+      version: '1.3',
+      scene: 'scene-x',
+      frames: [{ ...base.frames[0], lidar, ...extra }],
+    };
+  }
+
+  it('a frame whose points are in their own file has no inline points, only where to get them', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const [frame] = parseNuScenes(sceneFile({ path: POINTS_PATH, pointCount: 5991 }, { thumb: THUMB_PATH }));
+    expect(frame.pointCloud).toEqual([]);
+    expect(frame.pointCloudSource).toEqual({ url: POINTS_PATH, count: 5991 });
+    expect(frame.thumbnailUrl).toBe(THUMB_PATH);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('the boxes and camera views are exactly those of the single-file frame', () => {
+    const [split] = parseNuScenes(sceneFile({ path: POINTS_PATH, pointCount: 2 }));
+    const [inline] = parseNuScenes(preppedWith([FRONT, BEHIND], lidarWith([1, 2, 3, 4, 5, 6])));
+    expect(split.detections3D).toEqual(inline.detections3D);
+    expect(split.detections2D).toEqual(inline.detections2D);
+    expect(split.cameras).toEqual(inline.cameras);
+  });
+
+  it('a single-file frame (inline points) gets no point source and no thumbnail', () => {
+    const [frame] = parseNuScenes(preppedWith([FRONT], lidarWith([1, 2, 3])));
+    expect(frame).not.toHaveProperty('pointCloudSource');
+    expect(frame).not.toHaveProperty('thumbnailUrl');
+    expect(frame.pointCloud).toHaveLength(1);
+  });
+
+  it('a broken reference is skipped like any malformed lidar: boxes stay, no points, no source', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    for (const lidar of [
+      { path: '', pointCount: 3 },
+      { path: POINTS_PATH },
+      { path: POINTS_PATH, pointCount: -1 },
+      { path: POINTS_PATH, pointCount: 2.5 },
+      { pointCount: 3 },
+    ]) {
+      const [frame] = parseNuScenes(sceneFile(lidar));
+      expect(frame.pointCloud).toEqual([]);
+      expect(frame).not.toHaveProperty('pointCloudSource');
+      expect(frame.detections3D).toHaveLength(2);
+    }
+    expect(warn).toHaveBeenCalledTimes(5);
+    warn.mockRestore();
+  });
+
+  it('a wrong-typed thumbnail is dropped, the frame is kept', () => {
+    for (const thumb of [42, '', null, { path: THUMB_PATH }]) {
+      const [frame] = parseNuScenes(sceneFile({ path: POINTS_PATH, pointCount: 1 }, { thumb }));
+      expect(frame).not.toHaveProperty('thumbnailUrl');
+      expect(frame.detections3D).toHaveLength(2);
+    }
+  });
+});
+
+describe('parseNuScenesPoints (F7)', () => {
+  // A non-identity setup, so the test would notice a pose being ignored or the
+  // wrong one being used: the car moved 2 m between the LiDAR sweep and the photo.
+  const lidar: NuScenesLidar = {
+    points: [1, 2, 3, -4, 5, 0.5, 10, -20, 1.25],
+    egoPose: { translation: [100, 50, 0], rotation: [0.9659258, 0, 0, 0.2588190] },
+    calibratedSensor: { translation: [0.9, 0, 1.8], rotation: [0.7071068, 0, 0, -0.7071068] },
+  };
+  const frameEgoPose = { translation: [101.7, 51, 0] as [number, number, number], rotation: [0.9659258, 0, 0, 0.2588190] as [number, number, number, number] };
+
+  function inlineFrame(): NuScenesPrepped {
+    const base = preppedWith([FRONT]);
+    return { version: '1.2', frames: [{ ...base.frames[0], egoPose: frameEgoPose, lidar }] };
+  }
+
+  it('gives exactly the points the single-file parser gives for the same values', () => {
+    const [frame] = parseNuScenes(inlineFrame());
+    const points = parseNuScenesPoints({ token: 'sample-token-1', frameEgoPose, lidar });
+    expect(points).toEqual(frame.pointCloud);
+    expect(points).toHaveLength(3);
+    // …and they are really transformed (not the raw sensor values).
+    expect(points?.[0]).not.toEqual({ x: 1, y: 2, z: 3 });
+  });
+
+  it('uses the FRAME ego pose from the file (a different pose moves the points)', () => {
+    const here = parseNuScenesPoints({ token: 't', frameEgoPose, lidar });
+    const moved = parseNuScenesPoints({
+      token: 't',
+      frameEgoPose: { ...frameEgoPose, translation: [103.7, 51, 0] },
+      lidar,
+    });
+    expect(moved).not.toEqual(here);
+  });
+
+  it('points carry no detectionId (environment points)', () => {
+    const points = parseNuScenesPoints({ token: 't', frameEgoPose, lidar });
+    for (const point of points ?? []) expect(point).not.toHaveProperty('detectionId');
+  });
+
+  it('a valid file with zero points gives an empty list, not null', () => {
+    expect(parseNuScenesPoints({ token: 't', frameEgoPose, lidar: { ...lidar, points: [] } })).toEqual([]);
+  });
+
+  it('returns null and warns for anything that is not a points file', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const bad: unknown[] = [
+      null,
+      undefined,
+      'text',
+      [1, 2, 3],
+      {},
+      { token: 't', frameEgoPose }, // no lidar
+      { token: 't', lidar }, // no frame pose
+      { frameEgoPose, lidar }, // no token
+      { token: 't', frameEgoPose, lidar: { ...lidar, points: [1, 2, 3, 4] } }, // not triples
+      { token: 't', frameEgoPose, lidar: { ...lidar, points: [1, 2, 'x'] } },
+      { token: 't', frameEgoPose: { translation: [0, 0], rotation: [1, 0, 0, 0] }, lidar },
+      // A frames-file reference is not a points file.
+      { token: 't', frameEgoPose, lidar: { path: '/p.json', pointCount: 3 } },
+    ];
+    for (const raw of bad) expect(parseNuScenesPoints(raw)).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(bad.length);
+    warn.mockRestore();
+  });
+});
+
+describe('parseNuScenesPoints — the frame it is for (Edge_F#7 Case 3)', () => {
+  const lidar = lidarWith([1, 2, 3]);
+  const frameEgoPose = { translation: [0, 0, 0] as [number, number, number], rotation: IDENTITY_WXYZ };
+
+  it('accepts a file that names the expected frame', () => {
+    expect(parseNuScenesPoints({ token: 'frame-a', frameEgoPose, lidar }, 'frame-a')).toHaveLength(1);
+  });
+
+  it('rejects a file that names another frame, with a warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(parseNuScenesPoints({ token: 'frame-b', frameEgoPose, lidar }, 'frame-a')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('does not check the frame when none is expected', () => {
+    expect(parseNuScenesPoints({ token: 'anything', frameEgoPose, lidar })).toHaveLength(1);
   });
 });

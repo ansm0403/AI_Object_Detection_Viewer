@@ -5,6 +5,7 @@ import type { Detection3D, Frame } from '@/lib/types';
 import { bestViewsByObject, cameraShortName } from '@/lib/cameras';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { displayId } from '@/lib/ui/display-id';
+import { classLabel } from '@/lib/ui/class-label';
 import { PANEL_CLASS, PanelHeader, useScrollSelectedIntoView } from '@/components/workspace';
 import { detectionDistance, frameHasConfidence } from '@/lib/selectors';
 import type { Verdict } from '@/lib/review';
@@ -145,8 +146,10 @@ export function ObjectList({
                   className="w-2 h-2 rounded-full shrink-0"
                   style={{ backgroundColor: color }}
                 />
+                {/* (F7) Short name on screen ("barrier"), the dataset's full name
+                    ("movable_object.barrier") as the tooltip. */}
                 <span title={d.class} className="flex-1 min-w-0 text-sm text-zinc-100 truncate">
-                  {d.class}
+                  {classLabel(d.class)}
                 </span>
                 {isMeasured &&
                   (cameraCount > 1 ? (

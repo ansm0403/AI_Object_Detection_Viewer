@@ -41,6 +41,14 @@ export {
 } from './match';
 export { DISTANCE_BIN_METRES, precisionOf, ratio, recallOf, summarize } from './metrics';
 export {
+  evaluateScenes,
+  type GroupScore,
+  type SceneInput,
+  type SceneScore,
+  type ScenesEvaluation,
+  type Score,
+} from './scenes';
+export {
   evaluateFrameCameras,
   evaluateFrames,
   mergeObjectOutcomes,

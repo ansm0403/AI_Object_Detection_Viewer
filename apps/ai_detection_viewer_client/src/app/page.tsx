@@ -1,10 +1,13 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { parseCoco } from '@/lib/coco';
-import { parseNuScenes } from '@/lib/nuscenes';
-import { fetchJson } from '@/lib/data/fetch-json';
-import { enrichFrame } from '@/lib/geometry';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { AUTOPLAY_INTERVAL_MS, nextFrameIndex } from '@/lib/sequence';
 import {
   detectionDistance,
@@ -26,6 +29,9 @@ import { Viewer3D } from '@/components/viewer-3d';
 import { ObjectList } from '@/components/object-list';
 import { Filters } from '@/components/filters';
 import { Header, type DatasetId } from '@/components/header';
+import { useDataset, useFramePoints, useScenes } from '@/components/dataset';
+import { ScenePicker, type SceneStat } from '@/components/scenes';
+import { ExploreBar, ExploreResults, SearchPanel } from '@/components/explore';
 import { Timeline, type TimelineBadge } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
 import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
@@ -38,7 +44,8 @@ import {
   ResultList,
   SelectedResult,
   useFrameResults,
-  usePredictions,
+  useSettledValue,
+  type PredictionsState,
   type NotEvaluatedBox,
   type WorkMode,
 } from '@/components/evaluation';
@@ -48,9 +55,12 @@ import {
   IOU_THRESHOLD,
   describeOtherViews,
   evaluateFrames,
+  evaluateScenes,
   findResult,
+  formatPercent,
   isPredictionId,
   outcomeCountLabel,
+  recallOf,
   selectionIdOf,
   visibilityText,
   type EvalKind,
@@ -79,10 +89,9 @@ import {
 import {
   SHORTCUT_KEYS,
   buildQueue,
-  buildReviewExport,
+  buildSceneReviewExport,
   getReview,
   getReviewBlock,
-  makePracticeSet,
   nextFrameWithUnreviewed,
   nextUnreviewed,
   nextUnsure,
@@ -94,7 +103,6 @@ import {
   stepInQueue,
   summarizeProgress,
   verdictsOfFrame,
-  type PlantedError,
   type QueueOrder,
   type RejectReason,
   type ReviewAction,
@@ -103,27 +111,65 @@ import {
   type Verdict,
 } from '@/lib/review';
 import { REVIEW_STORAGE_KEY, useReviewStore, useViewerStore } from '@/store';
-import type { Frame } from '@/lib/types';
+import { stepScene } from '@/lib/scenes';
+import {
+  SEARCH_PRESETS,
+  conditionValue,
+  describeValue,
+  highlightedBoxIds,
+  matchesCondition,
+  needsEvaluation,
+  resultsForConditions,
+  searchScenes,
+  sortHits,
+  stepHit,
+  type HitOrder,
+  type SearchCondition,
+  type SearchFrameContext,
+  type SearchHit,
+  type SearchScene,
+} from '@/lib/search';
+import type { Frame, Point3D } from '@/lib/types';
 
-// Static sample sources, one per dataset. Both are served from /public; there
-// is no backend (nuScenes was flattened offline by scripts/prep_nuscenes.py).
-const DATASET_SOURCES: Record<DatasetId, string> = {
-  coco: '/sample-data/sample.json',
-  nuscenes: '/sample-data/nuscenes/nuscenes.json',
+// Static sample sources. Everything is served from /public; there is no
+// backend (nuScenes was flattened offline by scripts/prep_nuscenes.py).
+//  - COCO: one file with every frame.
+//  - nuScenes (F7): a catalog of scenes; each scene's boxes, each frame's
+//    points and photos are fetched as they are needed (see `useScenes`).
+const COCO_SOURCE = '/sample-data/sample.json';
+const NUSCENES_CATALOG = '/sample-data/nuscenes/scenes.json';
+// The scene the app opens on. Its first ten frames are the ten frames the app
+// shipped before F7, so saved reviews and familiar numbers are where they were.
+const DEFAULT_SCENE = 'scene-0916';
+
+// (F6, F7) How many frames ahead of the current one the photos and point
+// clouds are fetched in the background. One frame is six photos plus a points
+// file (~300 KB); playback moves every half second. Three frames is 1.5 s of
+// lead — enough at ordinary speeds without downloading a scene nobody plays.
+const PRELOAD_FRAMES_AHEAD = 3;
+// (F7) How much fetched data is held in memory; older entries are dropped (and
+// are still in the browser's HTTP cache). With ten frames nothing was dropped;
+// with 404 that would grow without end.
+const POINT_CLOUDS_KEPT = 24; // frames (~0.4 MB of points each)
+const PHOTOS_KEPT = 72; // photos = 12 frames × 6 cameras
+
+// (F7) How long the score slider must rest before all scenes are re-scored.
+const ALL_SCENES_SETTLE_MS = 250;
+
+const NO_FRAMES: Frame[] = [];
+const NO_POINTS: Point3D[] = [];
+const NO_CLASS_FILTER = new Set<string>();
+const NO_HITS: SearchHit[] = [];
+const NO_KIND_FILTER: ReadonlySet<EvalKind> = new Set();
+// (F7) Explore: the wire colour of boxes that do NOT count toward the search.
+const SEARCH_DIM_COLOR = '#52525b'; // zinc-600
+// (F7) Conditions about the model (missed labels, false alarms) are offered
+// in Explore. They are evaluated at the default rules, not the slider's.
+const MODEL_CONDITIONS = true;
+const DEFAULT_EVALUATION_RULES: EvaluationRules = {
+  minScore: DEFAULT_MIN_SCORE,
+  iouThreshold: IOU_THRESHOLD,
 };
-
-// (F5) Camera-detector predictions for a dataset, written offline by
-// scripts/predict_nuscenes.py. A separate file on purpose: the labels file does
-// not change when the model is re-run, and review works without it.
-const PREDICTION_SOURCES: Partial<Record<DatasetId, string>> = {
-  nuscenes: '/sample-data/nuscenes/predictions.json',
-};
-
-// (F6) How many frames ahead of the current one the photos are fetched in the
-// background. One frame is six photos (~0.8 MB) and playback moves every half
-// second, so they must be there before they are shown. The sample has ten
-// frames, so this fetches all of them (8 MB); a larger dataset (F7) lowers it.
-const PRELOAD_FRAMES_AHEAD = 10;
 
 // Set intersection (no Set.prototype.intersection in our target runtimes).
 const intersectIds = (a: Set<string>, b: Set<string>): Set<string> =>
@@ -134,11 +180,6 @@ export default function Index() {
   // Header flips this, which re-runs the loader below. Default = nuScenes so the
   // app opens on the measured-3D headline feature.
   const [datasetId, setDatasetId] = useState<DatasetId>('nuscenes');
-  // `frames` holds FINAL (enriched) frames ready to render. COCO frames are
-  // enriched here (estimated 3D); nuScenes frames arrive already enriched from
-  // parseNuScenes (measured 3D) and must NOT be re-enriched.
-  const [frames, setFrames] = useState<Frame[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   // (F2-C) Autoplay: step through the keyframe sequence on a timer. Only
   // meaningful on nuScenes, where objects keep their `instance` id across frames
   // (track id) so playing shows real motion; COCO frames are independent.
@@ -167,19 +208,67 @@ export default function Index() {
   // keys on `plantedErrors`, never on the toggle — so nothing can claim
   // "practice" or "measured" for one render while the other data is still shown.
   const [practice, setPractice] = useState(false);
-  const [plantedErrors, setPlantedErrors] = useState<PlantedError[] | null>(null);
+  // (F7) Which nuScenes scene the user asked for; null = the default scene. The
+  // scene actually ON SCREEN is `scenes.onScreen` — it lags this while the
+  // requested scene is still loading, so the workspace (and its 3D canvas) is
+  // never replaced by a loading placeholder when switching scenes.
+  const [requestedScene, setRequestedScene] = useState<string | null>(null);
+  // The data. Two loaders, one in use at a time (the other gets no url):
+  //  - COCO: one file (`useDataset`).
+  //  - nuScenes: the catalog, the scene on screen, and — in the background —
+  //    every other scene's boxes (`useScenes`).
+  // `frames` holds FINAL frames ready to render: COCO frames with estimated 3D,
+  // nuScenes frames with measured 3D and their points still to be fetched.
+  const coco = useDataset('coco', datasetId === 'coco' ? COCO_SOURCE : null, false);
+  const scenes = useScenes(
+    datasetId === 'nuscenes' ? NUSCENES_CATALOG : null,
+    requestedScene,
+    DEFAULT_SCENE,
+    practice,
+  );
+  const sceneOnScreen = datasetId === 'nuscenes' ? scenes.onScreen : null;
+  const frames: Frame[] | null =
+    datasetId === 'coco'
+      ? coco.frames
+      : scenes.status === 'ready'
+        ? (sceneOnScreen?.frames ?? NO_FRAMES)
+        : null;
+  const plantedErrors = sceneOnScreen?.plantedErrors ?? null;
+  const error = datasetId === 'coco' ? coco.error : scenes.error;
+  // Every scene whose boxes are in memory (the one on screen first, the others
+  // as they arrive in the background).
+  const sceneLibrary = scenes.library.scenes;
   // (F5) What the workspace is used for: reviewing the labels, or evaluating a
   // camera detector against them. A VIEW setting like `cameraMode` — the frame
   // and the selected object are shared by both modes (Rule #2: still one
   // `selectedObjectId`). nuScenes only; reset to 'review' on a dataset switch.
   const [mode, setMode] = useState<WorkMode>('review');
-  // The model's predictions, loaded next to the dataset. Independent of the
-  // dataset request: if this one fails, review still works.
-  const predictions = usePredictions(PREDICTION_SOURCES[datasetId] ?? null);
+  // The model's predictions for the scene on screen. They arrive with the scene
+  // but are independent of it: if they fail, review still works (F5).
+  const scenePredictions = sceneOnScreen?.predictions ?? null;
+  const scenePredictionsError = sceneOnScreen?.predictionsError ?? null;
+  const predictions = useMemo<PredictionsState>(() => {
+    if (datasetId !== 'nuscenes') return { status: 'none', set: null, error: null };
+    if (!sceneOnScreen) return { status: 'loading', set: null, error: null };
+    if (scenePredictions) return { status: 'ready', set: scenePredictions, error: null };
+    return {
+      status: 'failed',
+      set: null,
+      error: scenePredictionsError ?? 'This scene has no predictions file.',
+    };
+  }, [datasetId, sceneOnScreen, scenePredictions, scenePredictionsError]);
   // (F5) Which outcomes the result list and the camera image show (empty = all
   // four, the same convention as `visibleClasses`). A VIEW filter of evaluate
   // mode; it never changes a number.
   const [shownKinds, setShownKinds] = useState<ReadonlySet<EvalKind>>(() => new Set());
+  // (F7) Explore mode: the search conditions (all must hold) and how the result
+  // list is ordered. VIEW state of the page, like the mode itself — the store is
+  // not involved, and the selected frame / object are still the store's single
+  // ones (a result row that is "open" simply IS the selected frame).
+  const [conditions, setConditions] = useState<SearchCondition[]>([]);
+  const [hitOrder, setHitOrder] = useState<HitOrder>('scene');
+  // A frame to open once its scene is on screen (a search result in another scene).
+  const [pendingFrame, setPendingFrame] = useState<{ scene: string; frameId: string } | null>(null);
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -240,53 +329,6 @@ export default function Index() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // Load the active dataset. Re-runs on dataset switch; clears stale frames so
-  // the loading skeleton shows and the auto-select effect re-homes to the new
-  // frames[0] (the old selectedFrameId won't exist in the new set).
-  useEffect(() => {
-    const ac = new AbortController();
-    setFrames(null);
-    setPlantedErrors(null);
-    setError(null);
-    // `fetchJson` rejects with the HTTP status on a non-2xx answer, so a failed
-    // request is reported as what it is and not as a JSON parse error.
-    fetchJson(DATASET_SOURCES[datasetId], { signal: ac.signal })
-      .then((raw) => {
-        // COCO: parse → estimate 3D (enrichFrame). nuScenes: parseNuScenes
-        // already returns measured, enriched frames — do not estimate again.
-        if (datasetId === 'coco') {
-          setFrames(parseCoco(raw).map((f) => enrichFrame(f)));
-          return;
-        }
-        // (F4-F) Practice set: modify a few boxes in the RAW data, then parse as
-        // usual — 3D boxes, camera projections and ids all follow from the same
-        // modified values. The file on disk is never changed.
-        if (practice) {
-          // Which boxes the camera sees decides where an error is FAIR (a wrong
-          // class can only be recognised in the photo). That needs one plain
-          // parse of the original data first; the practice set is parsed after.
-          // (F6) "The camera sees it" = ANY of the frame's cameras does.
-          const seen = new Set(
-            parseNuScenes(raw).flatMap((f) =>
-              cameraViews(f).flatMap((view) => view.detections2D.map((d) => `${f.id}/${d.id}`)),
-            ),
-          );
-          const set = makePracticeSet(raw, {
-            inCamera: (frameToken, instanceToken) => seen.has(`${frameToken}/${instanceToken}`),
-          });
-          setFrames(parseNuScenes(set.prepped));
-          setPlantedErrors(set.planted);
-        } else {
-          setFrames(parseNuScenes(raw));
-        }
-      })
-      .catch((err) => {
-        if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(String(err));
-      });
-    return () => ac.abort();
-  }, [datasetId, practice]);
-
   // Auto-select frames[0] when no valid frame is selected. Edge_#3 Case 3 (a):
   // the timeline policy is "always exactly one frame selected" — there is no
   // null path. Also self-heals if selectedFrameId points to an id that no
@@ -301,10 +343,17 @@ export default function Index() {
     }
   }, [frames, selectedFrameId, setSelectedFrame]);
 
+  // (F7) When the frames change under the selection (another scene arrived) the
+  // stored frame id is not in them for one render, until the effect above has
+  // run. The first frame stands in for that render — returning "no frame" would
+  // show the loading placeholder and tear the 3D canvas down.
   const currentFrame = useMemo(() => {
     if (!frames) return null;
-    return frames.find((f) => f.id === selectedFrameId) ?? null;
+    return frames.find((f) => f.id === selectedFrameId) ?? frames[0] ?? null;
   }, [frames, selectedFrameId]);
+  // The frame everything on screen is about. Use this — not the store's
+  // `selectedFrameId` — wherever "the current frame" is meant.
+  const currentFrameId = currentFrame?.id ?? null;
 
   // Class chips must stay reachable across frames even if the active frame
   // doesn't contain the class. Edge_#7.md Case 1 Option A. Iterates detections3D
@@ -323,8 +372,18 @@ export default function Index() {
         }
       }
     }
+    // (F7) The class filter is kept across scenes, and scenes do not share all
+    // classes. A class that is switched ON but absent from this scene still
+    // gets its chip — otherwise the filter would hide boxes with nothing on
+    // screen to show why, or to undo it.
+    for (const name of visibleClasses) {
+      if (!seen.has(name)) {
+        seen.add(name);
+        out.push(name);
+      }
+    }
     return out;
-  }, [frames]);
+  }, [frames, visibleClasses]);
 
   const frameIndex = useMemo(() => {
     if (!frames || !currentFrame) return 0;
@@ -337,10 +396,10 @@ export default function Index() {
   // null when there is no meaningful "next" (single frame / no selection yet).
   const nextFrame = useMemo(() => {
     if (!tracksAcrossFrames || !frames || frames.length <= 1) return null;
-    const idx = frames.findIndex((f) => f.id === selectedFrameId);
+    const idx = frames.findIndex((f) => f.id === currentFrameId);
     const next = nextFrameIndex(idx, frames.length, { loop: true });
     return next === null ? null : frames[next];
-  }, [tracksAcrossFrames, frames, selectedFrameId]);
+  }, [tracksAcrossFrames, frames, currentFrameId]);
 
   // (F4) Review applies to MEASURED 3D boxes only. COCO's 3D is estimated from
   // 2D — there is no annotated 3D box to approve or reject (Rule #6) — so on
@@ -352,6 +411,9 @@ export default function Index() {
   // be the answer key for a model (keyed on `plantedErrors`, i.e. on the data
   // actually shown, like every other honesty check).
   const evaluating = mode === 'evaluate' && reviewEnabled && plantedErrors === null;
+  // (F7) Explore mode is on screen. It searches the dataset's REAL boxes in
+  // every scene, so — like evaluate — it is not available on a practice set.
+  const exploring = mode === 'explore' && reviewEnabled && plantedErrors === null;
 
   // (F6) Which camera the camera cell shows. A VIEW setting (not a selection,
   // Rule #2): it follows the selected object — the photo that shows the box is
@@ -387,14 +449,32 @@ export default function Index() {
     if (!frames || !currentFrame?.cameras) return [];
     return preloadOrder(frames, frames.indexOf(currentFrame), PRELOAD_FRAMES_AHEAD);
   }, [frames, currentFrame]);
-  usePhotoPreload(preloadUrls);
+  usePhotoPreload(preloadUrls, PHOTOS_KEPT);
+  // (F7) The current frame's point cloud. nuScenes frames arrive without their
+  // points (85 % of the data); they are fetched per frame, the same few frames
+  // ahead as the photos. COCO frames carry their points and pass through.
+  const framePoints = useFramePoints(frames, currentFrame, PRELOAD_FRAMES_AHEAD, POINT_CLOUDS_KEPT);
+  const framePointList = framePoints.points;
+  // The frame as the 3D view draws it: the same boxes, with the fetched points.
+  // Until they arrive the boxes are drawn without a cloud (and the name tag
+  // says so) — never with another frame's points.
+  const frame3D = useMemo(
+    () =>
+      currentFrame && currentFrame.pointCloudSource
+        ? { ...currentFrame, pointCloud: framePointList ?? NO_POINTS }
+        : currentFrame,
+    [currentFrame, framePointList],
+  );
 
   // In evaluate mode the store's `confidenceThreshold` is the MODEL's minimum
   // score (set on entering, see `handleSelectMode`). It must not filter the
   // labels — they carry a placeholder confidence, not a score — and the
   // distance slider is not shown, so the distance filter is off as well.
-  const labelThreshold = evaluating ? 0 : confidenceThreshold;
-  const labelMaxDistance = evaluating ? DISTANCE_MAX : maxDistance;
+  // (F7) Explore mode shows no class / distance controls (its bar holds the
+  // search), so none of those filters may hide boxes there.
+  const labelThreshold = evaluating || exploring ? 0 : confidenceThreshold;
+  const labelMaxDistance = evaluating || exploring ? DISTANCE_MAX : maxDistance;
+  const labelClasses = exploring ? NO_CLASS_FILTER : visibleClasses;
 
   // Distance filter (F2-A): ids of 3D boxes within maxDistance of the ego
   // vehicle. On COCO this passes everything (estimated centers are well within
@@ -416,11 +496,11 @@ export default function Index() {
     () =>
       viewFrame
         ? intersectIds(
-            selectVisibleDetectionIds(viewFrame, labelThreshold, visibleClasses),
+            selectVisibleDetectionIds(viewFrame, labelThreshold, labelClasses),
             withinDistance,
           )
         : new Set<string>(),
-    [viewFrame, labelThreshold, visibleClasses, withinDistance],
+    [viewFrame, labelThreshold, labelClasses, withinDistance],
   );
   // The 3D rule as a function of the frame, so the SAME rule can be applied to
   // a frame other than the current one (F4: the queue of the frame we are about
@@ -428,15 +508,37 @@ export default function Index() {
   const visibleIds3DOf = useCallback(
     (frame: Frame) =>
       intersectIds(
-        selectVisibleDetectionIds3D(frame, labelThreshold, visibleClasses),
+        selectVisibleDetectionIds3D(frame, labelThreshold, labelClasses),
         selectIdsWithinDistance(frame.detections3D, labelMaxDistance),
       ),
-    [labelThreshold, visibleClasses, labelMaxDistance],
+    [labelThreshold, labelClasses, labelMaxDistance],
   );
   const visibleIds3D = useMemo(
     () => (currentFrame ? visibleIds3DOf(currentFrame) : new Set<string>()),
     [currentFrame, visibleIds3DOf],
   );
+
+  // (F7) The scene on screen and the one on its way, by name.
+  const shownSceneName = sceneOnScreen?.info.name ?? null;
+  const pendingSceneName = scenes.pending?.name ?? null;
+  // (F7) Explore: whether a search condition is about the model, and — only
+  // then — every loaded scene's evaluation at the DEFAULT rules.
+  const conditionsNeedModel = needsEvaluation(conditions);
+  // Model conditions need each scene's evaluation at the DEFAULT rules (not the
+  // slider's): computed only while such a condition is in use.
+  const searchEvaluations = useMemo(() => {
+    if (!exploring || !conditionsNeedModel) return null;
+    const byScene = new Map<string, ReturnType<typeof evaluateFrames>['byFrame']>();
+    for (const [name, loaded] of sceneLibrary) {
+      if (!loaded.predictions) continue;
+      byScene.set(
+        name,
+        evaluateFrames(loaded.frames, loaded.predictions, DEFAULT_EVALUATION_RULES).byFrame,
+      );
+    }
+    return byScene;
+  }, [exploring, conditionsNeedModel, sceneLibrary]);
+  const catalogScenes = scenes.catalog?.scenes;
 
   // Phase 3 analytics aggregations. Selectors are intentionally unfiltered:
   // the histogram threshold line and class-bar toggles only carry meaning
@@ -485,6 +587,7 @@ export default function Index() {
       const photos = result.byCamera.size;
       badges.set(frame.id, {
         text: `${missed} missed`,
+        value: missed,
         tone: missed > 0 ? 'alert' : 'good',
         title: `${missed} missed · ${found} found · ${falseAlarm} ${outcomeCountLabel('false-alarm', falseAlarm)}${photos > 1 ? ` · in ${photos} photos` : ''}`,
       });
@@ -493,11 +596,36 @@ export default function Index() {
   }, [evaluation, frames]);
   // (F6) The current frame's evaluation: every photo of it, and the outcome
   // per object across the cameras (what the 3D boxes are coloured by).
-  const frameEvaluation = (currentFrame && evaluation?.byFrame.get(currentFrame.id)) ?? null;
+  //
+  // (F7) Explore mode with a condition about the MODEL shows the same thing —
+  // what the model did in this frame — at the default rules the search uses
+  // (`searchEvaluations`), so the photo and the 3D view explain the hit.
+  const exploringModel = exploring && conditionsNeedModel;
+  const frameEvaluation =
+    (currentFrame &&
+      (exploringModel
+        ? shownSceneName !== null
+          ? searchEvaluations?.get(shownSceneName)?.get(currentFrame.id)
+          : undefined
+        : evaluation?.byFrame.get(currentFrame.id))) ??
+    null;
   // The evaluation of the PHOTO on screen — what the list, the camera image
   // and the J / K queue show. `null` → empty list, no overlay.
-  const photoEvaluation =
+  const wholePhotoEvaluation =
     (activeCamera !== null && frameEvaluation?.byCamera.get(activeCamera)) || null;
+  // In Explore only the results the conditions COUNT are drawn in the photo
+  // (the missed labels, or the false alarms with no label nearby), so the boxes
+  // on screen are the ones that made the frame match.
+  const photoEvaluation = useMemo(
+    () =>
+      exploringModel && wholePhotoEvaluation
+        ? {
+            ...wholePhotoEvaluation,
+            results: resultsForConditions(conditions, wholePhotoEvaluation.results),
+          }
+        : wholePhotoEvaluation,
+    [exploringModel, wholePhotoEvaluation, conditions],
+  );
   const frameResults = useFrameResults({
     frame: viewFrame,
     predictions:
@@ -508,9 +636,37 @@ export default function Index() {
     objectOutcomes: frameEvaluation?.objects ?? null,
     boxFrame: currentFrame,
     selectedId: selectedObjectId,
-    classes: visibleClasses,
-    kinds: shownKinds,
+    classes: exploring ? NO_CLASS_FILTER : visibleClasses,
+    kinds: exploring ? NO_KIND_FILTER : shownKinds,
   });
+  // ---- (F7) Evaluate: every scene, once the slider rests ------------------
+  // The scene on screen is scored at once (above). Scoring all ten scenes takes
+  // ~70–100 ms — too long to do on every step of the score slider — so it
+  // follows the rules only after they have stopped changing for a moment
+  // (`useSettledValue`; why not `useDeferredValue` is measured there). While
+  // the slider moves, the "All scenes" block is shown as catching up.
+  const deferredRules = useSettledValue(evaluationRules, ALL_SCENES_SETTLE_MS);
+  const scenesEvaluation = useMemo(() => {
+    if (!evaluating || !catalogScenes) return null;
+    return evaluateScenes(
+      catalogScenes.flatMap((info) => {
+        const loaded = sceneLibrary.get(info.name);
+        return loaded
+          ? [
+              {
+                name: info.name,
+                night: info.night,
+                drive: info.log?.name ?? null,
+                frames: loaded.frames,
+                predictions: loaded.predictions,
+              },
+            ]
+          : [];
+      }),
+      deferredRules,
+    );
+  }, [evaluating, catalogScenes, sceneLibrary, deferredRules]);
+  const scenesEvaluationStale = deferredRules !== evaluationRules;
   const handleToggleKind = useCallback((kind: EvalKind) => {
     setShownKinds((prev) => {
       const next = new Set(prev);
@@ -555,7 +711,6 @@ export default function Index() {
   );
   // Review actions target the selected box of the current frame. Each one
   // re-checks `reviewBlock`, so a disabled button and a stray call agree.
-  const currentFrameId = currentFrame?.id ?? null;
   // (F4-C) The list order and the review queue. The list shows every box in
   // `orderedBoxes`; the queue is the part of it that passes the filters — the
   // boxes J / K walk and the pool "next unreviewed" is drawn from.
@@ -644,11 +799,22 @@ export default function Index() {
   // (F4-E) Export. The document is built by the pure functions in
   // `lib/review/export` from the frames + records; this only stamps the time and
   // hands the text to the browser as a download. No backend is involved.
+  //
+  // (F7) Records are kept per (frame, box) and frames belong to scenes, so the
+  // file covers every scene whose boxes are in memory — normally all of them a
+  // moment after the page opens — and lists which. A practice export covers the
+  // practice scene on screen: that is the only data its records are about.
   const handleExport = useCallback(
     (type: ReviewExportFileType) => {
-      if (!frames) return;
+      if (!frames || !sceneOnScreen) return;
       const now = new Date();
-      const data = buildReviewExport(frames, reviews, {
+      const exportScenes = plantedErrors
+        ? [{ name: sceneOnScreen.info.name, frames }]
+        : (scenes.catalog?.scenes ?? []).flatMap((info) => {
+            const loaded = sceneLibrary.get(info.name);
+            return loaded ? [{ name: info.name, frames: loaded.frames }] : [];
+          });
+      const data = buildSceneReviewExport(exportScenes, reviews, {
         scope: reviewScope,
         exportedAt: now.toISOString(),
       });
@@ -659,8 +825,17 @@ export default function Index() {
         downloadTextFile(filename, UTF8_BOM + reviewExportToCsv(data), 'text/csv');
       }
     },
-    [frames, reviews, reviewScope],
+    [frames, sceneOnScreen, plantedErrors, scenes.catalog, sceneLibrary, reviews, reviewScope],
   );
+  // (F7) What the export menu acts on: every record of the scope, whatever
+  // scene it belongs to. And a caveat when the file cannot hold all of them.
+  const reviewRecordCount = useMemo(() => Object.keys(reviews).length, [reviews]);
+  const catalogSceneCount = scenes.catalog?.scenes.length ?? 0;
+  const exportNote = plantedErrors
+    ? 'The file covers the practice set of the scene on screen only.'
+    : sceneLibrary.size < catalogSceneCount
+      ? `The file covers the ${sceneLibrary.size} of ${catalogSceneCount} scenes that are loaded; records of the others are left out.`
+      : undefined;
   const handleResetReviews = useCallback(
     () => resetReviewScope(reviewScope),
     [resetReviewScope, reviewScope],
@@ -690,6 +865,189 @@ export default function Index() {
     setSelectedObject,
   ]);
 
+  // (F7) Scene switch. The scene is only REQUESTED here; it replaces the one on
+  // screen when its data has arrived (`useScenes`). Playback stops at once — it
+  // belongs to the scene being left.
+  const retryScene = scenes.retry;
+  const handleSelectScene = useCallback(
+    (name: string) => {
+      retryScene(name); // a scene that failed earlier is asked for again
+      setRequestedScene(name);
+      setIsPlaying(false);
+      setPendingFrame(null); // a scene chosen by hand opens on its first frame
+    },
+    [retryScene],
+  );
+  const sceneNames = useMemo(
+    () => scenes.catalog?.scenes.map((scene) => scene.name) ?? [],
+    [scenes.catalog],
+  );
+  const handleStepScene = useCallback(
+    (delta: 1 | -1) => {
+      // Step from where the user is HEADING, so two quick presses move two scenes.
+      const next = stepScene(sceneNames, pendingSceneName ?? shownSceneName, delta);
+      if (next) handleSelectScene(next);
+    },
+    [sceneNames, pendingSceneName, shownSceneName, handleSelectScene],
+  );
+  // When another scene comes on screen: the selection is cleared (an object id
+  // means nothing in another scene), playback stays stopped, and the camera
+  // cell goes back to its default camera. Filters and the mode are kept. The
+  // first scene to arrive after the page (or the dataset) opens changes nothing.
+  const previousSceneName = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousSceneName.current;
+    previousSceneName.current = shownSceneName;
+    if (previous === null || shownSceneName === null || previous === shownSceneName) return;
+    setSelectedObject(null);
+    setIsPlaying(false);
+    resetCamera();
+  }, [shownSceneName, setSelectedObject, resetCamera]);
+  // (F7) A number per scene for the scene list: review progress, or — in
+  // evaluate mode — recall. Computed for the scenes whose boxes are in memory,
+  // and only when the list asks (it is closed most of the time).
+  const sceneStat = useCallback(
+    (name: string): SceneStat | null => {
+      const loaded = sceneLibrary.get(name);
+      if (!loaded) return null;
+      if (evaluating) {
+        if (!loaded.predictions) return { text: 'no preds', title: 'No predictions for this scene' };
+        const score = scenesEvaluation?.scenes.find((entry) => entry.scene === name);
+        if (!score) return null;
+        return {
+          text: formatPercent(recallOf(score.counts)),
+          title: `${score.counts.found} of ${score.counts.found + score.counts.missed} labels found in this scene's photos`,
+        };
+      }
+      const { overall } = summarizeProgress(loaded.frames, reviewsByScope.nuscenes);
+      return {
+        text: `${overall.reviewed} / ${overall.total.toLocaleString('en-US')}`,
+        title: `${overall.reviewed} of ${overall.total} boxes reviewed in this scene`,
+        tone: overall.total > 0 && overall.reviewed >= overall.total ? 'good' : 'default',
+      };
+    },
+    [sceneLibrary, evaluating, scenesEvaluation, reviewsByScope],
+  );
+
+  // ---- (F7) Explore: search every loaded scene ----------------------------
+  // The search runs directly on the boxes in memory with the pure functions of
+  // `lib/search` (one pass per condition, ~0.5 ms for all 404 frames), so it is
+  // simply recomputed whenever the conditions or the loaded scenes change.
+  const searchInput = useMemo<SearchScene[]>(() => {
+    if (!exploring || !catalogScenes) return [];
+    return catalogScenes.flatMap((info) => {
+      const loaded = sceneLibrary.get(info.name);
+      return loaded
+        ? [
+            {
+              name: info.name,
+              night: info.night,
+              frames: loaded.frames,
+              evaluation: searchEvaluations?.get(info.name) ?? null,
+            },
+          ]
+        : [];
+    });
+  }, [exploring, catalogScenes, sceneLibrary, searchEvaluations]);
+  const search = useMemo(
+    () => (exploring ? searchScenes(searchInput, conditions) : null),
+    [exploring, searchInput, conditions],
+  );
+  const orderedHits = useMemo(
+    () => (search ? sortHits(search.hits, hitOrder) : NO_HITS),
+    [search, hitOrder],
+  );
+  // The frame on screen, measured on the same conditions.
+  const sceneIsNight = sceneOnScreen?.info.night ?? false;
+  const frameSearch = useMemo(() => {
+    if (!exploring || !currentFrame || !shownSceneName) return null;
+    const context: SearchFrameContext = {
+      frame: currentFrame,
+      night: sceneIsNight,
+      evaluation: searchEvaluations?.get(shownSceneName)?.get(currentFrame.id) ?? null,
+    };
+    return {
+      values: conditions.map((condition) => conditionValue(condition, context)),
+      matches: conditions.every((condition) => matchesCondition(condition, context)),
+      boxIds: highlightedBoxIds(conditions, context),
+    };
+  }, [exploring, currentFrame, shownSceneName, sceneIsNight, searchEvaluations, conditions]);
+  // 3D: boxes that count toward the search keep their class colour; the others
+  // are drawn grey, so it is visible WHY the frame was found. No condition
+  // about boxes → nothing is dimmed.
+  const searchBoxIds = frameSearch?.boxIds ?? null;
+  const searchBoxColors = useMemo(() => {
+    if (!searchBoxIds || !currentFrame) return undefined;
+    const colors = new Map<string, string>();
+    for (const box of currentFrame.detections3D) {
+      if (!searchBoxIds.has(box.id)) colors.set(box.id, SEARCH_DIM_COLOR);
+    }
+    return colors;
+  }, [searchBoxIds, currentFrame]);
+  // Timeline: which frames of the scene on screen match, and by how much.
+  const searchBadges = useMemo(() => {
+    if (!exploring || conditions.length === 0 || !frames || !shownSceneName) return undefined;
+    const first = conditions[0];
+    const badges = new Map<string, TimelineBadge>();
+    for (const frame of frames) {
+      const context: SearchFrameContext = {
+        frame,
+        night: sceneIsNight,
+        evaluation: searchEvaluations?.get(shownSceneName)?.get(frame.id) ?? null,
+      };
+      const matches = conditions.every((condition) => matchesCondition(condition, context));
+      const value = conditionValue(first, context);
+      badges.set(
+        frame.id,
+        matches
+          ? { text: describeValue(first, value), value: first.kind === 'time' ? 1 : (value ?? 0), tone: 'match' }
+          : { text: 'no match', value: 0, tone: 'muted' },
+      );
+    }
+    return badges;
+  }, [exploring, conditions, frames, shownSceneName, sceneIsNight, searchEvaluations]);
+  // The classes offered in the condition form: every class of the loaded scenes.
+  const searchClasses = useMemo(() => {
+    if (!exploring) return [];
+    const counts = new Map<string, number>();
+    for (const loaded of sceneLibrary.values()) {
+      for (const frame of loaded.frames) {
+        for (const box of frame.detections3D) counts.set(box.class, (counts.get(box.class) ?? 0) + 1);
+      }
+    }
+    // Most frequent first: the common classes are at the top of the list.
+    return [...counts].sort((a, b) => b[1] - a[1]).map(([name]) => name);
+  }, [exploring, sceneLibrary]);
+  // Open a search result: the frame, in whatever scene it is. Another scene is
+  // requested first and the frame is selected when that scene is on screen.
+  const handleOpenHit = useCallback(
+    (hit: { scene: string; frameId: string }) => {
+      setIsPlaying(false);
+      if (hit.scene === shownSceneName && pendingSceneName === null) {
+        setPendingFrame(null);
+        setSelectedFrame(hit.frameId);
+        return;
+      }
+      handleSelectScene(hit.scene);
+      setPendingFrame({ scene: hit.scene, frameId: hit.frameId });
+    },
+    [shownSceneName, pendingSceneName, handleSelectScene, setSelectedFrame],
+  );
+  const handleOpenSceneHits = useCallback(
+    (scene: string) => {
+      const firstHit = search?.hits.find((hit) => hit.scene === scene);
+      if (firstHit) handleOpenHit(firstHit);
+    },
+    [search, handleOpenHit],
+  );
+  useEffect(() => {
+    if (!pendingFrame || !frames || shownSceneName !== pendingFrame.scene) return;
+    if (frames.some((frame) => frame.id === pendingFrame.frameId)) {
+      setSelectedFrame(pendingFrame.frameId);
+    }
+    setPendingFrame(null);
+  }, [pendingFrame, frames, shownSceneName, setSelectedFrame]);
+
   // (F4-C) Keyboard shortcuts. `resolveShortcut` (lib/review) decides what a key
   // means; this decides what the action does — always through the same handlers
   // the buttons use, so mouse and keyboard cannot drift apart.
@@ -699,11 +1057,17 @@ export default function Index() {
       // camera zoom (Z) work; the keys that WRITE a review do nothing, so a
       // stray "A" cannot approve a box whose verdict is not even on screen.
       if (
-        evaluating &&
+        (evaluating || exploring) &&
         action.type !== 'step' &&
         action.type !== 'toggle-zoom' &&
         action.type !== 'camera'
       ) {
+        return;
+      }
+      // (F7) Explore mode: J / K walk the result list (frames, not boxes).
+      if (exploring && action.type === 'step') {
+        const hit = stepHit(orderedHits, currentFrameId, action.direction);
+        if (hit && hit.frameId !== currentFrameId) handleOpenHit(hit);
         return;
       }
       switch (action.type) {
@@ -747,6 +1111,10 @@ export default function Index() {
     },
     [
       evaluating,
+      exploring,
+      orderedHits,
+      currentFrameId,
+      handleOpenHit,
       cameraRow,
       activeCamera,
       setCamera,
@@ -849,7 +1217,7 @@ export default function Index() {
   const handleSelectMode = useCallback(
     (next: WorkMode) => {
       if (next === mode) return;
-      if (next === 'evaluate' && evaluateBlocked) return;
+      if (next !== 'review' && evaluateBlocked) return;
       setMode(next);
       setConfidenceThreshold(next === 'evaluate' ? DEFAULT_MIN_SCORE : 0);
     },
@@ -866,9 +1234,10 @@ export default function Index() {
     setConfidenceThreshold(DEFAULT_MIN_SCORE);
   }, [resetFilters, setMaxDistance, maxDistance, setConfidenceThreshold]);
 
-  // (F4-F) Enter / leave practice mode. The data reloads (the loader effect
-  // depends on `practice`); the frame position is kept (same frame ids), the
-  // object selection and playback are not — the boxes themselves change.
+  // (F4-F) Enter / leave practice mode. The scene's practice set is built and
+  // then swapped in (F7: the scene on screen stays until it is ready, so the 3D
+  // canvas is kept); the frame position is kept (same frame ids), the object
+  // selection and playback are not — the boxes themselves change.
   const handleTogglePractice = useCallback(() => {
     setPractice((p) => !p);
     setSelectedObject(null);
@@ -908,22 +1277,41 @@ export default function Index() {
       // (F5) Practice and evaluate exclude each other: the toggle is hidden
       // while evaluating, and Evaluate is blocked while practising.
       onTogglePractice={
-        datasetId === 'nuscenes' && mode !== 'evaluate' ? handleTogglePractice : undefined
+        datasetId === 'nuscenes' && mode === 'review' ? handleTogglePractice : undefined
       }
       modeSwitch={
         datasetId === 'nuscenes' ? (
-          <ModeSwitch mode={mode} onSelect={handleSelectMode} evaluateBlocked={evaluateBlocked} />
+          <ModeSwitch
+            mode={mode}
+            onSelect={handleSelectMode}
+            evaluateBlocked={evaluateBlocked}
+            exploreBlocked={
+              evaluateBlocked
+                ? 'Not available in practice mode: the search runs on the dataset’s real boxes. Turn Practice off first.'
+                : undefined
+            }
+          />
         ) : undefined
       }
     >
-      {evaluating ? (
+      {exploring && search ? (
+        <span className="text-xs text-zinc-400 tabular-nums lg:whitespace-nowrap">
+          <span className="font-semibold text-zinc-100">{search.hits.length}</span> of {search.frames}{' '}
+          frames match · {search.scenesWithMatches} of {search.byScene.length} scenes
+          {scenes.catalog && search.byScene.length < scenes.catalog.scenes.length && (
+            <span className="ml-1.5 text-sky-300">
+              ({search.byScene.length} / {scenes.catalog.scenes.length} scenes loaded)
+            </span>
+          )}
+        </span>
+      ) : evaluating ? (
         <EvaluationHeadline
           summary={evaluation?.summary ?? null}
           status={predictions.status === 'none' ? 'failed' : predictions.status}
           modelName={predictions.set?.model.name}
           basis={
             evaluation
-              ? `All ${evaluation.evaluatedPhotos} evaluated photos (${evaluation.evaluatedFrames} frames × ${evaluation.byCamera.length} camera${evaluation.byCamera.length === 1 ? '' : 's'}), each scored on its own · score ≥ ${confidenceThreshold.toFixed(2)} · IoU ≥ ${IOU_THRESHOLD} · small sample`
+              ? `${shownSceneName ?? 'This scene'}: all ${evaluation.evaluatedPhotos} evaluated photos (${evaluation.evaluatedFrames} frames × ${evaluation.byCamera.length} camera${evaluation.byCamera.length === 1 ? '' : 's'}), each scored on its own · score ≥ ${confidenceThreshold.toFixed(2)} · IoU ≥ ${IOU_THRESHOLD} · one scene of one drive — see "All scenes" in the panel`
               : undefined
           }
         />
@@ -932,7 +1320,11 @@ export default function Index() {
         <>
           <ReviewProgress counts={reviewProgress.overall} notSaved={reviewStorageFailed} />
           <ExportMenu
-            reviewedCount={reviewProgress.overall.reviewed}
+            // (F7) Export and reset act on EVERY scene's records, so the menu
+            // counts those — not the scene on screen (Edge_F#7 Case 2).
+            reviewedCount={reviewRecordCount}
+            scope="in all scenes"
+            exportNote={exportNote}
             onExport={handleExport}
             onReset={handleResetReviews}
           />
@@ -941,6 +1333,26 @@ export default function Index() {
       )}
     </Header>
   );
+
+  // (F7) The scene picker. Built once, because it is needed in two places: in
+  // the timeline, and — when the scene that should be on screen failed or is
+  // empty — in the timeline's place of the error state, so there is always a
+  // way to another scene (Edge_F#7 Case 1).
+  const scenePicker =
+    datasetId === 'nuscenes' && scenes.catalog && scenes.catalog.scenes.length > 0 ? (
+      <ScenePicker
+        scenes={scenes.catalog.scenes}
+        current={shownSceneName}
+        pending={scenes.pending}
+        onSelect={handleSelectScene}
+        onStep={handleStepScene}
+        states={scenes.library.states}
+        // Practice verdicts are about modified boxes of one scene; the
+        // per-scene numbers describe the real data, so they are hidden.
+        statLabel={plantedErrors ? undefined : evaluating ? 'Recall' : 'Reviewed'}
+        stat={plantedErrors ? undefined : sceneStat}
+      />
+    ) : undefined;
 
   if (error || !frames || frames.length === 0 || !currentFrame || !viewFrame) {
     // Loading (no frames yet) and the one render between frames arriving and
@@ -953,6 +1365,9 @@ export default function Index() {
         <PaneMessage>
           <p className="text-rose-400 text-sm">Failed to load sample data</p>
           <p className="text-zinc-600 text-xs font-mono">{error}</p>
+          {scenePicker && (
+            <p className="text-zinc-500 text-xs">Another scene can be opened from the scene picker below.</p>
+          )}
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -983,7 +1398,15 @@ export default function Index() {
           datasetId === 'nuscenes' ? <CameraStripPlaceholder pulse={loading} /> : undefined
         }
         details={<PanePlaceholder pulse={loading} className="min-h-48 lg:min-h-0" />}
-        timeline={<PanePlaceholder pulse={loading} className="min-h-[84px]" />}
+        timeline={
+          scenePicker && !loading ? (
+            <div className={`flex h-full w-full min-h-[84px] items-center px-3 ${PANEL_CLASS}`}>
+              {scenePicker}
+            </div>
+          ) : (
+            <PanePlaceholder pulse={loading} className="min-h-[84px]" />
+          )
+        }
       />
     );
   }
@@ -999,11 +1422,19 @@ export default function Index() {
   const isMeasured = currentFrame.source === 'nuscenes-measured';
   // Practice set: the points are still measured, the boxes are not the
   // dataset's any more — the tag must not read "measured 3D".
-  const label3D = plantedErrors
-    ? 'LiDAR measured · boxes modified (practice)'
-    : isMeasured
-      ? 'LiDAR · measured 3D'
-      : '3D · estimated from 2D';
+  // (F7) The point cloud is fetched per frame: say when it is not there (yet).
+  const pointsNote =
+    framePoints.status === 'loading'
+      ? ' · loading points…'
+      : framePoints.status === 'failed'
+        ? ' · points unavailable'
+        : '';
+  const label3D =
+    (plantedErrors
+      ? 'LiDAR measured · boxes modified (practice)'
+      : isMeasured
+        ? 'LiDAR · measured 3D'
+        : '3D · estimated from 2D') + pointsNote;
   const label2D = isMeasured && activeCamera ? activeCamera : 'Image';
   const frameReviewCounts = reviewProgress?.byFrame.get(currentFrame.id);
   // (F4-D) Dataset facts about the selected box, for the strip above the
@@ -1027,9 +1458,20 @@ export default function Index() {
     const box = selectedObjectId
       ? view.detections2D.find((d) => d.id === selectedObjectId)
       : undefined;
-    const photo = evaluating ? frameEvaluation?.byCamera.get(view.name) : undefined;
-    const badge: CameraThumb['badge'] =
-      !evaluating || !frameEvaluation
+    const photo =
+      evaluating || exploringModel ? frameEvaluation?.byCamera.get(view.name) : undefined;
+    // (F7) Explore with a model condition: how many of the results the search
+    // counts are in each photo, so the photo to look at is one click away.
+    const searched = exploringModel && photo ? resultsForConditions(conditions, photo.results).length : 0;
+    const badge: CameraThumb['badge'] = exploringModel
+      ? photo
+        ? {
+            text: String(searched),
+            tone: searched > 0 ? 'alert' : 'muted',
+            title: `${searched} of the results this search counts are in this photo`,
+          }
+        : undefined
+      : !evaluating || !frameEvaluation
         ? undefined
         : photo
           ? {
@@ -1088,6 +1530,17 @@ export default function Index() {
       cameraAspect={cameraAspect}
       topBar={header}
       filterBar={
+        exploring && search ? (
+          <ExploreBar
+            conditions={conditions}
+            onChange={setConditions}
+            presets={SEARCH_PRESETS}
+            classes={searchClasses}
+            allowModel={MODEL_CONDITIONS}
+            matched={search.hits.length}
+            total={search.frames}
+          />
+        ) : (
         <Filters
           classes={allClasses}
           confidenceThreshold={confidenceThreshold}
@@ -1112,9 +1565,24 @@ export default function Index() {
           onReset={evaluating ? handleResetEvaluationFilters : resetFilters}
           onDeselect={() => setSelectedObject(null)}
         />
+        )
       }
       list={
-        evaluating ? (
+        exploring && search ? (
+          // (F7) Explore mode lists the FRAMES that match the search.
+          <ExploreResults
+            hits={orderedHits}
+            conditions={conditions}
+            order={hitOrder}
+            onChangeOrder={setHitOrder}
+            currentFrameId={currentFrameId}
+            onOpen={handleOpenHit}
+            scenesWithMatches={search.scenesWithMatches}
+            scenesSearched={search.byScene.length}
+            scenesPending={(scenes.catalog?.scenes.length ?? 0) - search.byScene.length}
+            stepHint={`${SHORTCUT_KEYS.previous} / ${SHORTCUT_KEYS.next} to step`}
+          />
+        ) : evaluating ? (
           // (F5) Evaluate mode lists the frame's RESULTS (misses first), not
           // its boxes. A click still goes through the one `selectedObjectId`.
           <ResultList
@@ -1175,7 +1643,10 @@ export default function Index() {
         //   bounce every 0.5 s during playback. Edge_F#2 Case 6.
         <Viewer3D
           key={tracksAcrossFrames ? 'nuscenes-sequence' : currentFrame.id}
-          frame={currentFrame}
+          // (F7) The frame with its fetched point cloud (same boxes).
+          frame={frame3D ?? currentFrame}
+          // (F7) A new scene re-fits the camera inside the SAME canvas.
+          framingKey={shownSceneName ?? undefined}
           selectedId={selectedObjectId}
           onSelect={setSelectedObject}
           visibleIds={visibleIds3D}
@@ -1189,9 +1660,29 @@ export default function Index() {
           // 3D view shows WHERE the model missed. Only colours change — the
           // same Canvas, the same camera. No evaluation for this frame → class
           // colours and no legend.
-          boxColors={evaluating ? (frameResults.boxColors ?? undefined) : undefined}
+          // (F7) Explore mode: boxes that do not count toward the search are grey.
+          boxColors={
+            exploringModel || evaluating
+              ? (frameResults.boxColors ?? undefined)
+              : exploring
+                ? searchBoxColors
+                : undefined
+          }
           legend={
-            evaluating && frameResults.boxColors ? (
+            exploringModel && frameResults.boxColors ? (
+              <BoxColorLegend anyCamera={cameraRow.length > 1} />
+            ) : exploring && searchBoxColors ? (
+              <>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-[1px] border border-zinc-100" />
+                  in colour: counts toward the search
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2 w-2 rounded-[1px] border border-zinc-600" />
+                  grey: other boxes
+                </span>
+              </>
+            ) : evaluating && frameResults.boxColors ? (
               <BoxColorLegend anyCamera={cameraRow.length > 1} />
             ) : undefined
           }
@@ -1215,8 +1706,9 @@ export default function Index() {
           // outcome colours, instead of the frame's own boxes. The viewer just
           // draws the rectangles it is given. Without an evaluation for this
           // frame there is nothing to compare, and the labels show as usual.
-          overlay={evaluating ? (frameResults.overlay ?? undefined) : undefined}
-          legend={evaluating ? <OverlayLegend /> : undefined}
+          // (F7) Explore with a model condition: the results that condition counts.
+          overlay={evaluating || exploringModel ? (frameResults.overlay ?? undefined) : undefined}
+          legend={evaluating || exploringModel ? <OverlayLegend /> : undefined}
         />
       }
       cameraStrip={
@@ -1231,7 +1723,34 @@ export default function Index() {
         ) : undefined
       }
       details={
-        evaluating ? (
+        exploring && search && frameSearch ? (
+          <SearchPanel
+            conditions={conditions}
+            frameIndex={frameIndex}
+            frameBoxCount={totalCount}
+            frameValues={frameSearch.values}
+            frameMatches={frameSearch.matches}
+            byScene={search.byScene}
+            currentScene={shownSceneName}
+            onOpenScene={handleOpenSceneHits}
+            scenesTotal={scenes.catalog?.scenes.length ?? 0}
+            scenesPending={(scenes.catalog?.scenes.length ?? 0) - search.byScene.length}
+            framesSearched={search.frames}
+            // A model box or label clicked in the photo: say what it is and why.
+            pinned={
+              exploringModel && frameResults.selectedResult ? (
+                <SelectedResult
+                  result={frameResults.selectedResult}
+                  visibility={visibilityText(selectedBox?.annotation?.visibility)}
+                  notEvaluated={null}
+                  rules={DEFAULT_EVALUATION_RULES}
+                  camera={activeCamera ?? undefined}
+                  otherViews={null}
+                />
+              ) : undefined
+            }
+          />
+        ) : evaluating ? (
           // (F5) In evaluate mode the details panel is the evaluation panel.
           <EvaluationPanel
             status={predictions.status === 'none' ? 'failed' : predictions.status}
@@ -1242,6 +1761,17 @@ export default function Index() {
             frameBoxCount={totalCount}
             model={predictions.set?.model}
             rules={evaluationRules}
+            // (F7) The headline is this scene's; every scene is listed below it.
+            scope={shownSceneName ?? undefined}
+            scenes={scenesEvaluation}
+            scenesTotal={scenes.catalog?.scenes.length ?? 0}
+            scenesStale={scenesEvaluationStale}
+            onOpenScene={handleSelectScene}
+            photoNote={
+              scenes.catalog?.photo && scenes.catalog.photo.width < scenes.catalog.photo.sourceWidth
+                ? `the original ${scenes.catalog.photo.sourceWidth}×${scenes.catalog.photo.sourceHeight} photos (the photos shown here are ${scenes.catalog.photo.width}×${scenes.catalog.photo.height} copies)`
+                : undefined
+            }
             pinned={
               <SelectedResult
                 result={frameResults.selectedResult}
@@ -1325,8 +1855,12 @@ export default function Index() {
         // frames → playback would be a meaningless slideshow).
         <Timeline
           frames={frames}
-          selectedFrameId={selectedFrameId}
+          selectedFrameId={currentFrameId}
           onSelectFrame={handleSelectFrame}
+          // (F7) A scene has ~40 frames: one bar per frame instead of one photo.
+          // COCO keeps its ten thumbnails.
+          variant={tracksAcrossFrames ? 'scrubber' : 'thumbnails'}
+          leading={scenePicker}
           isPlaying={tracksAcrossFrames ? isPlaying : undefined}
           onTogglePlay={
             tracksAcrossFrames ? () => setIsPlaying((p) => !p) : undefined
@@ -1342,8 +1876,9 @@ export default function Index() {
           // independent so it's hidden there (callback omitted).
           onReset={tracksAcrossFrames ? handleResetSequence : undefined}
           // (F5) Evaluate mode: "N missed" per frame instead of review counts.
-          reviewCounts={evaluating ? undefined : reviewProgress?.byFrame}
-          badges={evaluationBadges}
+          reviewCounts={evaluating || exploring ? undefined : reviewProgress?.byFrame}
+          // (F7) Explore mode: which frames match the search, and by how much.
+          badges={exploring ? searchBadges : evaluationBadges}
         />
       }
     />

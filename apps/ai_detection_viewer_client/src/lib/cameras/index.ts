@@ -21,4 +21,4 @@ export {
   stepCamera,
   visibleFraction,
 } from './pick';
-export { preloadOrder } from './preload';
+export { preloadOrder, upcomingFrames } from './preload';

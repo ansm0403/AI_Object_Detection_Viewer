@@ -95,8 +95,9 @@ COCO 프레임은 2D bbox에서 *추정한* 3D를, nuScenes 프레임은 실제 
 
 > 두 가지 샘플 데이터가 내장되어 있습니다 (앱은 nuScenes로 기본 진입):
 >
-> - **nuScenes-mini `scene-0916`** *(기본)* — 실측 3D 박스(쿼터니언 회전) + 실측 LiDAR 점구름 +
->   10 키프레임 시퀀스(자동재생 · 객체 추적 · 카메라 Follow). `Measured` 배지.
+> - **nuScenes-mini 전체** *(기본)* — 장면 10개, 키프레임 404개, 3D 박스 18,538개, 카메라 6대의 사진 2,424장.
+>   실측 3D 박스(쿼터니언 회전) + 실측 LiDAR 점구름 + 장면별 시퀀스(자동재생 · 객체 추적 · 카메라 Follow).
+>   `scene-0916`으로 열리고, 타임라인 왼쪽에서 장면을 바꿉니다. `Measured` 배지.
 > - **MS COCO val2017** — person / bicycle / car 10장에 YOLOv8n 추론을 돌려 실제 confidence
 >   분포를 채운 데이터. 2D bbox로부터 3D를 추정. `Estimated` 배지.
 >
@@ -290,8 +291,8 @@ nuScenes 실측 3D를 추가하면서 COCO를 *대체*할 수도 있었지만, �
 
 - Node.js 20+
 - npm
-- (선택) Python 3.13 — nuScenes 샘플 데이터를 직접 재생성할 때만 필요. 생성된 JSON은 이미
-  저장소에 포함되어 있어 앱 실행에는 불필요합니다.
+- (선택) Python 3.13 + Pillow(+ 예측을 다시 만들려면 ultralytics) — nuScenes 샘플 데이터를 직접
+  재생성할 때만 필요. 생성된 파일은 이미 저장소에 포함되어 있어 앱 실행에는 불필요합니다.
 
 ### 로컬 개발
 
@@ -318,10 +319,13 @@ npx nx build ai_detection_viewer_client
 ### (선택) nuScenes 샘플 데이터 재생성
 
 ```bash
-# nuScenes-mini를 로컬에 받아둔 경우에만. 다른 scene으로 교체 가능.
-python apps/ai_detection_viewer_client/scripts/prep_nuscenes.py \
-  --dataroot C:\data\sets\nuscenes --scene-index 0 --num-keyframes 10
-# → public/sample-data/nuscenes/nuscenes.json + cam_front/*.jpg 생성
+# nuScenes-mini를 로컬에 받아둔 경우에만 (저장소 루트에서 실행).
+# 1) 장면 10개 전부: 목차 + 장면별 박스 파일 + 프레임별 LiDAR 점 파일 + 줄인 사진(960×540 WebP)
+python scripts/prep_nuscenes.py --dataroot C:\data\sets\nuscenes
+# 2) 원본 사진(1600×900)에 YOLOv8n을 돌려 장면별 예측 파일을 만든다 (CPU로 약 5분)
+python scripts/predict_nuscenes.py --dataroot C:\data\sets\nuscenes
+# → apps/ai_detection_viewer_client/public/sample-data/nuscenes/scenes.json + scenes/<장면>/…
+#   (같은 입력으로 다시 돌리면 같은 파일이 나온다. 장면 하나만: --scenes scene-0916)
 ```
 
 ---
@@ -359,10 +363,11 @@ apps/ai_detection_viewer_client/
 │   └── ...
 ├── scripts/
 │   ├── generate_predictions.py   # COCO val2017 → YOLOv8n 추론 (confidence 채움)
-│   └── prep_nuscenes.py          # nuScenes 관계형 테이블 → 정적 JSON + LiDAR 디코드
+│   ├── prep_nuscenes.py          # nuScenes 관계형 테이블 → 장면별 정적 파일 + LiDAR 디코드 + 사진 줄이기
+│   └── predict_nuscenes.py       # nuScenes 원본 사진 → YOLOv8n 추론 (장면별 예측 파일)
 ├── public/sample-data/
 │   ├── frame_*.jpg + sample.json # COCO 10장 + YOLO 추론
-│   └── nuscenes/                 # scene-0916 10 키프레임 + LiDAR + cam_front/
+│   └── nuscenes/                 # scenes.json(목차) + scenes/<장면>/ (박스, 예측, 프레임별 점, 사진 6대)
 └── tests/integration/            # 선택 동기화 / 프레임 전환 / 추적 계약 테스트
 ```
 
@@ -569,9 +574,18 @@ LCP 요소는 2D 뷰어의 CAM_FRONT `<image>`, TBT는 평균 1.5s(CPU 4배 감�
 
 내장 샘플 데이터는 시연용이며, 각 데이터셋의 약관을 따릅니다.
 
-- **nuScenes-mini `scene-0916`** (`public/sample-data/nuscenes/`) — CAM_FRONT 이미지와 3D 박스·LiDAR를
-  가공한 JSON. nuScenes 데이터셋은 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)
-  (비상업적 이용)과 [nuScenes Terms of Use](https://www.nuscenes.org/terms-of-use)를 따릅니다.
+- **nuScenes-mini (v1.0-mini) 전체** (`public/sample-data/nuscenes/`) — [nuScenes](https://www.nuscenes.org/nuscenes)
+  데이터셋(Motional)의 맛보기 묶음을 가공한 것입니다: 장면 10개, 키프레임 404개, 카메라 6대의 사진 2,424장,
+  3D 박스 18,538개, LiDAR 점구름.
+  - **라이선스:** [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)(출처 표시 · 비상업적 이용 ·
+    같은 조건으로 공유)과 [nuScenes Terms of Use](https://www.nuscenes.org/terms-of-use)를 따릅니다. 이 폴더의
+    가공 파일도 같은 조건입니다(저장소의 코드와는 별개).
+  - **원본에서 바꾼 것:** 키프레임만 골랐고(스윕, 레이더, 지도는 없음), 사진은 1600×900 JPEG을 960×540 WebP로
+    줄였으며, LiDAR 점은 격자 솎아내기로 프레임당 약 6천 개로 줄였고, 관계형 테이블을 장면별 JSON으로 펼쳤습니다.
+    박스 좌표와 카메라 보정값은 원본 값 그대로입니다.
+  - **인용:** H. Caesar et al., "nuScenes: A multimodal dataset for autonomous driving", CVPR 2020.
+  - 이 프로젝트는 Motional과 무관하며, Motional의 승인이나 후원을 받지 않았습니다.
+  - `scenes/<장면>/predictions.json`은 원본 사진에 Ultralytics YOLOv8n을 돌린 추론 결과이며 데이터셋의 일부가 아닙니다.
 - **MS COCO val2017** (`public/sample-data/frame_*.jpg`) — 이미지 10장, 원본 주소는 `sample.json`의 `coco_url`.
   이미지 저작권은 COCO가 아닌 원저작자에게 있어 [Flickr 이용약관](https://www.flickr.com/help/terms)을
   따르고, COCO 원본 주석(`sample.gt_backup.json`)은 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)입니다
