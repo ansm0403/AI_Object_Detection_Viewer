@@ -21,6 +21,21 @@ export function isPredictionId(id: string | null | undefined): boolean {
   return typeof id === 'string' && id.startsWith(PREDICTION_ID_PREFIX);
 }
 
+/**
+ * (F7.5) The camera a prediction id names, or `null` when `id` is not a
+ * prediction id of that shape. A model box belongs to exactly one photo, so
+ * selecting it says which camera to show (`useActiveCamera`'s `preferred`).
+ * The index is the last `:` field and the camera the one before it, so a frame
+ * id may itself contain colons.
+ */
+export function cameraOfPredictionId(id: string | null | undefined): string | null {
+  if (typeof id !== 'string' || !id.startsWith(PREDICTION_ID_PREFIX)) return null;
+  const parts = id.slice(PREDICTION_ID_PREFIX.length).split(':');
+  if (parts.length < 3) return null;
+  const camera = parts[parts.length - 2];
+  return camera === '' ? null : camera;
+}
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 
@@ -162,5 +177,6 @@ function readModel(model: Record<string, unknown>): PredictionModelInfo {
     info.minScore = model.minScore;
   }
   if (typeof model.library === 'string' && model.library !== '') info.library = model.library;
+  if (typeof model.weights === 'string' && model.weights !== '') info.weights = model.weights;
   return info;
 }

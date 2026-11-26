@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isPredictionId, parsePredictions, predictionId } from './parse';
+import { cameraOfPredictionId, isPredictionId, parsePredictions, predictionId } from './parse';
 
 const MODEL = { name: 'yolov8n', library: 'ultralytics 8.4.51', imageSize: 1280, minScore: 0.05 };
 /** A file in the F5 format: one camera for the whole file, one list per frame. */
@@ -232,5 +232,38 @@ describe('prediction ids', () => {
   it('differ between frames, and between cameras, for the same position', () => {
     expect(predictionId('f1', 'CAM_FRONT', 0)).not.toBe(predictionId('f2', 'CAM_FRONT', 0));
     expect(predictionId('f1', 'CAM_FRONT', 0)).not.toBe(predictionId('f1', 'CAM_BACK', 0));
+  });
+});
+
+describe('(F7.5) cameraOfPredictionId', () => {
+  it('reads the camera out of a prediction id', () => {
+    expect(cameraOfPredictionId(predictionId('abc', 'CAM_BACK_RIGHT', 12))).toBe('CAM_BACK_RIGHT');
+    expect(cameraOfPredictionId(predictionId('abc', 'CAM_FRONT', 0))).toBe('CAM_FRONT');
+  });
+
+  it('still finds it when the frame id contains a colon', () => {
+    expect(cameraOfPredictionId(predictionId('scene:7:frame', 'CAM_BACK', 3))).toBe('CAM_BACK');
+  });
+
+  it('is null for anything that is not a prediction id naming a camera', () => {
+    expect(cameraOfPredictionId('5999098c7e5e4a0f8d8f3f2b1c0d9e8f')).toBeNull();
+    expect(cameraOfPredictionId('pred:abc')).toBeNull();
+    expect(cameraOfPredictionId(predictionId('abc', '', 0))).toBeNull(); // a single-camera frame has no name
+    expect(cameraOfPredictionId('')).toBeNull();
+    expect(cameraOfPredictionId(null)).toBeNull();
+    expect(cameraOfPredictionId(undefined)).toBeNull();
+  });
+});
+
+describe('(F7.5) the weights file name', () => {
+  it('is kept when the file states it', () => {
+    const set = parsePredictions({ model: { name: 'yolov8n', weights: 'yolov8n.pt' }, frames: [] });
+    expect(set?.model.weights).toBe('yolov8n.pt');
+  });
+
+  it('is absent when the file does not state it, or states something that is not a name', () => {
+    expect(parsePredictions({ model: { name: 'yolov8n' }, frames: [] })?.model.weights).toBeUndefined();
+    expect(parsePredictions({ model: { name: 'yolov8n', weights: 5 }, frames: [] })?.model.weights).toBeUndefined();
+    expect(parsePredictions({ model: { name: 'yolov8n', weights: '' }, frames: [] })?.model.weights).toBeUndefined();
   });
 });

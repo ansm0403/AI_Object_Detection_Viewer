@@ -52,8 +52,12 @@ export const DEFAULT_MIN_SCORE = 0.25;
  */
 export const UNSCORED_VISIBILITY = 'v0-40';
 
-/** Below this overlap a "closest" box is not worth mentioning. */
-const NEAREST_MIN_IOU = 0.1;
+/**
+ * Below this overlap a "closest" box is not worth mentioning. (F7.5: exported
+ * because it is also the definition of "a false alarm with no label nearby",
+ * which the sample-check export states. The value and its use are unchanged.)
+ */
+export const NEAREST_MIN_IOU = 0.1;
 
 type Label = {
   detection: Detection2D;
