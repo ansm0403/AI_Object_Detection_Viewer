@@ -44,7 +44,8 @@
 | F7 | **구현 완료 (2026-11-27).** 결과와 계획 대비 달라진 점은 `post-mvp-checklist.md`의 F7 항목, 구조는 `architecture.md`의 "Scenes, Chunked Loading and Search (F7)", 경계 사례는 `docs/edgecases/Edge_F#7.md`, 시안과 단계별·경계 캡처는 `docs/plan-feature/assets/F7/`(`compare.html`, `steps.html`). 설계 문서는 [F7_scene_exploration.md](F7_scene_exploration.md) |
 | F7 병합 | **PR #15로 `main`에 합쳐졌다**(squash 커밋 `1358e99`, 같은 세션에서 `git log`로 확인. 합쳐진 `main`과 브랜치의 내용이 같음을 확인하고 로컬 브랜치를 지웠다) |
 | 13장 재검토 | **F7 설계 문서 13장에 13.1, 13.2를 더했다(2026-11-27).** 사용자가 받아 온 글 44항목을 원문과 다시 대조하니 9항목이 기록 없이 빠져 있었다(IoU 기준 슬라이더, 다른 주행의 밤 장면, 3D 예측 보기 등). 후보를 세 묶음(가 / 나 / 다)으로 다시 나눴다 |
-| F7.5, F8 설계 문서 | 없음. 각 세션을 시작할 때 쓴다 |
+| F7.5 설계 문서 | **승인됨 (2026-11-27. "커밋 후 추천대로 진행해": 표본 100개, 보고서 창, 나머지는 추천안).** [F7.5_trustworthy_evaluation.md](F7.5_trustworthy_evaluation.md), 시안은 `docs/plan-feature/assets/F7.5/compare.html`. 브랜치 `feat/f7.5-trustworthy-eval`(최신 `main` `4b4597e`에서 만듦). 구현 중 |
+| F8 설계 문서 | 없음. 그 세션을 시작할 때 쓴다 |
 | 테스트 | **861개 통과**(F7 전 695개), `tsc --noEmit` 오류 0개, CI 린트 오류 0개(경고 19개), 배포용 빌드 성공 (F7 세션 종료 시점). 실제 앱을 조작하는 확인 163항목 통과(F7-B 45, C 32, D 28, E 24, 엣지 34. 마지막 빌드에서 다시 돌림) |
 
 **다음 세션에서 할 일**
