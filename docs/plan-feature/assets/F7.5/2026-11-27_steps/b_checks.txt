@@ -101,7 +101,7 @@ PASS  1024×768: no text in the panel is cut or sticks out
 PASS  1024×768: the estimate sentence is visible without scrolling the panel
 PASS  1024×768: no text in the sample bar is cut
 PASS  1024×768: no page scroll
-PASS  export: file name is false-alarm-sample_<date>.json  — false-alarm-sample_20261127-0659.json
+PASS  export: file name is false-alarm-sample_<date>.json  — false-alarm-sample_20261127-0717.json
 PASS  export: its own format, not review@2  — ai-detection-viewer/false-alarm-sample@1
 PASS  export: population 1,452, seed, 100 items
 PASS  export: 3 judged — the same number the screen shows

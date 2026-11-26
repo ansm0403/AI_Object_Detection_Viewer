@@ -45,6 +45,7 @@ export {
   type DistanceRow,
 } from './distance-compare';
 export { describeModelConditions, describeWeights, type WeightsOrigin } from './model-info';
+export { BENCHMARK_IOU, IOU_CHOICES, describeIouChoice, isIouChoice } from './iou-choices';
 export {
   DEFAULT_MIN_SCORE,
   IOU_THRESHOLD,

@@ -38,6 +38,13 @@ type Props = {
   onDeselect?: () => void;
   /** (F7.5) Extra controls placed before the count on the right (the bar knows nothing about them). */
   extra?: ReactNode;
+  /** (F7.5) A control placed right after the metric slider (evaluate mode: the IoU choice). */
+  afterMetric?: ReactNode;
+  /**
+   * (F7.5) Whether what `afterMetric` controls is at its resting value. Reset is
+   * enabled while anything in the bar is away from rest — including that.
+   */
+  afterMetricIsDefault?: boolean;
 };
 
 export function Filters({
@@ -58,6 +65,8 @@ export function Filters({
   onReset,
   onDeselect,
   extra,
+  afterMetric,
+  afterMetricIsDefault = true,
 }: Props) {
   // The active metric filter is "default" only when its own control is at rest:
   // confidence at 0, or distance at its max ("All"). The inactive metric is
@@ -66,7 +75,7 @@ export function Filters({
     filterMode === 'confidence'
       ? confidenceThreshold === defaultThreshold
       : maxDistance >= DISTANCE_MAX;
-  const isDefault = metricIsDefault && visibleClasses.size === 0;
+  const isDefault = metricIsDefault && visibleClasses.size === 0 && afterMetricIsDefault;
 
   return (
     // (F3) A flush bar under the header. Wide screens keep it on one line (the
@@ -87,6 +96,14 @@ export function Filters({
           />
         )}
       </div>
+      {afterMetric && (
+        <>
+          <span aria-hidden="true" className="hidden lg:block w-px h-5 bg-zinc-800 shrink-0" />
+          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+            {afterMetric}
+          </div>
+        </>
+      )}
       <span aria-hidden="true" className="hidden lg:block w-px h-5 bg-zinc-800 shrink-0" />
       <div className="min-w-0 lg:overflow-x-auto" onClick={(e) => e.stopPropagation()}>
         <ClassToggles

@@ -117,6 +117,48 @@ const SCREENS = [
       <p><span class="tag fix">고침</span>처음에는 목록의 클래스 이름이 "c…", "b…"로 잘렸다. 장면 칸을 "scene-0757"에서 <b>"0757"</b>로 줄여 고쳤다(전체 이름은 줄에 마우스를 올리면 나온다).</p>
       <p><b>무엇을 보면 되는지:</b> car / bicycle / person이 다 보인다. 판정 버튼 셋이 한 줄에 들어가 있다. 이 화면은 1번 박스를 마우스로 다시 고른 상태라 "Judged: Real object, label missing"과 "C clear"가 보인다.</p>`,
   },
+  {
+    key: 'C1 조건 한 줄',
+    title: '단계 C — IoU 고르기와 조건 한 줄: 기본값(0.3)',
+    img: 'c1_default.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>74 / 74. 단계 B의 135항목도 이 빌드에서 다시 돌려 모두 통과했다. 단위 테스트 981개 통과, 타입 오류 0, 린트 오류 0(경고 19개).</p>
+      <p><b>무엇을 보면 되는지:</b></p>
+      <ul>
+        <li><b>위쪽 줄:</b> 점수 슬라이더 옆에 <b>MIN OVERLAP (IoU) [0.3 | 0.5]</b>. 0.3이 눌려 있고 옆에 "this tool's default". 오른쪽 끝에 노란 테두리의 <b>Sample check</b>.</li>
+        <li><b>오른쪽 아래 패널:</b> 새로 생긴 한 줄 <b>"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3"</b>. 마우스를 올리면 근거가 나온다("Weights yolov8n.pt as released (trained on COCO); not trained on nuScenes…"). 모델 이름은 예측 파일에 적힌 그대로다. 패널 제목 옆은 "6 cameras · 246 photos"로 바꿨다(무엇을 채점했는지는 제목 옆에, 어떻게 채점했는지는 이 한 줄에).</li>
+        <li><b>숫자는 그대로다:</b> Precision 77%, Recall 68%, 첫 프레임 23 missed. 기본값을 바꾸지 않았기 때문이다.</li>
+      </ul>`,
+  },
+  {
+    key: 'C2 IoU 0.5',
+    title: '단계 C — 0.5를 누르면',
+    img: 'c2_iou05.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>위쪽 줄의 <b>0.5</b>를 눌렀다.</p>
+      <p><b>무엇을 보면 되는지:</b> 같은 장면이 Precision 77% → <b>57%</b>, Recall 68% → <b>54%</b>. 첫 프레임은 놓침 23 → 28, 헛짚음 5 → 11, 찾음 21 → 16. 목록, 사진, 3D 색, 타임라인, 썸네일의 숫자가 모두 따라 바뀐다. 조건 한 줄의 끝이 노란 <b>"IoU ≥ 0.5"</b>가 됐고 버튼 옆에 "benchmark value"가 붙었다. Reset이 켜졌다(누르면 0.3으로 돌아간다).</p>
+      <p>3D 캔버스는 다시 만들어지지 않았다.</p>`,
+  },
+  {
+    key: 'C3 전체 장면',
+    title: '단계 C — 0.5에서 전체 장면의 숫자',
+    img: 'c3_iou05_all_scenes.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>같은 상태에서 패널을 "All scenes"까지 내렸다.</p>
+      <p><b>무엇을 보면 되는지:</b> 전체 <b>Precision 51% · Recall 45%</b>(5,462 of 12,018). 그 아래 낮 52%(4,659 / 8,916), 밤 26%(803 / 3,102). <b>F7 때 조사해 문서에 적어 둔 값(51% / 45%, 52% / 26%)과 같다.</b> 기준 하나로 전체가 10~15%p 움직이고, 낮과 밤의 차이는 두 기준 모두에서 남는다.</p>
+      <p>함께 확인한 것: 0.5를 고른 채 Explore로 가도 검색 결과는 그대로다("Model missed ≥ 15" 135프레임, "Crowded" 177프레임 / 장면 7개). 표본 검수도 그대로다(1,452개 중 100개, 같은 첫 박스). 표본 검수에서 나오면 0.5가 그대로 눌려 있다. 데이터셋을 바꿨다 돌아오면 0.3이다.</p>`,
+  },
+  {
+    key: 'C4 1024',
+    title: '단계 C — 1024×768에서 위쪽 줄',
+    img: 'c4_1024x768.jpg', w: 1024, h: 768,
+    html: `<p><span class="tag pass">통과</span>가장 좁은 폭, IoU 0.5. 위치로 확인한 것(네 가지 창 크기 × 두 값): 위쪽 줄이 한 줄(40px)인가, IoU 버튼이 줄 안에 있고 다른 것과 겹치지 않는가, 잘린 글자가 없는가, 조건 한 줄이 패널 안에 있고 잘리지 않았는가, 이 장면의 Precision / Recall이 스크롤 없이 보이는가, 페이지 스크롤이 없는가.</p>
+      <p><b>알아 둘 대가:</b> 위쪽 줄에 IoU 버튼과 Sample check가 들어가면서 <b>클래스 칩이 쓸 수 있는 폭이 줄었다.</b> 1024px에서 368px이다(잰 값). 그 전에는 약 570px이었다(잰 값이 아니라, 368에 IoU 97px, 버튼 58px, 사이 간격 약 45px을 더한 계산값). 칩이 다 들어가지 않으면 지금처럼 옆으로 밀어 본다(F3부터 있던 동작이다). 줄이려고 한 것: 1280px보다 좁으면 "MIN OVERLAP (IoU)"를 "IoU"로, "Sample check"를 "Sample"로 줄이고, 설명 글은 1440px 이상에서만 보인다. 0.5의 설명 글도 "benchmark value — strict for projected labels"에서 "benchmark value"로 줄였다(긴 설명은 툴팁과 패널 아래 설명에 있다).</p>`,
+  },
+  {
+    key: 'C5 1280',
+    title: '단계 C — 1280×720',
+    img: 'c5_1280x720.jpg', w: 1280, h: 720,
+    html: `<p><span class="tag pass">통과</span>1280×720, IoU 0.5. 클래스 칩 자리 494px.</p>
+      <p><b>무엇을 보면 되는지:</b> 위쪽 줄이 한 줄에 들어가 있고, 패널의 조건 한 줄이 잘리지 않았다(패널 폭 360px).</p>`,
+  },
 ];
 let at = 0;
 const nav = document.getElementById('nav');

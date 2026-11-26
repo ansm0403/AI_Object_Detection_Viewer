@@ -2,8 +2,12 @@
 
 import type { ReactNode } from 'react';
 import {
+  BENCHMARK_IOU,
   EVAL_KINDS,
+  IOU_THRESHOLD,
   countOf,
+  describeModelConditions,
+  describeWeights,
   formatPercent,
   outcomeCountLabel,
   ratio,
@@ -94,12 +98,12 @@ export function EvaluationPanel({
   const fileMinScore =
     model?.minScore !== undefined && rules.minScore < model.minScore ? model.minScore : null;
   const cameras = evaluation?.byCamera ?? [];
+  // The header says WHAT was scored (cameras, photos); HOW it was scored is the
+  // conditions line below it (F7.5).
+  const photos = evaluation?.evaluatedPhotos ?? 0;
   const basis = [
-    model?.name,
     cameras.length === 1 ? cameras[0].camera : cameras.length > 1 ? `${cameras.length} cameras` : null,
-    fileMinScore !== null
-      ? `score ≥ ${fileMinScore.toFixed(2)} (file minimum)`
-      : `score ≥ ${rules.minScore.toFixed(2)}`,
+    photos > 0 ? `${photos.toLocaleString('en-US')} photo${photos === 1 ? '' : 's'}` : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -116,6 +120,7 @@ export function EvaluationPanel({
       {status === 'ready' && evaluation ? (
         <>
           {pinned}
+          <ConditionsLine model={model} rules={rules} fileMinScore={fileMinScore} />
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Scores evaluation={evaluation} scope={scope} />
             <FrameCounts frameEvaluation={frameEvaluation} frameIndex={frameIndex} />
@@ -195,6 +200,64 @@ export function EvaluationPanel({
         </div>
       )}
     </aside>
+  );
+}
+
+/**
+ * (F7.5) What the numbers were measured with, in one line that is always on
+ * screen with them: model, training, input size, score, IoU. Without it a
+ * recall of 56 % reads as "the model's recall"; it is the recall of the
+ * smallest YOLOv8, not trained on this data, at these two thresholds.
+ *
+ * Every phrase comes from the predictions file or the rules in effect —
+ * "no fine-tuning" only when the weights file is a known release
+ * (`describeWeights`); otherwise the file name is shown and nothing is claimed.
+ * The line wraps rather than being cut.
+ */
+function ConditionsLine({
+  model,
+  rules,
+  fileMinScore,
+}: {
+  model?: PredictionModelInfo;
+  rules: EvaluationRules;
+  fileMinScore: number | null;
+}) {
+  const origin = describeWeights(model?.weights);
+  const parts = describeModelConditions(model);
+  const title = [
+    origin
+      ? `Weights ${model?.weights} as released (trained on ${origin.trainedOn}); not trained on nuScenes.`
+      : model?.weights
+        ? `Weights file ${model.weights}; how it was trained is not recorded.`
+        : null,
+    model?.imageSize ? `Photos were resized so their longer side is ${model.imageSize} px before the model saw them.` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  return (
+    <p
+      aria-label="Conditions"
+      title={title || undefined}
+      className="shrink-0 px-3 py-1 border-b border-zinc-800 text-[11px] leading-snug text-zinc-400 tabular-nums"
+    >
+      {parts.map((part) => (
+        <span key={part}>
+          <span className={part === 'no fine-tuning' || part.startsWith('input ') ? 'text-zinc-200' : undefined}>
+            {part}
+          </span>
+          {' · '}
+        </span>
+      ))}
+      <span className="whitespace-nowrap">
+        score ≥ {(fileMinScore ?? rules.minScore).toFixed(2)}
+        {fileMinScore !== null && ' (file minimum)'}
+      </span>
+      {' · '}
+      <span className={`whitespace-nowrap ${rules.iouThreshold === IOU_THRESHOLD ? '' : 'text-amber-300'}`}>
+        IoU ≥ {rules.iouThreshold}
+      </span>
+    </p>
   );
 }
 
@@ -425,6 +488,13 @@ function Notes({
         {rules.iouThreshold}. Labels less than 40% visible are not scored — as rated by nuScenes for
         the object as a whole, over all six cameras, not for one photo.
       </p>
+      {rules.iouThreshold === BENCHMARK_IOU && (
+        <p className="text-amber-300/80">
+          IoU {BENCHMARK_IOU} is the usual benchmark value. Here the labels are projected 3D boxes, looser
+          than the object, so some correct detections fall short of it and count as a miss plus a false
+          alarm. This tool&apos;s default is {IOU_THRESHOLD}.
+        </p>
+      )}
       {photoNote && (
         <p>
           <span className="text-zinc-400">The model was run on {photoNote}.</span> Box coordinates

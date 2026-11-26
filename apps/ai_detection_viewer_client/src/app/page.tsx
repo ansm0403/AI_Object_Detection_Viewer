@@ -39,6 +39,7 @@ import {
   BoxColorLegend,
   EvaluationHeadline,
   EvaluationPanel,
+  IouChoice,
   ModeSwitch,
   OverlayLegend,
   ResultList,
@@ -293,6 +294,11 @@ export default function Index() {
     frameId: string;
     objectId?: string;
   } | null>(null);
+  // (F7.5) The overlap a model box needs to count as having found a label: this
+  // tool's default (0.3) or the usual benchmark value (0.5). A VIEW setting of
+  // evaluate mode, like the mode itself: not stored, reset by Reset and by a
+  // dataset switch. Explore and the sample check do not read it (fixed rules).
+  const [iouThreshold, setIouThreshold] = useState(IOU_THRESHOLD);
   // (F7.5) The sample check: judging a random sample of the false alarms that
   // have no label nearby. A state of evaluate mode (not a fourth mode); a VIEW
   // setting like the mode itself. Which box is being judged is NOT stored — it
@@ -600,8 +606,8 @@ export default function Index() {
     () =>
       sampleCheckOn
         ? DEFAULT_EVALUATION_RULES
-        : { minScore: confidenceThreshold, iouThreshold: IOU_THRESHOLD },
-    [sampleCheckOn, confidenceThreshold],
+        : { minScore: confidenceThreshold, iouThreshold },
+    [sampleCheckOn, confidenceThreshold, iouThreshold],
   );
   const evaluation = useMemo(
     () =>
@@ -1362,6 +1368,7 @@ export default function Index() {
       setPractice(false); // (F4-F) practice is a nuScenes-only mode
       setMode('review'); // (F5) evaluate is a nuScenes-only mode
       setSampleChecking(false); // (F7.5) the sample check is part of evaluate mode
+      setIouThreshold(IOU_THRESHOLD); // (F7.5) back to the default overlap
       setShownKinds(new Set()); // (F5) show every outcome again
       resetCamera(); // (F6) back to the default camera
     },
@@ -1396,6 +1403,7 @@ export default function Index() {
     resetFilters();
     setMaxDistance(maxDistance);
     setConfidenceThreshold(DEFAULT_MIN_SCORE);
+    setIouThreshold(IOU_THRESHOLD); // (F7.5) Reset means the default rules again
   }, [resetFilters, setMaxDistance, maxDistance, setConfidenceThreshold]);
 
   // (F4-F) Enter / leave practice mode. The scene's practice set is built and
@@ -1740,6 +1748,11 @@ export default function Index() {
           onToggleClass={toggleClass}
           onReset={evaluating ? handleResetEvaluationFilters : resetFilters}
           onDeselect={() => setSelectedObject(null)}
+          // (F7.5) Evaluate mode: the overlap threshold, next to the score.
+          afterMetric={
+            evaluating ? <IouChoice value={iouThreshold} onChange={setIouThreshold} /> : undefined
+          }
+          afterMetricIsDefault={!evaluating || iouThreshold === IOU_THRESHOLD}
           // (F7.5) The way into the sample check, next to the numbers it is about.
           extra={
             evaluating ? (
@@ -1747,9 +1760,11 @@ export default function Index() {
                 type="button"
                 onClick={handleEnterSampleCheck}
                 title="Judge a random sample of the false alarms that have no label nearby: is the model wrong, or is the label missing?"
+                aria-label="Sample check"
                 className="text-xs px-2 py-0.5 rounded border border-amber-400/30 text-amber-200 hover:border-amber-300/60 hover:text-amber-100 transition-colors whitespace-nowrap"
               >
-                Sample check
+                {/* Below 1280 px the class chips need the room (the bar is one line). */}
+                Sample<span className="hidden xl:inline"> check</span>
               </button>
             ) : undefined
           }
