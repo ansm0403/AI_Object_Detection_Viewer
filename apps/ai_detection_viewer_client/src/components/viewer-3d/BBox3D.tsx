@@ -184,11 +184,21 @@ export function BBox3D({
           unaffected. The wireframe + click mesh rotate with the box; the label
           stays on the unrotated outer group so it hangs upright above the box. */}
       <group ref={groupRef} quaternion={detection.bbox3D.rotation ?? IDENTITY_QUAT}>
-        {/* Invisible full-volume mesh for reliable raycasting — line segments alone are hard to click.
-            DoubleSide ensures clicks register from inside the bbox volume when the camera orbits in.
+        {/* Full-volume pick target for reliable raycasting — line segments alone are hard to click.
+            DoubleSide ensures clicks register from inside the bbox volume when the camera orbits in
+            (the raycaster reads `material.side`).
             Hover (F1-B) hangs off this same mesh; stopPropagation keeps only the front box highlighted
-            when boxes overlap, matching the click behavior. */}
+            when boxes overlap, matching the click behavior.
+
+            `visible={false}`: the mesh is never DRAWN. Picking does not need it drawn — the
+            raycaster tests geometry and ignores `visible`. Do NOT make it "invisible" with
+            `transparent opacity={0}` instead: three.js draws a transparent double-sided material
+            in two passes and flags it `needsUpdate` each time, so every box re-evaluated its
+            shader program twice per frame (78 of 119 draw calls and 78% of the idle JS time
+            on a 40-box nuScenes frame, production build, measured 2026-11-26). It also still
+            writes depth, which erased the floor grid behind boxes. See Edge_F#6.5. */}
         <mesh
+          visible={false}
           onClick={(e) => {
             e.stopPropagation();
             onClick?.();
@@ -203,7 +213,7 @@ export function BBox3D({
           }}
         >
           <boxGeometry args={[sx, sy, sz]} />
-          <meshBasicMaterial side={THREE.DoubleSide} transparent opacity={0} />
+          <meshBasicMaterial side={THREE.DoubleSide} />
         </mesh>
         <lineSegments geometry={geometry}>
           <lineBasicMaterial color={wireColor} />
