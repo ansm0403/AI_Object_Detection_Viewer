@@ -9,6 +9,7 @@ import {
   type EvalResult,
   type EvaluationRules,
 } from '@/lib/evaluation';
+import { classLabel } from '@/lib/ui/class-label';
 import { OutcomeIcon } from './icons';
 
 /** A selected 3D box that takes no part in the evaluation, and why. */
@@ -86,7 +87,7 @@ export function SelectedResult({
         <>
           {name}
           <span className="text-zinc-200">
-            {result.class} · {Math.round(result.distance)} m
+            {classLabel(result.class)} · {Math.round(result.distance)} m
             {visibility ? ` · visible ${visibility}` : ''}
           </span>
         </>
@@ -99,7 +100,7 @@ export function SelectedResult({
           Not evaluated
         </span>
         <span className="text-zinc-200">
-          {notEvaluated.class} · {Math.round(notEvaluated.distance)} m
+          {classLabel(notEvaluated.class)} · {Math.round(notEvaluated.distance)} m
         </span>
       </>
     );

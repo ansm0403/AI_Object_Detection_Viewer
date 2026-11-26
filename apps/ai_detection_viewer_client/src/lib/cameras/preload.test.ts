@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CameraView } from '@/lib/types';
-import { preloadOrder } from './preload';
+import { preloadOrder, upcomingFrames } from './preload';
 import { multiCameraFrame, singleImageFrame, view } from './test-helpers';
 
 const photo = (frame: number, camera: string): CameraView => ({
@@ -69,5 +69,34 @@ describe('preloadOrder', () => {
   it('handles frames with one image (no cameras)', () => {
     const coco = [singleImageFrame([], 'c0'), singleImageFrame([], 'c1')];
     expect(preloadOrder(coco, 0, 1)).toEqual(['/img/c0.jpg', '/img/c1.jpg']);
+  });
+});
+
+describe('upcomingFrames', () => {
+  const items = ['f0', 'f1', 'f2', 'f3', 'f4'];
+
+  it('is the current frame followed by the next ones in playback order', () => {
+    expect(upcomingFrames(items, 1, 2)).toEqual(['f1', 'f2', 'f3']);
+  });
+
+  it('wraps around the end and never repeats a frame', () => {
+    expect(upcomingFrames(items, 3, 3)).toEqual(['f3', 'f4', 'f0', 'f1']);
+    expect(upcomingFrames(items, 3, 99)).toEqual(['f3', 'f4', 'f0', 'f1', 'f2']);
+    expect(upcomingFrames(items, 0, Infinity)).toEqual(items);
+  });
+
+  it('0, negative or non-numeric distance → only the current frame', () => {
+    for (const ahead of [0, -2, Number.NaN]) expect(upcomingFrames(items, 2, ahead)).toEqual(['f2']);
+  });
+
+  it('a fractional distance is rounded down', () => {
+    expect(upcomingFrames(items, 0, 2.9)).toEqual(['f0', 'f1', 'f2']);
+  });
+
+  it('an index outside the list, or an empty list, gives nothing', () => {
+    expect(upcomingFrames(items, 5, 2)).toEqual([]);
+    expect(upcomingFrames(items, -1, 2)).toEqual([]);
+    expect(upcomingFrames(items, 1.5, 2)).toEqual([]);
+    expect(upcomingFrames([], 0, 2)).toEqual([]);
   });
 });

@@ -14,6 +14,7 @@ import {
 } from '@/lib/evaluation';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { displayId } from '@/lib/ui/display-id';
+import { classLabel } from '@/lib/ui/class-label';
 import { PANEL_CLASS, PanelHeader, useScrollSelectedIntoView } from '@/components/workspace';
 import { OutcomeIcon } from './icons';
 
@@ -176,7 +177,7 @@ export function ResultList({
                   title={isModelBox ? `Model box: ${result.class}` : result.class}
                   className="flex-1 min-w-0 text-sm text-zinc-100 truncate"
                 >
-                  {result.class}
+                  {classLabel(result.class)}
                 </span>
                 {isModelBox ? (
                   // A model box is 2D only: it has no measured position, and

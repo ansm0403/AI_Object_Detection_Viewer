@@ -27,6 +27,8 @@ import type {
   NuScenesCamera,
   NuScenesImage,
   NuScenesLidar,
+  NuScenesLidarRef,
+  NuScenesPointsFile,
   NuScenesPrepped,
   NuScenesPreppedFrame,
 } from './types';
@@ -42,6 +44,11 @@ import type {
  * because annotations are ground truth, never an injected fake score
  * (Immutable Rule #6). `pointCloud` carries the frame's real decimated LiDAR_TOP
  * points (F2-B), aligned to the boxes; absent (older prepped JSON) → empty.
+ *
+ * (F7) The same function reads a scene's frames file (format 1.3). There the
+ * points are in a separate file per frame: `pointCloud` is empty and
+ * `pointCloudSource` says where to fetch them (`parseNuScenesPoints` turns that
+ * file into the same points this function would have produced inline).
  */
 export function parseNuScenes(raw: unknown): Frame[] {
   if (!isPrepped(raw)) {
@@ -157,6 +164,9 @@ function buildFrame(pf: unknown): Frame | null {
   // The top-level image fields are the default camera's view (`views[0]`) —
   // the same array, so the two can never disagree (see `Frame.cameras`).
   const main = views[0];
+  // (F7) Points in their own file → nothing inline, only where to get them.
+  const lidarRef = isLidarRef(pf.lidar) ? pf.lidar : null;
+  const thumb: unknown = pf.thumb;
   return {
     id: pf.token,
     imageUrl: main.imageUrl,
@@ -164,10 +174,40 @@ function buildFrame(pf: unknown): Frame | null {
     imageHeight: main.imageHeight,
     detections2D: main.detections2D,
     detections3D,
-    pointCloud: buildLidarPoints(pf.lidar, egoPose, pf.token),
+    pointCloud: lidarRef ? [] : buildLidarPoints(pf.lidar, egoPose, pf.token),
     source: 'nuscenes-measured',
     cameras: views,
+    ...(lidarRef ? { pointCloudSource: { url: lidarRef.path, count: lidarRef.pointCount } } : {}),
+    ...(typeof thumb === 'string' && thumb !== '' ? { thumbnailUrl: thumb } : {}),
   };
+}
+
+/**
+ * (F7) Parse one frame's points file (`NuScenesPointsFile`) into render-frame
+ * points — the same points, through the same per-point math, that
+ * `parseNuScenes` produces for a single-file frame with inline points.
+ *
+ * Returns `null` when the file is not a points file (the caller then shows that
+ * the points are unavailable; the boxes still render). A valid file with zero
+ * points returns `[]`. Never throws (Error Defaults).
+ *
+ * `expectedToken`: the frame the points are about to be drawn on. A file that
+ * names ANOTHER frame is rejected (`null`) — measured points of one moment must
+ * never be shown under the boxes of another (Rule #6: what is on screen is what
+ * was measured for this frame).
+ */
+export function parseNuScenesPoints(raw: unknown, expectedToken?: string): Point3D[] | null {
+  if (!isPointsFile(raw)) {
+    console.warn('[parseNuScenesPoints] Not a points file. Expected { token, frameEgoPose, lidar }.');
+    return null;
+  }
+  if (expectedToken !== undefined && raw.token !== expectedToken) {
+    console.warn(
+      `[parseNuScenesPoints] Points file is for frame ${raw.token}, not ${expectedToken}. Ignoring it.`,
+    );
+    return null;
+  }
+  return buildLidarPoints(raw.lidar, raw.frameEgoPose, raw.token);
 }
 
 /** What the parser needs to project boxes into one camera's photo. */
@@ -394,6 +434,26 @@ function isLidar(value: unknown): value is NuScenesLidar {
     isPose(l.egoPose) &&
     isPose(l.calibratedSensor) // LiDAR calib has translation+rotation; no intrinsic
   );
+}
+
+/** (F7) A reference to a points file instead of inline points. */
+function isLidarRef(value: unknown): value is NuScenesLidarRef {
+  if (value === null || typeof value !== 'object') return false;
+  const l = value as Record<string, unknown>;
+  return (
+    typeof l.path === 'string' &&
+    l.path !== '' &&
+    !('points' in l) &&
+    typeof l.pointCount === 'number' &&
+    Number.isInteger(l.pointCount) &&
+    l.pointCount >= 0
+  );
+}
+
+function isPointsFile(value: unknown): value is NuScenesPointsFile {
+  if (value === null || typeof value !== 'object') return false;
+  const f = value as Record<string, unknown>;
+  return typeof f.token === 'string' && isPose(f.frameEgoPose) && isLidar(f.lidar);
 }
 
 function isAnnotation(value: unknown): value is NuScenesAnnotation {

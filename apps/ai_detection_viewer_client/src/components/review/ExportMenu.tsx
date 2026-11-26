@@ -4,8 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReviewExportFileType } from '@/lib/review';
 
 type Props = {
-  /** Reviewed boxes in the current scope — what an export would contain. */
+  /**
+   * Review records the menu acts on — what an export contains and what a reset
+   * deletes. (F7) With scenes this is EVERY scene's records, not the count of
+   * the scene on screen: both actions cover all scenes (Edge_F#7 Case 2).
+   */
   reviewedCount: number;
+  /** (F7) What the count covers, e.g. "in all scenes". Shown next to it. */
+  scope?: string;
+  /** (F7) A caveat about the export, e.g. scenes that are not loaded yet. */
+  exportNote?: string;
   onExport: (type: ReviewExportFileType) => void;
   /** Delete every review of the current scope. */
   onReset: () => void;
@@ -17,7 +25,7 @@ type Props = {
  * takes two clicks inside the menu — the first only arms the button and says
  * how many reviews would go.
  */
-export function ExportMenu({ reviewedCount, onExport, onReset }: Props) {
+export function ExportMenu({ reviewedCount, scope, exportNote, onExport, onReset }: Props) {
   const [open, setOpen] = useState(false);
   const [armed, setArmed] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -75,8 +83,11 @@ export function ExportMenu({ reviewedCount, onExport, onReset }: Props) {
           <p className="px-3 pt-1 pb-1.5 text-[11px] text-zinc-500">
             {empty
               ? 'Nothing reviewed yet'
-              : `${reviewedCount} reviewed box${reviewedCount === 1 ? '' : 'es'} · saved in this browser`}
+              : `${reviewedCount} reviewed box${reviewedCount === 1 ? '' : 'es'}${scope ? ` ${scope}` : ''} · saved in this browser`}
           </p>
+          {exportNote && !empty && (
+            <p className="px-3 pb-1.5 text-[11px] text-amber-300/90">{exportNote}</p>
+          )}
           <button
             type="button"
             role="menuitem"
@@ -108,7 +119,9 @@ export function ExportMenu({ reviewedCount, onExport, onReset }: Props) {
             type="button"
             role="menuitem"
             disabled={empty}
-            className={`${item} ${armed ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25' : 'text-rose-300'}`}
+            // flex-wrap: the armed text ("… delete all 2,424" + "in all scenes · no
+            // undo") is wider than the menu; the warning must wrap, not be cut off.
+            className={`${item} flex-wrap gap-y-0.5 ${armed ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25' : 'text-rose-300'}`}
             onClick={() => {
               if (!armed) {
                 setArmed(true);
@@ -119,10 +132,14 @@ export function ExportMenu({ reviewedCount, onExport, onReset }: Props) {
             }}
           >
             <span className="whitespace-nowrap">
-              {armed ? `Click again to delete ${reviewedCount}` : 'Reset reviews…'}
+              {armed
+                ? `Click again to delete ${scope ? 'all ' : ''}${reviewedCount}`
+                : 'Reset reviews…'}
             </span>
             {armed && (
-              <span className="whitespace-nowrap text-[10px] text-rose-300/80">no undo</span>
+              <span className="whitespace-nowrap text-[10px] text-rose-300/80">
+                {scope ? `${scope} · no undo` : 'no undo'}
+              </span>
             )}
           </button>
         </div>

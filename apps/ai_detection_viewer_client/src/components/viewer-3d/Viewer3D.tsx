@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { Frame } from '@/lib/types';
 import { frameBoxesForCamera, selectFollowTarget } from '@/lib/geometry';
@@ -33,6 +33,12 @@ type Viewer3DProps = {
   boxColors?: ReadonlyMap<string, string>;
   // (F5) A legend for those colours, shown under the name tag.
   legend?: ReactNode;
+  // (F7) What the camera framing belongs to — the scene's name. While it stays
+  // the same the framing is frozen (frame switches and playback do not move the
+  // camera). When it changes, the camera is fitted again to the frame shown at
+  // that moment: same Canvas, same WebGL context, only the camera moves. Left
+  // undefined (COCO, one-scene data) the framing is fixed for the component's life.
+  framingKey?: string;
 };
 
 export function Viewer3D({
@@ -46,6 +52,7 @@ export function Viewer3D({
   label,
   boxColors,
   legend,
+  framingKey,
 }: Viewer3DProps) {
   // nuScenes boxes sit at real measured positions (tens of metres ahead, Three
   // forward = −z) so the COCO camera (at −z looking +z) faces away from them.
@@ -68,7 +75,15 @@ export function Viewer3D({
   // current center replaces this frozen framing as `target`; this framing stays
   // the default AND the fallback (nothing selected / object not in this frame).
   // Only the aim point changes — no remount, no key change.
-  const mountFrame = useRef(frame).current;
+  //
+  // (F7) "The mount frame" generalised to "the frame shown when `framingKey`
+  // last changed": a new scene sits somewhere else, so the framing is taken
+  // again from its first frame — once, and then frozen as before. The value is
+  // remembered in state and replaced while rendering when the key differs
+  // (React's pattern for "derive from props, but keep the previous value").
+  const [anchor, setAnchor] = useState({ key: framingKey, frame });
+  if (anchor.key !== framingKey) setAnchor({ key: framingKey, frame });
+  const mountFrame = anchor.key === framingKey ? anchor.frame : frame;
   const framing = useMemo(
     () =>
       isMeasured
@@ -120,6 +135,11 @@ export function Viewer3D({
           onSelect={onSelect}
           visibleIds={visibleIds}
           target={target}
+          // (F7) Where the camera stands, and for which framing. The Canvas
+          // places the camera once, at creation; after that the scene moves it
+          // only when `placementKey` changes.
+          cameraPosition={cameraPosition}
+          placementKey={framingKey}
           fog={isMeasured ? false : undefined}
           nextFrame={nextFrame}
           playing={playing}

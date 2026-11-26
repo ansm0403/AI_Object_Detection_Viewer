@@ -5,9 +5,18 @@ import type { RejectReason, ReviewMap, ReviewScope, Verdict } from './types';
 
 /** Identifies the file format and its version, so a reader can tell what it got. */
 export const REVIEW_EXPORT_FORMAT = 'ai-detection-viewer/review@1';
+/**
+ * (F7) The same document for data that is split into scenes: every row also
+ * names its scene, `frameIndex` counts within that scene, and `scenes` lists
+ * what the file covers. A new version because the CSV gains a column.
+ */
+export const REVIEW_EXPORT_FORMAT_SCENES = 'ai-detection-viewer/review@2';
 
 export type ReviewExportRow = {
-  /** 1-based position of the frame in the sequence (what the timeline shows). */
+  /** (review@2) The scene the frame belongs to, e.g. "scene-0916". */
+  scene?: string;
+  /** 1-based position of the frame in the sequence — within its scene, when
+   *  the data has scenes (what the timeline shows). */
   frameIndex: number;
   frameId: string;
   objectId: string;
@@ -21,9 +30,15 @@ export type ReviewExportRow = {
 };
 
 export type ReviewExport = {
-  format: typeof REVIEW_EXPORT_FORMAT;
+  format: typeof REVIEW_EXPORT_FORMAT | typeof REVIEW_EXPORT_FORMAT_SCENES;
   exportedAt: string;
   dataset: 'nuscenes';
+  /**
+   * (review@2) The scenes this file covers, in order. `summary.totalBoxes`
+   * counts the boxes of exactly these scenes — a scene that was not loaded when
+   * the file was written is not in the list, and its records are not in the file.
+   */
+  scenes?: string[];
   /**
    * True when the verdicts were made on the practice set, whose boxes were
    * deliberately modified. Such a file says nothing about the real annotations
@@ -52,12 +67,33 @@ export function buildReviewExport(
   reviews: ReviewMap,
   options: { scope: ReviewScope; exportedAt: string },
 ): ReviewExport {
+  const rows = rowsOf(frames, reviews);
+  const { overall } = summarizeProgress(frames, reviews);
+  return {
+    format: REVIEW_EXPORT_FORMAT,
+    exportedAt: options.exportedAt,
+    dataset: 'nuscenes',
+    practice: options.scope === 'nuscenes-practice',
+    summary: {
+      totalBoxes: overall.total,
+      reviewed: overall.reviewed,
+      approved: overall.approved,
+      rejected: overall.rejected,
+      unsure: overall.unsure,
+    },
+    reviews: rows,
+  };
+}
+
+/** The rows of one run of frames: reviewed boxes only, frame order then box order. */
+function rowsOf(frames: readonly Frame[], reviews: ReviewMap, scene?: string): ReviewExportRow[] {
   const rows: ReviewExportRow[] = [];
   frames.forEach((frame, index) => {
     for (const box of frame.detections3D) {
       const record = getReview(reviews, frame.id, box.id);
       if (!record) continue;
       rows.push({
+        ...(scene !== undefined ? { scene } : {}),
         frameIndex: index + 1,
         frameId: frame.id,
         objectId: box.id,
@@ -70,12 +106,32 @@ export function buildReviewExport(
       });
     }
   });
+  return rows;
+}
 
-  const { overall } = summarizeProgress(frames, reviews);
+/**
+ * (F7) The export document for data split into scenes: the records of every
+ * given scene, scene by scene in the given order. Each row names its scene and
+ * its frame's position WITHIN that scene; the summary counts all given scenes.
+ *
+ * Only the scenes passed in are covered — the caller passes the ones it has in
+ * memory, and `scenes` in the file says which those were.
+ */
+export function buildSceneReviewExport(
+  scenes: readonly { name: string; frames: readonly Frame[] }[],
+  reviews: ReviewMap,
+  options: { scope: ReviewScope; exportedAt: string },
+): ReviewExport {
+  const rows = scenes.flatMap((scene) => rowsOf(scene.frames, reviews, scene.name));
+  const { overall } = summarizeProgress(
+    scenes.flatMap((scene) => scene.frames),
+    reviews,
+  );
   return {
-    format: REVIEW_EXPORT_FORMAT,
+    format: REVIEW_EXPORT_FORMAT_SCENES,
     exportedAt: options.exportedAt,
     dataset: 'nuscenes',
+    scenes: scenes.map((scene) => scene.name),
     practice: options.scope === 'nuscenes-practice',
     summary: {
       totalBoxes: overall.total,
@@ -143,12 +199,17 @@ function csvCell(value: string, guardFormula = false): string {
  * The same rows as a CSV table (header + one line per reviewed box). Multiple
  * reasons share one cell, joined with ";". Lines end with CRLF, as RFC 4180
  * specifies and Excel expects.
+ *
+ * (F7) A document with scenes (review@2) gets a leading `scene` column; a
+ * review@1 document is written exactly as before.
  */
 export function reviewExportToCsv(data: ReviewExport): string {
-  const lines = [CSV_COLUMNS.join(',')];
+  const withScene = data.format === REVIEW_EXPORT_FORMAT_SCENES;
+  const lines = [(withScene ? ['scene', ...CSV_COLUMNS] : CSV_COLUMNS).join(',')];
   for (const row of data.reviews) {
     lines.push(
       [
+        ...(withScene ? [csvCell(row.scene ?? '')] : []),
         String(row.frameIndex),
         csvCell(row.frameId),
         csvCell(row.objectId),

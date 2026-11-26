@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   REVIEW_EXPORT_FORMAT,
+  REVIEW_EXPORT_FORMAT_SCENES,
   buildReviewExport,
+  buildSceneReviewExport,
   reviewExportFilename,
   reviewExportToCsv,
   reviewExportToJson,
@@ -179,5 +181,74 @@ describe('reviewExportToCsv', () => {
       );
       expect(csv).toContain(`,'${note},`);
     }
+  });
+});
+
+describe('buildSceneReviewExport (F7: data split into scenes)', () => {
+  // Two scenes. The second scene's first frame is frame 1 OF THAT SCENE.
+  const g1 = makeFrame('g1', [makeBox('x', { class: 'bus', annotation: { token: 'ann-g1-x' } })]);
+  const scenes = [
+    { name: 'scene-0061', frames },
+    { name: 'scene-0103', frames: [g1] },
+  ];
+  const reviews = () => withVerdict(sampleReviews(), 'g1', 'x', 'approved', T2);
+
+  it('names the format, the scenes it covers, and whether it is a practice set', () => {
+    const data = buildSceneReviewExport(scenes, {}, { scope: 'nuscenes', exportedAt: NOW });
+    expect(data.format).toBe(REVIEW_EXPORT_FORMAT_SCENES);
+    expect(data.scenes).toEqual(['scene-0061', 'scene-0103']);
+    expect(data.practice).toBe(false);
+    expect(buildSceneReviewExport(scenes, {}, { scope: 'nuscenes-practice', exportedAt: NOW }).practice).toBe(true);
+  });
+
+  it('lists the records scene by scene, with the frame index counted within the scene', () => {
+    const data = buildSceneReviewExport(scenes, reviews(), { scope: 'nuscenes', exportedAt: NOW });
+    expect(data.reviews.map((r) => [r.scene, r.frameIndex, r.frameId, r.objectId])).toEqual([
+      ['scene-0061', 1, 'f1', 'a'],
+      ['scene-0061', 1, 'f1', 'b'],
+      ['scene-0061', 2, 'f2', 'a'],
+      ['scene-0103', 1, 'g1', 'x'],
+    ]);
+  });
+
+  it('the summary counts every box of the scenes given', () => {
+    const data = buildSceneReviewExport(scenes, reviews(), { scope: 'nuscenes', exportedAt: NOW });
+    expect(data.summary).toEqual({ totalBoxes: 5, reviewed: 4, approved: 2, rejected: 1, unsure: 1 });
+  });
+
+  it('covers only the scenes it is given: a record of another scene is left out', () => {
+    const data = buildSceneReviewExport([scenes[0]], reviews(), { scope: 'nuscenes', exportedAt: NOW });
+    expect(data.scenes).toEqual(['scene-0061']);
+    expect(data.reviews.some((r) => r.frameId === 'g1')).toBe(false);
+    expect(data.summary.totalBoxes).toBe(4);
+  });
+
+  it('for one scene the rows are those of the plain export, plus the scene name', () => {
+    const plain = buildReviewExport(frames, sampleReviews(), { scope: 'nuscenes', exportedAt: NOW });
+    const split = buildSceneReviewExport([scenes[0]], sampleReviews(), { scope: 'nuscenes', exportedAt: NOW });
+    expect(split.reviews).toEqual(plain.reviews.map((row) => ({ scene: 'scene-0061', ...row })));
+    expect(split.summary).toEqual(plain.summary);
+  });
+
+  it('no scenes → an empty, valid document', () => {
+    const data = buildSceneReviewExport([], reviews(), { scope: 'nuscenes', exportedAt: NOW });
+    expect(data.scenes).toEqual([]);
+    expect(data.reviews).toEqual([]);
+    expect(data.summary.totalBoxes).toBe(0);
+  });
+
+  it('the CSV gets a leading scene column; the plain export keeps its header', () => {
+    const csv = reviewExportToCsv(
+      buildSceneReviewExport(scenes, reviews(), { scope: 'nuscenes', exportedAt: NOW }),
+    ).split('\r\n');
+    expect(csv[0]).toBe(
+      'scene,frameIndex,frameId,objectId,annotationToken,class,verdict,reasons,note,reviewedAt',
+    );
+    expect(csv[1].startsWith('scene-0061,1,f1,a,ann-f1-a,car,approved,')).toBe(true);
+    expect(csv[4].startsWith('scene-0103,1,g1,x,ann-g1-x,bus,approved,')).toBe(true);
+    const plain = reviewExportToCsv(
+      buildReviewExport(frames, sampleReviews(), { scope: 'nuscenes', exportedAt: NOW }),
+    ).split('\r\n');
+    expect(plain[0]).toBe('frameIndex,frameId,objectId,annotationToken,class,verdict,reasons,note,reviewedAt');
   });
 });

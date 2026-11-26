@@ -25,10 +25,19 @@ export type NuQuat = [number, number, number, number];
 /** A 3-vector [x, y, z]. */
 export type NuVec3 = [number, number, number];
 
-/** Top-level prepped file: a list of prepared keyframes. */
+/**
+ * A prepped frames file: a list of prepared keyframes.
+ *
+ * Up to format 1.2 this was THE file (`nuscenes.json`, LiDAR points inline).
+ * From 1.3 (F7) there is one per scene (`scenes/<name>/frames.json`), listed by
+ * the catalog (`NuScenesCatalogFile`), and the points are in per-frame files
+ * (`NuScenesPointsFile`). The parser reads both.
+ */
 export type NuScenesPrepped = {
   /** Version of THIS prepped format (ours), e.g. "1.0". */
   version: string;
+  /** (1.3) The scene these frames belong to, e.g. "scene-0916". */
+  scene?: string;
   frames: NuScenesPreppedFrame[];
 };
 
@@ -54,17 +63,31 @@ export type NuScenesPreppedFrame = {
   annotations: NuScenesAnnotation[];
   /** (F2-B) Decimated LiDAR_TOP point cloud + the calibration needed to align it
    *  to the boxes. Optional: prepped JSON produced before F2-B (or a frame whose
-   *  LiDAR sweep was unavailable) simply omits it and the parser yields no points. */
-  lidar?: NuScenesLidar;
+   *  LiDAR sweep was unavailable) simply omits it and the parser yields no points.
+   *  (F7, format 1.3) In a scene's frames file this is only a REFERENCE to the
+   *  frame's points file — the points are fetched when the frame is opened. */
+  lidar?: NuScenesLidar | NuScenesLidarRef;
+  /** (F7, format 1.3) Public path of a small preview photo (the base camera's). */
+  thumb?: string;
 };
 
 export type NuScenesImage = {
-  /** Public path served by the app, e.g. "/sample-data/nuscenes/cam_front/xxx.jpg". */
+  /**
+   * Public path served by the app. (F7) This file may be a REDUCED copy of the
+   * photo (e.g. 960×540 WebP); `width` / `height` below are NOT its pixel size.
+   */
   path: string;
-  /** Pixel width. */
+  /**
+   * Pixel width of the ORIGINAL photo (1600 for nuScenes). This is the
+   * coordinate system of the intrinsics, the projected boxes and the model's
+   * predictions; the viewer stretches whatever file it gets onto it.
+   */
   width: number;
-  /** Pixel height. */
+  /** Pixel height of the ORIGINAL photo. */
   height: number;
+  /** (F7) The original photo's path inside the nuScenes dataroot (what the
+   *  offline detector reads). Not used by the app. */
+  source?: string;
 };
 
 /**
@@ -130,6 +153,30 @@ export type NuScenesLidar = {
   calibratedSensor: NuScenesLidarCalibratedSensor;
 };
 
+/**
+ * (F7, format 1.3) What a scene's frames file says about a frame's LiDAR: where
+ * the points file is and how many points it holds.
+ */
+export type NuScenesLidarRef = {
+  /** Public path of the frame's `NuScenesPointsFile`. */
+  path: string;
+  /** Number of points in that file. */
+  pointCount: number;
+};
+
+/**
+ * (F7, format 1.3) One frame's points file. Self-contained: it carries every
+ * value the alignment needs, so it can be parsed without the frames file.
+ */
+export type NuScenesPointsFile = {
+  /** The frame (`sample`) token this file belongs to. */
+  token: string;
+  /** The frame's ego pose (its base camera's) — the frame the boxes are in.
+   *  The same value as `NuScenesPreppedFrame.egoPose`. */
+  frameEgoPose: NuScenesEgoPose;
+  lidar: NuScenesLidar;
+};
+
 /** `calibrated_sensor` for the LiDAR: pose relative to EGO, no camera intrinsic. */
 export type NuScenesLidarCalibratedSensor = {
   /** Translation relative to the car [x, y, z] in metres. */
@@ -173,3 +220,45 @@ export type NuScenesAnnotation = {
  * The names are nuScenes' own (`visibility.level`).
  */
 export type NuScenesVisibility = 'v0-40' | 'v40-60' | 'v60-80' | 'v80-100';
+
+/**
+ * (F7, format 1.3) The catalog file `scenes.json`: every scene, with the paths
+ * of its own files. Raw shape as the prep script writes it; `catalog.ts` reads
+ * it into `SceneCatalog`.
+ */
+export type NuScenesCatalogFile = {
+  version: string;
+  /** Where the data comes from and under which licence (for attribution). */
+  source?: { dataset: string; version: string; license: string; url?: string };
+  /** Camera channels of every frame, base camera first. */
+  cameras?: string[];
+  /** The photos served are reduced copies; `source*` is the original size. */
+  photo?: {
+    format: string;
+    width: number;
+    height: number;
+    quality?: number;
+    sourceWidth: number;
+    sourceHeight: number;
+  };
+  thumb?: { format: string; width: number; height: number; camera: string };
+  scenes: NuScenesCatalogScene[];
+};
+
+export type NuScenesCatalogScene = {
+  /** nuScenes scene name, e.g. "scene-0916". */
+  name: string;
+  token?: string;
+  /** nuScenes' own description of the scene (free text, English). */
+  description?: string;
+  /** The drive (`log`) the scene was cut from. */
+  log?: { name: string; location?: string; dateCaptured?: string; vehicle?: string };
+  frameCount?: number;
+  boxCount?: number;
+  /** Capture time of the first keyframe, in microseconds. */
+  firstTimestamp?: number | null;
+  /** Public path of the scene's frames file (`NuScenesPrepped`, format 1.3). */
+  framesPath: string;
+  /** Public path of the scene's predictions file (written by the predict script). */
+  predictionsPath?: string;
+};

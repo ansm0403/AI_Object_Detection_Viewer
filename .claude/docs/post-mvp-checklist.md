@@ -1487,6 +1487,205 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 - Edge refs: Edge_F#6.5 Case 1~2, "측정하고 바꾸지 않은 것", "재지 못한 것".
 -->
 
+## F7 — Scene Exploration ✅ Done (2026-11-27; prep, F7-A … F7-E)
+- **Design doc:** `docs/plan-feature/F7_scene_exploration.md` (approved 2026-11-27: decisions 1–3 as
+  recommended — all of nuScenes-mini, 960×540 WebP photos, files in the repo's `public/`; the other
+  14 built as recommended and adjusted from captures). Mockups, per-step captures and edge captures:
+  `docs/plan-feature/assets/F7/` (`compare.html`, `steps.html`).
+- **Goal:** go from ten frames of one scene to every keyframe of nuScenes-mini, without loading it
+  all at once, and find scenes and frames by condition.
+- **Scope (as built):**
+  - **Prep — loader out of `page.tsx`** (no visual change): pure `lib/data/buildFrames` + hook
+    `components/dataset/useDataset`.
+  - **F7-A — data** (no visual change): `prep_nuscenes.py` exports all ten scenes as split files —
+    catalog `scenes.json`, per scene `frames.json` (boxes + cameras, prepped format **1.3**) and
+    `predictions.json`, per frame a self-contained points file, six reduced photos and a front-camera
+    thumbnail. `predict_nuscenes.py` runs YOLOv8n on the ORIGINAL 1600×900 photos, one file per
+    scene. `lib/nuscenes`: `parseSceneCatalog`, `parseNuScenesPoints`, 1.3 frames (`pointCloudSource`,
+    `thumbnailUrl` on `Frame`). **3,253 files, 152.49 MB** (photos 98.33, points 42.39, boxes 7.45,
+    predictions 3.22, thumbnails 1.09); the user confirmed the size before the files went in.
+  - **F7-B — chunked loading + scenes:** `useScenes` (catalog → the scene on screen first → the other
+    scenes' boxes in the background, two at a time), `useFramePoints` (per-frame points, 3 frames
+    ahead, last 24 kept), bounded photo preload (72 kept), scene picker (`components/scenes`),
+    scrubber timeline (one cell with a bar per frame, thumbnail on hover), the camera re-fits inside
+    the SAME canvas on a scene change. The old single file, its 60 photos and predictions were removed.
+  - **F7-C — search:** `lib/search` (conditions, hits, order, presets) and a third mode **Explore**
+    (`components/explore`: condition bar, result list, Search panel; boxes that count stay coloured in
+    3D; the timeline marks matching frames; J / K step through hits across scenes).
+  - **F7-D — evaluation meets search:** `lib/evaluation/evaluateScenes`; the evaluation panel's "All
+    scenes" block (total, recall per scene, day / night with the number of DRIVES, the limits in
+    words); model conditions in Explore (missed labels, false alarms, false alarms with no label
+    nearby) at the default rules, with the counted results drawn in the photo and a count per camera
+    thumbnail.
+  - **F7-E — finish:** measurements on the production build, short class names, "the model saw the
+    original photos" in the panel, README data section + attribution, F4 / F5 / F6 flows re-checked.
+  - **Edge-case review** after F7-E: five more fixes (Edge_F#7 Cases 1–5).
+- **Done when (design doc §8) — met, verified by driving the real app with Playwright** (prep 17
+  checks, F7-A 8, F7-B 45, F7-C 32, F7-D 28, F7-E 24, edge review 34; B–E and edge re-run on the final
+  build, 163 checks):
+  - 10 scenes, 404 frames, 18,538 boxes, 2,424 photos. The first ten frames of scene-0916 have boxes,
+    per-camera 2D boxes, LiDAR points and predictions deep-equal to the pre-F7 files.
+  - **Those ten frames: front camera 91 / 83 / 13 / 26, 60 photos 349 / 182 / 107 / 180, frame 6 in 3D
+    28 / 16 / 17 — unchanged** (unit tests + on screen). All 404 frames: 6,726 / 5,292 / 3,514 / 5,278
+    (P 65.7%, R 56.0%); day 5,711 / 8,916 (64%), night 1,015 / 3,102 (33%).
+  - First screen needs 210 KB of data (compressed; was 594 KB + 60 photos). 4 points files and 24
+    photos are fetched on opening, not 404 and 2,424. JS heap after visiting all ten scenes 53.8 MB
+    (267 MB when everything was loaded at once in the design probe).
+  - The 3D canvas is never re-created: frame, mode, scene (menu, ‹ ›, search result, scene row),
+    practice toggle, playback, window size, a scene still loading, a scene that failed.
+  - "person within 20 m ≥ 5" → 177 of 404 frames in 7 scenes; "model missed ≥ 15" → 135. The value in
+    the list, the value in the panel and the number of coloured 3D boxes agree on an opened frame.
+  - 41 frames fit the timeline row without scrolling at 1536 / 1440 / 1280 / 1024 px (cells 30 / 28 /
+    24 / 18 px); no page scroll in the three modes; usable down to 390 px. COCO unchanged.
+  - F4 (verdicts, reasons, note, persistence, export, practice), F5 (result list, outcome chips,
+    explanations, slider) and F6 (thumbnails, automatic camera, `[` `]`) work in every scene.
+  - Tests **695 → 861**. `tsc --noEmit` 0 errors. CI lint 0 errors (19 pre-existing warnings).
+    Production build passes. Both data scripts run twice → identical files (329 of 329 for a scene).
+- **Measurements (production build, 2026-11-27, medians of three):** first screen 0.97 s at 20 Mbps
+  / 1.62 s at 9 Mbps; points drawn 1.34 / 2.01 s; all ten scenes' boxes 2.6 / 5.3 s. Playback over
+  24 frames: points never late; photos 0 late frames at 20 Mbps, 11 at 9 Mbps (≤ 0.32 s). Search:
+  preset click to next paint 105 ms, first model condition 198 ms. Slider step ≈ 1.4–1.5× pre-F7.
+  3D idle cost on the shared 40-box frame equal to pre-F7 when measured alternately (GPU 57 vs 64
+  ms/s, 42 draw calls, 60 fps); 156-box frame: GPU 60 fps / 159 ms/s, software 53 fps.
+- **Changes from the plan, and why:**
+  1. **A points file is self-contained** (it carries the frame's ego pose and the LiDAR calibration,
+     ~300 bytes). The design left the alignment values in `frames.json`; putting them in the file
+     keeps `Frame` free of dataset-specific poses and lets one pure function parse it.
+  2. **Background scenes load two at a time, not one.** One slow file held up the six scenes behind it
+     (Edge_F#7 Case 6).
+  3. **`useDeferredValue` (decision 11) was replaced by a 250 ms settle delay.** Measured: the
+     deferred scoring of all scenes still ran after every slider step and blocked the next paint (≈ 3×
+     the pre-F7 step cost). Now it runs once when the slider rests (Case 8).
+  4. **Preload: the 300 ms start delay is skipped during playback** and three photos load at a time.
+     Measured: without this 18–19 of 24 frames showed before their photos had arrived (Case 7).
+  5. **Review export is `review@2`:** every row names its scene, `frameIndex` counts within the scene,
+     the file lists the scenes it covers. The design only said "the export holds every scene's
+     records"; one global frame index would have been meaningless.
+  6. **The export / reset menu counts all scenes' records** (edge review, Case 2).
+  7. **Class filter across scenes:** a class that is switched on but absent from the new scene keeps
+     its chip. Otherwise the filter hid boxes with nothing on screen to explain or undo it.
+  8. **Explore with a model condition draws only the results the condition counts** (the missed
+     labels, or the false alarms with no label nearby) and puts a count on each camera thumbnail. The
+     design said "evaluation colours"; with all results drawn, the boxes that made the frame match
+     could not be told apart, and nothing said which of the six photos to look at.
+  9. **The scrubber is used for nuScenes only;** COCO keeps its ten thumbnails (the design did not
+     say). Below 1024 px the scrubber stacks under its controls (Case 4).
+  10. **`usePredictions` is gone:** predictions arrive with their scene (`loadScene`).
+  11. **Decision 12 (merge the box lines above a threshold):** by the letter the threshold was
+      exceeded on the 156-box frame (159 ms/s vs 150; software 53 fps). Not merged — the pre-F7 build
+      itself measured 1.7× its recorded value that day, and alternating measurements show no F7
+      regression. User decision; see Edge_F#7 "Measured and NOT changed".
+  12. **The design doc was wrong on one fact:** §2.1 says the README had no nuScenes attribution. It
+      had one (at the end); it was updated rather than added.
+  13. `prep_nuscenes.py` now needs **Pillow** (already installed; nothing new was installed).
+      Predictions total 3.22 MB, not the estimated 2.93 MB.
+  14. **Edge review fixes:** an empty scene no longer replaces the scene on screen and the picker is
+      reachable from the error state (Case 1); a points file must name the frame it is drawn on
+      (Case 3); 390 px (Cases 4, 5).
+- **Kept as designed:** all of mini, 960×540 WebP + 192×108 thumbnails, files in `public/`, search on
+  the boxes in memory with the screen's own functions (no precomputed index), points stay JSON,
+  scene / search state in page hooks (store untouched), Explore as a third mode, scrubber timeline,
+  canvas kept on scene change (selection cleared, playback stopped, filters and mode kept, previous
+  scene stays while the next loads), current scene scored at once, localStorage for reviews, YOLO on
+  the original photos, only the F7-touched part of `page.tsx` extracted, short class names + grey
+  default colour, day / night read from the scene description, a one-day cache header, no new library.
+- **Portfolio wording (design doc §9, decided 2026-11-27):** option A — trends with their conditions.
+  Day 64% vs night 33% is "observed", with "the night scenes are one drive" attached; the total is
+  never called the model's performance; the cause is not claimed. The same limits are on screen.
+- **Open / deferred:**
+  - **Not deployed.** 152 MB of static files on Vercel is unverified (docs list no limit).
+  - Merging the box lines into one geometry (decision 12) — follow-up if frame rate drops on a GPU.
+  - At 9 Mbps photos lag playback on about half the frames (≤ 0.4 s). Entering Explore takes ~0.7 s.
+  - What the ~1,380 "no label nearby" false alarms are is still unknown; Explore can now show them.
+  - Evaluation-hardening candidates (per-drive table, distance-matched day / night, sample review of
+    false alarms, labels for boxes cut by the camera plane, …): design doc §13. Not planned.
+  - README beyond the data section is out of date (386 tests, nothing about F3–F6).
+  - COCO mode: still on hold.
+- **Edge refs:** Edge_F#7 Cases 1–9 + "Found, not caused by F7" + "Measured and NOT changed" + "Could
+  not be verified".
+
+<!-- KO (move to a localized file)
+## F7 — 장면 탐색 ✅ 완료 (2026-11-27; 준비, F7-A ~ F7-E)
+- 설계 문서: `docs/plan-feature/F7_scene_exploration.md`(2026-11-27 승인. 결정 1~3은 추천안: mini 전체, 960×540 WebP,
+  저장소의 `public/`. 나머지 14개는 추천안으로 만들고 캡처를 보며 조정). 시안, 단계별 캡처, 엣지 캡처:
+  `docs/plan-feature/assets/F7/`.
+- 목표: 장면 하나의 프레임 10개에서 nuScenes-mini의 키프레임 전부로 늘리되 한꺼번에 받지 않고, 조건으로 장면과 프레임을 찾는다.
+- 범위(만든 것):
+  - 준비: `page.tsx`의 데이터 받는 부분을 순수 함수 `buildFrames`와 훅 `useDataset`으로 분리(화면 변화 없음).
+  - F7-A 데이터(화면 변화 없음): 준비 스크립트가 장면 10개를 나눠 받을 수 있는 파일로 내보냄. 목차 `scenes.json`, 장면별
+    `frames.json`(형식 1.3)과 `predictions.json`, 프레임별 점 파일, 줄인 사진 6장, 앞 카메라 썸네일. 예측 스크립트는 원본
+    1600×900 사진으로 YOLOv8n을 돌림. **파일 3,253개, 152.49MB**(사진 98.33, 점 42.39, 박스 7.45, 예측 3.22, 썸네일 1.09).
+    넣기 전에 용량을 말하고 사용자 확인을 받음.
+  - F7-B 나눠 받기와 장면: `useScenes`(목차 → 지금 장면 → 나머지 장면의 박스를 뒤에서 2개씩), `useFramePoints`(프레임별 점,
+    앞으로 3프레임, 최근 24개 보관), 사진 미리 받기에 한도(72장), 장면 고르기, 눈금 막대 타임라인, 장면을 바꿔도 같은
+    캔버스에서 카메라만 다시 맞춤. 옛 파일(한 파일 데이터, 사진 60장, 예측) 삭제.
+  - F7-C 검색: `lib/search`(조건, 결과, 정렬, 프리셋)와 세 번째 모드 Explore(조건 줄, 결과 목록, Search 패널, 조건에 든 박스만
+    3D에서 색 유지, 타임라인에 맞는 프레임 표시, J / K로 장면을 넘어 결과 이동).
+  - F7-D 평가와 만나기: `evaluateScenes`, 평가 패널의 "All scenes"(전체, 장면별 Recall, 낮/밤을 주행 수와 함께, 한계 문구),
+    Explore의 모델 조건(놓친 정답, 헛짚음, 근처에 정답이 없는 헛짚음). 기본 규칙 고정, 조건이 세는 것만 사진에 그림, 썸네일에 개수.
+  - F7-E 마무리: 배포용 빌드 측정, 짧은 클래스 이름, "모델은 원본 사진을 봤다" 표시, README 데이터 부분과 출처, F4 / F5 / F6 흐름 재확인.
+  - 엣지 케이스 검증: 수정 5건 추가(Edge_F#7 Case 1~5).
+- 완료 기준(설계 문서 8장): 충족. 실제 앱을 Playwright로 조작해 확인(준비 17항목, A 8, B 45, C 32, D 28, E 24, 엣지 34.
+  마지막 빌드로 B~E와 엣지를 다시 돌림, 163항목).
+  - 장면 10개, 프레임 404개, 박스 18,538개, 사진 2,424장. scene-0916의 앞 10프레임은 박스, 카메라별 2D 박스, LiDAR 점, 예측이
+    F7 이전 파일과 완전히 같다.
+  - **그 10프레임: 앞 카메라 91 / 83 / 13 / 26, 사진 60장 349 / 182 / 107 / 180, 프레임 6의 3D 색 28 / 16 / 17 그대로**(테스트와 화면).
+    404프레임 전체 6,726 / 5,292 / 3,514 / 5,278(Precision 65.7%, Recall 56.0%). 낮 5,711 / 8,916(64%), 밤 1,015 / 3,102(33%).
+  - 첫 화면에 필요한 데이터 210KB(압축. 이전에는 594KB + 사진 60장). 열 때 점 파일 4개와 사진 24장만 받는다. 장면 10개를 돌아본 뒤
+    JS 힙 53.8MB(설계 조사에서 한꺼번에 넣었을 때 267MB).
+  - 3D 캔버스는 다시 만들어지지 않는다: 프레임, 모드, 장면(목록, ‹ ›, 검색 결과, 장면 줄), 연습 모드, 재생, 창 크기, 받는 중인 장면,
+    실패한 장면.
+  - "보행자 20m 안 5명 이상" → 404개 중 177개 프레임, 장면 7곳. "모델이 15개 이상 놓침" → 135개. 연 프레임에서 목록의 값, 패널의 값,
+    3D에서 색이 남은 박스 수가 같다.
+  - 프레임 41개가 1536 / 1440 / 1280 / 1024px에서 타임라인 한 줄에 들어온다(칸 30 / 28 / 24 / 18px). 세 모드 모두 페이지 스크롤 없음.
+    390px까지 쓸 수 있다. COCO는 그대로.
+  - F4(판정·사유·메모·저장·내보내기·연습), F5(결과 목록, 종류 칩, 설명, 슬라이더), F6(썸네일, 자동 카메라, `[` `]`)이 모든 장면에서 동작.
+  - 테스트 695 → 861개, tsc 오류 0개, CI 린트 오류 0개(기존 경고 19개), 배포용 빌드 성공, 두 스크립트 모두 두 번 돌려 같은 파일.
+- 측정(배포용 빌드, 2026-11-27, 세 번의 가운데 값): 첫 화면 20Mbps 0.97초 / 9Mbps 1.62초. 점구름 1.34 / 2.01초. 장면 10개의 박스 정보
+  2.6 / 5.3초. 재생 24프레임: 점은 늦지 않음, 사진은 20Mbps에서 늦은 프레임 0개, 9Mbps에서 11개(0.32초 이하). 검색: 프리셋을 누른 뒤
+  다음 화면까지 105ms, 모델 조건 처음 198ms. 슬라이더 한 칸은 F7 이전의 약 1.4~1.5배. 3D 바닥 비용은 같은 프레임(박스 40개)을
+  번갈아 재면 F7 이전과 같다(내장 GPU 57 대 64ms/초, 그리기 호출 42번, 60장). 박스 156개 프레임: 내장 GPU 60장 / 159ms/초, 소프트웨어 53장.
+- 계획과 달라진 점과 이유:
+  1. 점 파일이 혼자서 해석된다(프레임의 ego pose와 LiDAR 보정값을 함께 담음, 약 300바이트). 설계는 보정값을 `frames.json`에 두었다.
+     `Frame`에 데이터셋 고유의 자세 값을 넣지 않아도 되고 순수 함수 하나로 해석된다.
+  2. 뒤에서 받는 장면을 한 번에 1개가 아니라 2개씩 받는다. 느린 파일 하나가 뒤의 장면 6개를 막았다(Case 6).
+  3. `useDeferredValue`(결정 11) 대신 0.25초 멈춤을 기다린다. 재 보니 전체 채점이 슬라이더 매 칸마다 시작돼 다음 화면을 막았다
+     (F7 이전의 약 3배). 지금은 슬라이더가 멈췄을 때 한 번 한다(Case 8).
+  4. 미리 받기: 재생 중에는 0.3초 대기를 건너뛰고 사진을 3장씩 받는다. 그대로 두면 24프레임 중 18~19프레임에서 사진이 늦었다(Case 7).
+  5. 검수 기록 내보내기 형식이 `review@2`가 됐다: 줄마다 장면 이름, 프레임 번호는 장면 안에서의 순서, 파일이 담은 장면 목록.
+     설계는 "모든 장면의 기록을 담는다"까지만 적었다. 전체에 걸친 프레임 번호 하나는 뜻이 없었다.
+  6. 내보내기 / 지우기 메뉴가 모든 장면의 기록 수를 센다(엣지 검증, Case 2).
+  7. 클래스 필터: 켜 둔 클래스가 새 장면에 없어도 그 칩은 남는다. 안 그러면 왜 박스가 숨었는지 화면에서 알 수 없다.
+  8. Explore의 모델 조건에서는 조건이 세는 것(놓친 정답, 또는 근처에 정답이 없는 헛짚음)만 사진에 그리고, 카메라 썸네일마다 개수를
+     붙인다. 설계는 "평가 색"이었다. 결과를 전부 그리면 그 프레임이 걸린 이유인 박스를 가릴 수 없었고, 6장 중 어느 사진을 볼지도
+     알 수 없었다.
+  9. 눈금 막대는 nuScenes에만 쓰고 COCO는 썸네일 10장 그대로다(설계에 없던 부분). 1024px 미만에서는 막대가 버튼 아래로 쌓인다(Case 4).
+  10. `usePredictions`가 없어졌다. 예측은 장면과 함께 온다(`loadScene`).
+  11. 결정 12(기준을 넘으면 박스 선을 하나로 합친다): 글자 그대로는 박스 156개 프레임에서 기준을 넘었다(159 대 150ms/초,
+      소프트웨어 53장). 합치지 않았다. 그날 F7 이전 빌드도 기록의 1.7배로 재졌고, 번갈아 잰 비교에서 F7의 악화는 없었다.
+      사용자 결정. Edge_F#7 "측정하고 바꾸지 않은 것".
+  12. 설계 문서의 사실 하나가 틀렸다: 2.1절은 README에 nuScenes 출처 표시가 없다고 했지만 끝부분에 있었다. 새로 넣지 않고 고쳤다.
+  13. 준비 스크립트가 Pillow를 쓴다(이미 설치돼 있어 새로 설치한 것은 없다). 예측 파일 합계는 추정 2.93MB가 아니라 3.22MB다.
+  14. 엣지 검증 수정: 프레임이 없는 장면이 지금 화면을 밀어내지 않고, 오류 화면에서도 장면 고르기에 닿는다(Case 1). 점 파일은 자기
+      프레임의 것이어야 한다(Case 3). 390px(Case 4, 5).
+- 설계대로 유지: mini 전체, 960×540 WebP + 192×108 썸네일, `public/`, 메모리의 박스로 직접 검색(미리 계산한 요약 없음), 점은 JSON,
+  장면·검색 상태는 page의 훅(store 그대로), 세 번째 모드 Explore, 눈금 막대, 장면을 바꿔도 캔버스 유지(선택 해제, 재생 정지,
+  필터와 모드 유지, 다음 장면이 올 때까지 이전 장면 유지), 지금 장면은 바로 채점, 검수 기록은 localStorage, YOLO는 원본 사진,
+  `page.tsx`는 F7이 건드리는 부분만 분리, 짧은 클래스 이름과 회색 기본색, 낮/밤은 장면 설명 글에서, 하루짜리 캐시 헤더, 새 라이브러리 없음.
+- 포트폴리오 표기(설계 문서 9장, 2026-11-27 확정): 선택지 A(경향을 조건과 함께). 낮 64% 대 밤 33%는 "관찰됐다"로 쓰고 "밤 장면은 주행
+  1회"를 붙인다. 전체 숫자를 모델 성능이라 부르지 않고 원인을 주장하지 않는다. 같은 한계가 화면에도 적혀 있다.
+- 남은 것:
+  - **배포하지 않았다.** Vercel에 정적 파일 152MB를 올려 본 적이 없다(문서에 한도가 없을 뿐이다).
+  - 박스 선을 하나로 합치기(결정 12): GPU에서 프레임률이 떨어지면 할 일.
+  - 9Mbps에서는 재생 중 절반쯤의 프레임에서 사진이 늦다(0.4초 이하). Explore에 들어가는 데 약 0.7초.
+  - "근처에 정답이 없는 헛짚음" 약 1,380개가 무엇인지는 아직 모른다. 이제 Explore로 볼 수 있다.
+  - 평가를 단단하게 만드는 후보(주행 단위 표, 거리를 맞춘 낮/밤 비교, 헛짚음 표본 검수, 카메라 평면에 걸친 박스의 정답 등)는
+    설계 문서 13장에 있다. 계획된 것은 아니다.
+  - README는 데이터 부분 말고는 오래됐다(테스트 386개, F3~F6 내용 없음).
+  - COCO 모드: 계속 보류.
+- Edge refs: Edge_F#7 Case 1~9, "F7이 만든 것이 아닌 것", "측정하고 바꾸지 않은 것", "확인하지 못한 것".
+-->
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -1501,8 +1700,9 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 > `F3_workspace_layout.md`). **F4 is done** (2026-11-25, see the F4 entry above; design doc
 > `F4_box_review.md`). **F5 is done** (2026-11-26, `F5_camera_detection_eval.md`). **F6 is done**
 > (2026-11-26, see the F6 entry above; design doc `F6_six_cameras.md`). **The three.js idle-cost item
-> is done** (2026-11-26, its own session, see the F6.5 entry above; no design doc). Next: F7 — its
-> design doc is written at the start of the F7 session.
+> is done** (2026-11-26, its own session, see the F6.5 entry above; no design doc). **F7 is done**
+> (2026-11-27, see the F7 entry above; design doc `F7_scene_exploration.md`). Next: F8 — its design
+> doc is written at the start of the F8 session.
 > Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
 
 ### Why change direction (the gap this closes)
@@ -1549,6 +1749,12 @@ measurement justifies it, and record before/after numbers: Server Component data
 considered and deferred it — design doc decision 6: measure load time first, as a separate item); `useTransition` / `useDeferredValue` (only if
 filtering measurably janks after F5); binary point clouds + lazy per-frame loading + Web Worker
 parsing (becomes necessary in F7 when the frame count grows).
+**F7 (2026-11-27):** lazy per-frame loading is done (points and photos per frame, scenes one by
+one). Binary point clouds and Web Worker parsing were measured and NOT done: a points file is
+120 KB of JSON (48 KB compressed) and parses in 0.7 ms (one frame, 5,991 points — design doc F7
+§2.4); all ten scenes' boxes and predictions are 1.87 MB compressed and in memory after 2.6 s at
+20 Mbps. `useDeferredValue` was tried for the all-scenes evaluation and replaced by a settle delay
+(Edge_F#7 Case 8).
 
 ### Questions each plan must settle (carry into `/plan-feature`)
 - **F3:** pane zones and sizes; mobile behaviour (tool layout is desktop-first — keep the stacked
@@ -1581,7 +1787,9 @@ parsing (becomes necessary in F7 when the frame count grows).
   in F6: 60 photos = 8.04 MB, all preloaded for ten frames; `lib/cameras`.)*
 - **F7:** how many of nuScenes-mini's keyframes (10 scenes, ~400 keyframes vs the 10 used today) to
   ship; searching on scene descriptions and per-frame counts with no backend; hosting size limits on
-  Vercel; the binary / lazy-loading work above.
+  Vercel; the binary / lazy-loading work above. *(Settled in F7: all 10 scenes / 404 keyframes,
+  152 MB in `public/` as split files; search runs on the boxes in memory with pure functions.
+  The Vercel deployment itself is still unverified.)*
 - **F8:** rotated-rectangle editing interaction; undo/redo history model.
 
 ### Known limits (state them wherever results are shown)
@@ -1590,6 +1798,11 @@ parsing (becomes necessary in F7 when the frame count grows).
   **After F6 (2026-11-26):** six cameras give 531 scored labels in 60 photos and bands from 0 to
   70 m — but still ONE scene and ten moments. More photos of the same moments are not more
   evidence; quotable numbers need F7's additional scenes.
+  **After F7 (2026-11-27):** 10 scenes, 404 moments, 2,424 photos, 12,018 scored labels. The numbers
+  may now be quoted **as observations with their conditions** (wording rules: design doc F7 §9, and
+  architecture.md "Evaluation over all scenes"). Still limits: ten scenes from eight drives; the
+  three night scenes are ONE drive; one small general-purpose model without fine-tuning; 2D labels
+  derived from 3D boxes. Not "the model's performance", and no cause is claimed.
 - **Recall only by distance.** A false positive has no matched ground truth, hence no distance.
 - **Derived 2D ground truth** is an approximation (see F5).
 - **This evaluates a 2D camera detector, not 3D detection.**
@@ -1629,9 +1842,17 @@ parsing (becomes necessary in F7 when the frame count grows).
   - *F7:* bound the photo preload (`PRELOAD_FRAMES_AHEAD` in `page.tsx`; today all ten frames =
     8 MB) and measure the memory the preloaded photos hold; the thumbnail row reuses the full
     1600×900 file, which stops being acceptable with hundreds of frames.
+    **Both F7 items done 2026-11-27 (F7 entry):** idle cost re-measured on 40 and 156 boxes (no
+    regression; box lines not merged — user decision); preload bounded to 3 frames ahead, 72
+    photos kept; photos are 960×540 WebP; the timeline uses 192×108 thumbnails.
   - *Possible later:* a rule for labels cut off by the image edge (38% vs 68% recall; it would
     change the front camera's numbers); a 3×2 view of all six photos; the short class name
-    (`classLabel`) in the object list and the 3D label, where the long name is still shown.
+    (`classLabel`) in the object list and the 3D label, where the long name is still shown
+    *(the short class name was done in F7-E)*.
+- **From F7 (2026-11-27):** see the F7 entry's "Open / deferred" — deployment of 152 MB on Vercel
+  unverified; merging the box lines (follow-up, only if the frame rate drops on a GPU); photos lag
+  playback at 9 Mbps; what the ~1,380 "no label nearby" false alarms are; evaluation-hardening
+  candidates (design doc F7 §13); the README beyond its data section is out of date.
 - **COCO mode: left as it is for now.** Whether it stays as a secondary tab or is retired is decided
   after the F3 redesign shows what that tab looks like in the new layout (user decision, 2026-11-25).
   **F3 is done and COCO sits unchanged in the new layout; the user has not decided yet** (captures:
@@ -1650,7 +1871,8 @@ parsing (becomes necessary in F7 when the frame count grows).
 >
 > **설계 문서:** 각 기능의 구현 전 설계는 `docs/plan-feature/F#_*.md`에 쓴다(목록:
 > `docs/plan-feature/README.md`). 기능 하나에 문서 하나이며, 그 기능을 시작하기 직전에 쓴다. F3 문서가
-> 있고 **F3은 구현 완료**(2026-11-25, 위 F3 항목 참고). 다음은 F4이며, 설계 문서는 F4 세션을 시작할 때 쓴다.
+> 있고 **F3은 구현 완료**(2026-11-25, 위 F3 항목 참고). 그 뒤 F4(2026-11-25), F5·F6·F6.5(2026-11-26),
+> **F7(2026-11-27)까지 구현 완료**(각각 위의 항목 참고). 다음은 F8이며, 설계 문서는 F8 세션을 시작할 때 쓴다.
 > 큰 기능 하나를 세션 하나에서 진행한다. **`docs/plan-feature/HANDOFF.md`부터 읽는다.**
 
 ### 방향을 바꾸는 이유
@@ -1717,11 +1939,16 @@ F6·F7은 두 기둥이 쓰는 데이터를 넓힌다. 수정(F8)은 인터랙�
 - **F6:** 키프레임당 이미지 6장일 때의 데이터 크기. 박스별 "어느 카메라가 보는지" 조회.
 - **F7:** nuScenes-mini 키프레임(장면 10개, 약 400개, 현재 사용은 10개) 중 몇 개를 넣을지. 백엔드 없이
   장면 설명과 프레임별 개수로 검색하기. Vercel 호스팅 용량 한도. 위의 바이너리·지연 로딩 작업.
+  *(F7에서 정함: 장면 10개 / 프레임 404개 전부, 나눈 파일 152 MB를 `public/`에. 검색은 메모리에 있는 박스를
+  순수 함수로 훑는다. Vercel 배포 자체는 아직 확인하지 못했다.)*
 - **F8:** 회전된 사각형 편집 인터랙션. 실행 취소 이력 모델.
 
 ### 알려진 한계 (결과를 보여주는 곳마다 밝힐 것)
 - **표본이 작다.** 키프레임 10개 × 카메라 1대에서는 거리 구간마다 박스가 몇 개뿐이다. F5는 분석이
   동작함을 보여주는 단계이고, 수치를 인용할 수 있는 건 F6/F7 이후다.
+  **F7 이후(2026-11-27):** 장면 10개, 404순간, 사진 2,424장, 채점한 정답 12,018개. 이제 숫자를 **조건을 붙인 관찰**로
+  인용할 수 있다(표현 방침: F7 설계 문서 9장). 남은 한계: 장면 10개는 주행 8번에서 나왔고, 밤 장면 3개는 주행 1번이다.
+  추가 학습 없는 작은 범용 모델 하나, 3D 박스에서 만든 2D 정답. "모델 성능"이라 부르지 않고 원인을 주장하지 않는다.
 - **거리별 지표는 탐지율(Recall)뿐이다.** 잘못 찾은 것(FP)은 짝지어진 정답이 없어 거리를 알 수 없다.
 - **만들어낸 2D 정답**은 근사치다(F5 참고).
 - **평가 대상은 2D 카메라 탐지 모델이며, 3D 탐지가 아니다.**
@@ -1738,6 +1965,9 @@ F6·F7은 두 기둥이 쓰는 데이터를 넓힌다. 수정(F8)은 인터랙�
 - **F5에서 넘긴 것 (2026-11-26):** F6에서 자전거 거치대를 다시 확인하고(앞 카메라에는 하나도 없어 규칙이 필요 없었다),
   예측을 카메라별로 다시 돌린다(예측 파일 형식에 카메라 단계가 필요하다). 평가 숫자는 F6 / F7 이후에만 인용한다.
   나중에 할 수 있는 것: 예측에 대한 사람의 판정과 평가 결과 내보내기.
+- **F7에서 넘긴 것 (2026-11-27):** 위 F7 항목의 "남은 것" 참고. 152 MB의 Vercel 배포 미확인, 박스 선 합치기(GPU에서
+  화면이 끊길 때만 하는 후속 작업), 9 Mbps에서 재생 중 사진 지연, "근처에 정답이 없는 헛짚음" 약 1,380개의 정체,
+  평가를 더 단단하게 하는 후보들(F7 설계 문서 13장), 데이터 부분 외의 README가 낡았다.
 - **COCO 모드는 일단 그대로 둔다.** 보조 탭으로 남길지 정리할지는 F3 재설계 후 새 배치에서 그 탭이 어떻게
   보이는지 확인한 뒤 정한다(2026-11-25 사용자 결정). **F3이 끝났고 COCO는 새 화면 안에 그대로 있다. 아직
   결정하지 않았다**(캡처: `docs/plan-feature/assets/F3/2026-11-25_after/coco_*.jpg`).

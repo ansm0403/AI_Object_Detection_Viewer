@@ -22,6 +22,23 @@ export type Frame = {
   // boxes in any camera": use `lib/cameras` (`camerasSeeing`, `frameAsCamera`)
   // for anything that is about another camera or about all of them.
   cameras?: CameraView[];
+  // (F7) The frame's point cloud lives in its own file and is fetched when the
+  // frame is opened (points are ~85% of the data, so they are not shipped with
+  // the boxes). When this is set, `pointCloud` above is EMPTY until the caller
+  // has loaded the file — "no points yet", not "this frame has no points".
+  // Absent on COCO frames and on single-file nuScenes data (points inline).
+  pointCloudSource?: PointCloudSource;
+  // (F7) A small preview of the frame (its default camera's photo), for the
+  // timeline and result lists. Absent → there is no preview.
+  thumbnailUrl?: string;
+};
+
+// (F7) Where a frame's point cloud is fetched from.
+export type PointCloudSource = {
+  url: string;
+  // How many points the file holds, when the data says so (for display before
+  // the file has arrived).
+  count?: number;
 };
 
 // (F6) One camera's photo of a frame, with the frame's 3D boxes projected into

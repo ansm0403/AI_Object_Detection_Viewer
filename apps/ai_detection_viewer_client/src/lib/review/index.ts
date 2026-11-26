@@ -39,7 +39,9 @@ export {
 export type { QueueOrder } from './queue';
 export {
   REVIEW_EXPORT_FORMAT,
+  REVIEW_EXPORT_FORMAT_SCENES,
   buildReviewExport,
+  buildSceneReviewExport,
   reviewExportFilename,
   reviewExportToCsv,
   reviewExportToJson,
