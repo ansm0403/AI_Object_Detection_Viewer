@@ -4,7 +4,7 @@ PASS  …and 0.3 is chosen by default
 PASS  default: scene-0916 reads Precision 77% / Recall 68% (as before)  — 77% / 68%
 PASS  default: frame 1 badge "23 missed" (as before)  — Frame 1: 23 missed
 PASS  default: all scenes Precision 66% · Recall 56%, 6,726 of 12,018  — ALL SCENES 10 scenes · 2,424 photos Precision 66%·Recall 56%6,726 of 12,018 labels found scene-0061 night 46% 759/1,644 scene-0103 night 72% 1,200/1,670 scene-0
-PASS  default: day 64% 5,711/8,916 · night 33% 1,015/3,102  — 44% 397/902 Day 7 scenes · 7 drives 64% 5,711/8,916 Night 3 scenes · 1 drive 33% 1,015/3,102 What was observed on this data under these rules — not a general pr
+PASS  default: day 64% 5,711/8,916 · night 33% 1,015/3,102  — ght 3 scenes · 1 drive 33% 1,015/3,102 By drive, by distance, false alarms → open the report What was observed on this data under these rules — not a general pr
 PASS  default: Reset is disabled (everything is at rest)
 PASS  the panel has the conditions line: model, "no fine-tuning", "input 1280", score, IoU  — yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3
 PASS  its tooltip says where "no fine-tuning" comes from  — Weights yolov8n.pt as released (trained on COCO); not trained on nuScenes. Photos were resized so their longer side is 1280 px before the model saw them.
@@ -14,7 +14,7 @@ PASS  0.5: frame 1 row 28 missed · 11 false alarms · 16 found  — EVALUATION 
 PASS  0.5: the conditions line says IoU ≥ 0.5  — yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.5
 PASS  0.5: the headline tooltip says IoU ≥ 0.5  — × 6 cameras), each scored on its own · score ≥ 0.25 · IoU ≥ 0.5 · one scene of one drive — see "All scenes" in the panel
 PASS  0.5: all scenes Precision 51% · Recall 45% (5,462 of 12,018) — the F7 probe  — ALL SCENES 10 scenes · 2,424 photos Precision 51%·Recall 45%5,462 of 12,018 labels found scene-0061 night 32% 531/1,644 scene-0103 night 58% 972/1,670 scene-055
-PASS  0.5: day 52% 4,659/8,916 · night 26% 803/3,102 — the F7 probe  — t 35% 314/902 Day 7 scenes · 7 drives 52% 4,659/8,916 Night 3 scenes · 1 drive 26% 803/3,102 What was observed on this data under these rules — not a general pr
+PASS  0.5: day 52% 4,659/8,916 · night 26% 803/3,102 — the F7 probe  — Night 3 scenes · 1 drive 26% 803/3,102 By drive, by distance, false alarms → open the report What was observed on this data under these rules — not a general pr
 PASS  0.5: the notes say "IoU ≥ 0.5" and why 0.5 is strict here
 PASS  0.5: Reset is enabled
 PASS  the 3D canvas was not re-created by the IoU change

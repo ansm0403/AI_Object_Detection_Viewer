@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MIN_BAND_LABELS, compareByDistance } from './distance-compare';
+import { DEFAULT_MIN_BAND_LABELS, compareByDistance, distanceGap } from './distance-compare';
 import type { RecallBin } from './types';
 
 const bin = (from: number, found: number, total: number): RecallBin => ({ from, to: from + 10, found, total });
@@ -99,5 +99,28 @@ describe('compareByDistance', () => {
       expect(result.coverageA).toBeCloseTo(0.5, 10);
       expect(result.coverageB).toBe(1);
     });
+  });
+});
+
+describe('distanceGap', () => {
+  it('splits the difference into the part the distance mix accounts for and the rest', () => {
+    const gap = distanceGap(0.641, 0.327, 0.339);
+    expect(gap?.gap).toBeCloseTo(0.314, 10);
+    expect(gap?.fromDistance).toBeCloseTo(0.012, 10);
+  });
+
+  it('is all of the gap when re-weighting closes it', () => {
+    const gap = distanceGap(0.75, 0.25, 0.75);
+    expect(gap?.fromDistance).toBeCloseTo(gap?.gap ?? Number.NaN, 10);
+  });
+
+  it('can be negative: the second group had the easier distances', () => {
+    expect(distanceGap(0.6, 0.4, 0.35)?.fromDistance).toBeCloseTo(-0.05, 10);
+  });
+
+  it('is null when a number is missing', () => {
+    expect(distanceGap(null, 0.3, 0.3)).toBeNull();
+    expect(distanceGap(0.6, null, 0.3)).toBeNull();
+    expect(distanceGap(0.6, 0.3, null)).toBeNull();
   });
 });

@@ -135,3 +135,30 @@ export function compareByDistance(
     coverageB: ratio(weightB, totalB),
   };
 }
+
+/** How much of the recall difference between two groups their distance mix accounts for. */
+export type DistanceGap = {
+  /** A's recall minus B's recall, as measured (a fraction, e.g. 0.314). */
+  gap: number;
+  /**
+   * The part of `gap` that disappears when B is given A's distance mix:
+   * `bAtMixOfA - recallB`. Near 0 → distance does not account for the gap;
+   * near `gap` → it accounts for all of it. Can be negative (B's own mix was
+   * the EASIER one).
+   */
+  fromDistance: number;
+};
+
+/**
+ * Split the recall difference between A and B into "what the distance mix
+ * accounts for" and the rest. `null` when any of the three numbers is missing.
+ * Arithmetic only — what the rest is due to is NOT something this can say.
+ */
+export function distanceGap(
+  recallA: number | null,
+  recallB: number | null,
+  bAtMixOfA: number | null,
+): DistanceGap | null {
+  if (recallA === null || recallB === null || bAtMixOfA === null) return null;
+  return { gap: recallA - recallB, fromDistance: bAtMixOfA - recallB };
+}

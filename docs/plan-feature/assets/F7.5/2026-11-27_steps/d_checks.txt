@@ -1,0 +1,53 @@
+PASS  review mode: no Report button
+PASS  explore mode: no Report button
+PASS  evaluate mode: the top bar has a Report button
+PASS  the report covers exactly the list and the 3D view (1112×508) and leaves the photo, the panel and the timeline visible  — {"covers":true,"clearOfCamera":true,"clearOfTimeline":true,"size":"1112×508"}
+PASS  the 3D view is still mounted underneath (same canvas)
+PASS  conditions: yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3 · labels are projected 3D boxes  — ["yolov8n","no fine-tuning","input 1280","score ≥ 0.25","IoU ≥ 0.3","labels = 3D boxes projected into the photo (approximate)"]
+PASS  the conditions sit above the numbers
+PASS  title: all 10 scenes · 404 frames · 2,424 photos  — Evaluation reportall 10 scenes · 404 frames · 2,424 photos Close Esc Measured with yolov8n no fine-tuning input 1280 sco
+PASS  total: Precision 65.7% (6,726 of 10,240), Recall 56.0% (6,726 of 12,018)
+PASS  total: "654 distinct objects … in 8 drives" and "not “the model’s performance”"
+PASS  drive table: 8 rows with the measured numbers, oldest first, the night drive last with 3 scenes  — ["2018-07-24 singapore-onenorth | 1 | 86 | 46.2% | 759/1,644","2018-08-01 boston-seaport | 1 | 106 | 71.9% | 1,200/1,670","2018-08-27 boston-seaport | 1 | 100 | 76.2% | 1,010/1,326","2018-08-28 boston-seaport | 1 | 35 | 55.7% | 643/1,155","2018-08-30 boston-seaport | 1 | 23 | 65.8% | 314/477","2018-10-02 singapore-queenstown | 1 | 43 | 66.6% | 421/632","2018-10-08 singapore-queenstown | 1 | 90 | 67.8% | 1,364/2,012","2018-11-21 · night singapore-hollandvillage | 3 | 171 | 32.7% | 1,015/3,102"]
+PASS  drive table: "Day: 7 drives, 64.1% (5,711 / 8,916). Night: 1 drive (3 scenes), 32.7% (1,015 / 3,102) — one evening in one place."  — Day: 7 drives, 64.1% (5,711 / 8,916). Night: 1 drive (3 scenes), 32.7% (1,015 / 3,102) — one evening in one place. DAY VS NIGHT AT THE SAME DISTAN
+PASS  distance table: 10 rows (day %, night %, labels day / night)  — ["0–10 m | 76% | 55% | 1,108 / 280","10–20 m | 79% | 30% | 2,209 / 769","20–30 m | 69% | 38% | 2,121 / 836","30–40 m | 62% | 29% | 1,226 / 478","40–50 m | 49% | 20% | 799 / 239","50–60 m | 38% | 39% | 636 / 179","60–70 m | 42% | 26% | 378 / 93","70–80 m | 26% | 29% | 244 / 95","80–90 m | 37% | 2% | 115 / 56","90 m + | 19% | 4% | 80 / 77"]
+PASS  distance table carries "night = 1 drive"
+PASS  distance: "night recall is 33.9% instead of 32.7% (day: 64.1%) … accounts for 1.2 of the 31.4 points"  — Re-weighted to the day scenes' distance mix, night recall is 33.9% instead of 32.7% (day: 64.1%): the distance mix accounts for 1.2 of the 31.4 points between them. Faded rows have fewer than 50 labels in one gr
+PASS  distance: "What the rest is due to is not established by this: all 3 night scenes are one drive."
+PASS  distance: no band is faded (each has ≥ 50 labels in both groups, the far ones added up)  — [false,false,false,false,false,false,false,false,false,false]
+PASS  false alarms: "1,452 of 3,514 (41%) have no label of any class nearby", counted at the fixed rules  — FALSE ALARMS 1,452 of 3,514 (41%) have no label of any class nearby. Counted at score ≥ 0.25, IoU ≥ 0.3 — the sample check's fixed rules. Not checked yet Each is either a mistake of the model or a real object nuScenes did not label. Nobody has looked, so precision may be understated by an unknown amount. Check a sample of 100 →
+PASS  false alarms: "Not checked yet" and a button into the sample check
+PASS  1536×700 (report 1112×508): no text is cut
+PASS  1536×700: nothing sticks out of the report and no table cells overlap
+PASS  1536×700: both tables are fully visible without scrolling the report  — {"cut":[],"outside":[],"overlaps":false,"scrolls":false,"lastDrive":534,"lastBand":492,"bottom":600,"size":"1112×508"}
+PASS  1536×700: the top bar (with the Report button) is one line (44px); no page scroll
+PASS  1440×900 (report 1016×708): no text is cut
+PASS  1440×900: nothing sticks out of the report and no table cells overlap
+PASS  1440×900: both tables are fully visible without scrolling the report  — {"cut":[],"outside":[],"overlaps":false,"scrolls":false,"lastDrive":719,"lastBand":677,"bottom":800,"size":"1016×708"}
+PASS  1440×900: the top bar (with the Report button) is one line (44px); no page scroll
+PASS  1280×720 (report 896×528): no text is cut
+PASS  1280×720: nothing sticks out of the report and no table cells overlap
+PASS  1280×720: the report scrolls inside itself and its last table row can be reached  — {"cut":[],"outside":[],"overlaps":false,"scrolls":true,"lastDrive":719,"lastBand":677,"bottom":620,"size":"896×528"}
+PASS  1280×720: the top bar (with the Report button) is one line (44px); no page scroll
+PASS  1024×768 (report 640×576): no text is cut
+PASS  1024×768: nothing sticks out of the report and no table cells overlap
+PASS  1024×768: the report scrolls inside itself and its last table row can be reached  — {"cut":[],"outside":[],"overlaps":false,"scrolls":true,"lastDrive":805,"lastBand":1169,"bottom":668,"size":"640×576"}
+PASS  1024×768: the top bar (with the Report button) is one line (44px); no page scroll
+PASS  IoU 0.5 with the report open: Precision 51.1%, Recall 45.4%, chip "IoU ≥ 0.5"  — Evaluation reportall 10 scenes · 404 frames · 2,424 photos Close Esc Measured with yolov8n no fine-tuning input 1280 score ≥ 0.25 IoU ≥ 0.5 labels = 3D boxes projected into the photo (approximate) TOTAL Precision 51.1% 5,462 of 10,693 model boxes matched a lab
+PASS  IoU 0.5: day 52.3% (4,659 / 8,916), night 25.9% (803 / 3,102)
+PASS  IoU 0.5: the false-alarm block still reads 1,452 of 3,514 at its fixed rules
+PASS  with the report open, J / A do nothing underneath
+PASS  Esc closes the report
+PASS  the 3D canvas was not re-created by opening / closing the report
+PASS  after closing, J works again (a result is selected)
+PASS  the "All scenes" block of the panel opens the report as well
+PASS  "Check a sample" closes the report and opens the sample check on box 1
+PASS  during the sample check there is no Report button
+PASS  after two verdicts the report says "Sample check: 2 of 100 judged — not final" and words the estimate as a sample  — FALSE ALARMS 1,452 of 3,514 (41%) have no label of any class nearby. Counted at score ≥ 0.25, IoU ≥ 0.3 — the sample check's fixed rules. Sample check: 2 of 100 judged — not final Real objects without a label: 1 of 2 sampled boxes → about 9–91% of all 1,452. Model wrong: 1, unclear: 0. A sample estimate, judged by one person. Precision still counts all of them as false alarms — nothing was re-scored. Continue the sample check →
+PASS  …and that precision was not re-scored; the button now continues the check
+PASS  switching to Review closes the report
+PASS  …and it stays closed when coming back to Evaluate
+PASS  the 3D canvas was never re-created in this run
+PASS  no console errors
+
+d: 51 / 51 passed

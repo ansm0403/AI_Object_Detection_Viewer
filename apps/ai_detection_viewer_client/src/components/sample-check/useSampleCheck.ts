@@ -47,6 +47,11 @@ export type SampleCheck = {
   availability: SampleAvailability;
   /** Size of the population; `null` until the sample can be drawn. */
   population: number | null;
+  /**
+   * ALL false alarms at the same fixed rules (the population is the part of
+   * them with no label nearby); `null` until the sample can be drawn.
+   */
+  falseAlarms: number | null;
   /** The sampled boxes in drawn order (empty until ready). */
   sample: readonly UnlabelledFalseAlarm[];
   size: number;
@@ -97,24 +102,28 @@ export function useSampleCheck({
   const ready = active && availability.status === 'ready';
 
   // The population in its fixed order, then the one seeded shuffle of it.
-  const order = useMemo(() => {
-    if (!ready) return NO_ITEMS;
+  const drawn = useMemo(() => {
+    if (!ready) return { order: NO_ITEMS, falseAlarms: 0 };
+    let falseAlarms = 0;
     const population = listUnlabelledFalseAlarms(
       sceneNames.flatMap((name) => {
         const scene = loaded.get(name);
         if (!scene?.predictions) return [];
+        const evaluation = evaluateFrames(scene.frames, scene.predictions, rules);
+        falseAlarms += evaluation.summary.falseAlarm;
         return [
           {
             name,
             frames: scene.frames,
             predictions: scene.predictions,
-            evaluation: evaluateFrames(scene.frames, scene.predictions, rules).byFrame,
+            evaluation: evaluation.byFrame,
           },
         ];
       }),
     );
-    return drawOrder(population, SAMPLE_SEED);
+    return { order: drawOrder(population, SAMPLE_SEED), falseAlarms };
   }, [ready, sceneNames, loaded, rules]);
+  const order = drawn.order;
 
   // The size the user picked; until they pick one, the smallest size that
   // holds every verdict already stored (so a reload does not hide work).
@@ -145,6 +154,7 @@ export function useSampleCheck({
   return {
     availability,
     population: ready ? order.length : null,
+    falseAlarms: ready ? drawn.falseAlarms : null,
     sample,
     size,
     sizes,

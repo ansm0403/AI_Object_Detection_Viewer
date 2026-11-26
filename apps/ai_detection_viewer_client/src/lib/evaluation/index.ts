@@ -40,8 +40,10 @@ export { summarizeDrives, type DriveScore } from './drives';
 export {
   DEFAULT_MIN_BAND_LABELS,
   compareByDistance,
+  distanceGap,
   type BandCount,
   type DistanceComparison,
+  type DistanceGap,
   type DistanceRow,
 } from './distance-compare';
 export { describeModelConditions, describeWeights, type WeightsOrigin } from './model-info';

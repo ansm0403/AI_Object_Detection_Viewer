@@ -159,6 +159,51 @@ const SCREENS = [
     html: `<p><span class="tag pass">통과</span>1280×720, IoU 0.5. 클래스 칩 자리 494px.</p>
       <p><b>무엇을 보면 되는지:</b> 위쪽 줄이 한 줄에 들어가 있고, 패널의 조건 한 줄이 잘리지 않았다(패널 폭 360px).</p>`,
   },
+  {
+    key: 'D1 보고서',
+    title: '단계 D — 보고서 창 (주행 표, 거리별 낮/밤, 헛짚음)',
+    img: 'd1_report.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>51 / 51. 같은 빌드에서 단계 B 135항목, 단계 C 74항목도 다시 돌려 모두 통과했다. 단위 테스트 985개 통과, 타입 오류 0, 린트 오류 0(경고 19개).</p>
+      <p>평가 모드의 맨 위 줄에 생긴 <b>Report</b> 버튼을 누른 화면이다. 목록과 3D 화면 자리 위에 뜬다(3D 캔버스는 밑에 그대로 있고 다시 만들어지지 않았다). <b>Esc</b>로 닫는다. 패널의 "All scenes" 아래에도 여는 링크가 있다.</p>
+      <p><b>무엇을 보면 되는지 (위에서 아래로, 왼쪽에서 오른쪽으로):</b></p>
+      <ul>
+        <li><b>조건이 숫자보다 먼저 나온다:</b> yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3 · "labels = 3D boxes projected into the photo (approximate)".</li>
+        <li><b>TOTAL:</b> Precision 65.7%(6,726 / 10,240), Recall 56.0%(6,726 / 12,018). 그 아래 "12,018 labels are <b>654 distinct objects</b> … in <b>8 drives</b>. Observed on this data under these rules — not "the model's performance"."</li>
+        <li><b>FALSE ALARMS:</b> "1,452 of 3,514 (41%) have no label of any class nearby", 그리고 노란 상자 <b>"Not checked yet"</b>와 표본 검수로 가는 버튼.</li>
+        <li><b>RECALL BY DRIVE:</b> 주행 8줄. 날짜와 장소, 장면 수, 서로 다른 물체 수, Recall, 찾음 / 정답. 맨 아래 노란 줄이 밤 주행 하나(장면 3개, 물체 171개, 32.7%)다.</li>
+        <li><b>DAY VS NIGHT AT THE SAME DISTANCE:</b> 구간 10줄. 0~50m의 다섯 줄은 모두 밤이 낮고, 50~60m와 70~80m는 차이가 없거나 뒤집힌다. 오른쪽 위에 <b>"night = 1 drive"</b>. 아래 글: "밤의 거리 분포를 낮과 같게 맞추면 밤 Recall은 32.7%가 아니라 33.9% … 거리 분포가 설명하는 것은 31.4점 중 1.2점 … 나머지가 무엇 때문인지는 이것으로 밝혀지지 않는다: 밤 장면 3개는 모두 한 주행이다."</li>
+      </ul>
+      <p><span class="tag fix">고침</span>처음에는 주행 표의 "날짜 · 장소" 칸이 잘렸다(장소 이름이 길다). 날짜와 장소를 두 줄로 나누고, 주행 표에 더 넓은 칸을 줬다. 스크립트의 위치 검사가 잡아냈다.</p>`,
+  },
+  {
+    key: 'D2 보고서 0.5',
+    title: '단계 D — 보고서를 연 채 IoU 0.5를 누르면',
+    img: 'd2_report_iou05.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>보고서는 위쪽 줄을 가리지 않으므로 연 채로 IoU를 바꿀 수 있다.</p>
+      <p><b>무엇을 보면 되는지:</b> 전체가 <b>Precision 51.1% / Recall 45.4%</b>, 낮 52.3%, 밤 25.9%가 되고 조건의 칩이 "IoU ≥ 0.5"로 바뀐다. 주행 표와 거리 표의 숫자도 따라 바뀐다. <b>FALSE ALARMS의 "1,452 of 3,514"는 바뀌지 않는다</b>(표본 검수의 고정 규칙으로 센 것이라고 그 아래에 적혀 있다).</p>`,
+  },
+  {
+    key: 'D3 판정 뒤',
+    title: '단계 D — 표본을 판정한 뒤의 보고서',
+    img: 'd3_report_after_verdicts.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>보고서의 "Check a sample of 100 →"을 누르면 보고서가 닫히고 표본 검수가 열린다. 스크립트가 두 개(A, R)를 판정하고 나와서 보고서를 다시 열었다.</p>
+      <p><b>무엇을 보면 되는지:</b> 노란 "Not checked yet"이 <b>"Sample check: 2 of 100 judged — not final"</b>과 "1 of 2 sampled boxes → about …% of all 1,452"로 바뀌었다. 그 아래 "A sample estimate, judged by one person. Precision still counts all of them as false alarms — nothing was re-scored." 버튼은 "Continue the sample check →".</p>
+      <p>네가 100개를 다 판정하면 이 자리에 "100 of 100 judged"와 범위가 나온다.</p>`,
+  },
+  {
+    key: 'D4 1280',
+    title: '단계 D — 1280×720',
+    img: 'd4_1280x720.jpg', w: 1280, h: 720,
+    html: `<p><span class="tag pass">통과</span>1536px보다 좁으면 전체 숫자와 헛짚음 블록이 위로 올라가고 두 표가 그 아래에 나란히 놓인다. 보고서 안에서 스크롤한다.</p>
+      <p>위치로 확인한 것(네 가지 창 크기): 잘린 글자가 없는가, 보고서 밖으로 나간 것이 없는가, 표의 칸이 서로 겹치지 않는가, 1536×700과 1440×900에서는 두 표가 스크롤 없이 다 보이는가, 그보다 좁으면 스크롤해서 마지막 줄까지 갈 수 있는가, 맨 위 줄이 한 줄인가, 페이지 스크롤이 없는가.</p>`,
+  },
+  {
+    key: 'D5 1024',
+    title: '단계 D — 1024×768',
+    img: 'd5_1024x768.jpg', w: 1024, h: 768,
+    html: `<p><span class="tag pass">통과</span>가장 좁은 폭에서는 한 줄로 쌓인다. 주행 표가 보이고 거리 표는 아래로 스크롤하면 나온다.</p>
+      <p><b>이번에 만든 것이 아닌 것 하나 (적어 두고 고치지 않았다):</b> 오른쪽 패널의 "1364 of 1778 model boxes matched a la…"가 잘려 있다. 패널 폭이 360px일 때 생기는 말줄임이고, F7.5를 시작하기 전의 코드(<code>4b4597e</code>)에 이미 있었다. 고칠지는 네가 정하면 된다.</p>`,
+  },
 ];
 let at = 0;
 const nav = document.getElementById('nav');

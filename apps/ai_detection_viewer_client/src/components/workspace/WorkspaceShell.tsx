@@ -25,6 +25,13 @@ type WorkspaceShellProps = {
   /** Bottom row: frame timeline. */
   timeline: ReactNode;
   /**
+   * (F7.5) Something laid OVER the list and the 3D view (wide screens: the
+   * same grid cells, on top; narrow screens: above everything). The zones
+   * underneath stay mounted — the 3D canvas is not re-created when this opens
+   * or closes. Used for the evaluation report.
+   */
+  overlay?: ReactNode;
+  /**
    * Width / height of the camera cell. The shell sizes the cell; the viewer
    * inside only fills it. nuScenes photos are 16:9; COCO photos vary, so 4:3.
    */
@@ -60,6 +67,7 @@ export function WorkspaceShell({
   cameraStrip,
   details,
   timeline,
+  overlay,
   cameraAspect,
 }: WorkspaceShellProps) {
   return (
@@ -128,6 +136,17 @@ export function WorkspaceShell({
         >
           {timeline}
         </section>
+
+        {/* (F7.5) Over the list and the 3D view. Later in the DOM and a higher
+            z-index than the two cells it shares, so it covers them. */}
+        {overlay && (
+          <section
+            aria-label="Report"
+            className="order-first relative z-20 min-h-0 min-w-0 lg:order-none lg:col-start-1 lg:col-span-2 lg:row-start-1"
+          >
+            {overlay}
+          </section>
+        )}
       </main>
     </div>
   );

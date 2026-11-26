@@ -59,6 +59,8 @@ type Props = {
   /** (F7) `scenes` is catching up with the score slider. */
   scenesStale?: boolean;
   onOpenScene?: (scene: string) => void;
+  /** (F7.5) Opens the evaluation report. */
+  onOpenReport?: () => void;
 };
 
 /**
@@ -89,6 +91,7 @@ export function EvaluationPanel({
   scenesTotal = 0,
   scenesStale = false,
   onOpenScene,
+  onOpenReport,
   photoNote,
 }: Props) {
   // The file only holds predictions down to the score it was written with
@@ -131,6 +134,7 @@ export function EvaluationPanel({
                 stale={scenesStale}
                 currentScene={scope}
                 onOpenScene={onOpenScene}
+                onOpenReport={onOpenReport}
               />
             )}
             <RecallBars

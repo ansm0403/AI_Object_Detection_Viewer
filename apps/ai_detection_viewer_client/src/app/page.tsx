@@ -39,6 +39,7 @@ import {
   BoxColorLegend,
   EvaluationHeadline,
   EvaluationPanel,
+  EvaluationReport,
   IouChoice,
   ModeSwitch,
   OverlayLegend,
@@ -68,6 +69,7 @@ import {
   IOU_THRESHOLD,
   NEAREST_MIN_IOU,
   cameraOfPredictionId,
+  compareByDistance,
   describeOtherViews,
   evaluateFrames,
   evaluateScenes,
@@ -77,6 +79,7 @@ import {
   outcomeCountLabel,
   recallOf,
   selectionIdOf,
+  summarizeDrives,
   visibilityText,
   type EvalKind,
   type EvaluationRules,
@@ -304,6 +307,9 @@ export default function Index() {
   // setting like the mode itself. Which box is being judged is NOT stored — it
   // is `selectedObjectId` (Rule #2).
   const [sampleChecking, setSampleChecking] = useState(false);
+  // (F7.5) The evaluation report is open (laid over the list and the 3D view).
+  // A VIEW flag of evaluate mode.
+  const [reportOpen, setReportOpen] = useState(false);
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -451,6 +457,7 @@ export default function Index() {
   const exploring = mode === 'explore' && reviewEnabled && plantedErrors === null;
   // (F7.5) The sample check is on screen.
   const sampleCheckOn = evaluating && sampleChecking;
+  const reportOn = evaluating && reportOpen && !sampleChecking;
 
   // (F6) Which camera the camera cell shows. A VIEW setting (not a selection,
   // Rule #2): it follows the selected object — the photo that shows the box is
@@ -708,6 +715,8 @@ export default function Index() {
                 name: info.name,
                 night: info.night,
                 drive: info.log?.name ?? null,
+                driveDate: info.log?.date,
+                driveLocation: info.log?.location,
                 frames: loaded.frames,
                 predictions: loaded.predictions,
               },
@@ -718,6 +727,21 @@ export default function Index() {
     );
   }, [evaluating, catalogScenes, sceneLibrary, deferredRules]);
   const scenesEvaluationStale = deferredRules !== evaluationRules;
+  // (F7.5) The report's two tables: the same scores regrouped per drive, and
+  // day against night band by band. Only computed while the report is open.
+  const reportTables = useMemo(
+    () =>
+      reportOn && scenesEvaluation
+        ? {
+            drives: summarizeDrives(scenesEvaluation.scenes),
+            comparison: compareByDistance(
+              scenesEvaluation.day.byDistance,
+              scenesEvaluation.night.byDistance,
+            ),
+          }
+        : null,
+    [reportOn, scenesEvaluation],
+  );
   const handleToggleKind = useCallback((kind: EvalKind) => {
     setShownKinds((prev) => {
       const next = new Set(prev);
@@ -1109,7 +1133,9 @@ export default function Index() {
   // them to the one selection, the scene loader and the review store.
   const sampleRecords = reviewsByScope[SAMPLE_SCOPE];
   const sampleCheck = useSampleCheck({
-    active: sampleCheckOn,
+    // The report shows how many such false alarms there are and what the
+    // sample says so far, so it needs the same derived state.
+    active: sampleCheckOn || reportOn,
     sceneNames,
     loaded: sceneLibrary,
     failed: scenes.library.errors,
@@ -1139,8 +1165,11 @@ export default function Index() {
   const handleEnterSampleCheck = useCallback(() => {
     openFirstSampleItem.current = true;
     setSampleChecking(true);
+    setReportOpen(false); // from the report: the report gives way to the check
     setIsPlaying(false);
   }, []);
+  const handleOpenReport = useCallback(() => setReportOpen(true), []);
+  const handleCloseReport = useCallback(() => setReportOpen(false), []);
   const handleExitSampleCheck = useCallback(() => {
     openFirstSampleItem.current = false;
     setSampleChecking(false);
@@ -1297,7 +1326,9 @@ export default function Index() {
       setSelectedObject,
     ],
   );
-  useReviewShortcuts(handleReviewAction, reviewEnabled && currentFrame !== null);
+  // (F7.5) While the report covers the list and the 3D view, the keys must not
+  // act on what is hidden underneath.
+  useReviewShortcuts(handleReviewAction, reviewEnabled && currentFrame !== null && !reportOn);
 
   // Frame switch. The object-selection policy is DATASET-AWARE (F2-C):
   //  - COCO: clear the selection. COCO ids are `imageId-annId`, unstable across
@@ -1368,6 +1399,7 @@ export default function Index() {
       setPractice(false); // (F4-F) practice is a nuScenes-only mode
       setMode('review'); // (F5) evaluate is a nuScenes-only mode
       setSampleChecking(false); // (F7.5) the sample check is part of evaluate mode
+      setReportOpen(false); // (F7.5) so is the report
       setIouThreshold(IOU_THRESHOLD); // (F7.5) back to the default overlap
       setShownKinds(new Set()); // (F5) show every outcome again
       resetCamera(); // (F6) back to the default camera
@@ -1390,6 +1422,7 @@ export default function Index() {
       if (next !== 'review' && evaluateBlocked) return;
       setMode(next);
       setSampleChecking(false); // (F7.5) the sample check does not outlive a mode switch
+      setReportOpen(false); // (F7.5) nor does the report
       setConfidenceThreshold(next === 'evaluate' ? DEFAULT_MIN_SCORE : 0);
     },
     [mode, evaluateBlocked, setConfidenceThreshold],
@@ -1477,6 +1510,23 @@ export default function Index() {
           )}
         </span>
       ) : evaluating ? (
+        <>
+        {!sampleCheckOn && (
+          <button
+            type="button"
+            onClick={reportOn ? handleCloseReport : handleOpenReport}
+            aria-pressed={reportOn}
+            title="All scenes on one screen: conditions, totals, recall by drive, day and night at the same distance, the unchecked false alarms"
+            className={[
+              'text-xs px-2 py-0.5 rounded border transition-colors whitespace-nowrap',
+              reportOn
+                ? 'border-sky-400/50 bg-sky-500/15 text-sky-200'
+                : 'border-zinc-700 text-zinc-300 hover:border-sky-400/40 hover:text-zinc-100',
+            ].join(' ')}
+          >
+            Report
+          </button>
+        )}
         <EvaluationHeadline
           summary={evaluation?.summary ?? null}
           status={predictions.status === 'none' ? 'failed' : predictions.status}
@@ -1487,6 +1537,7 @@ export default function Index() {
               : undefined
           }
         />
+        </>
       ) : (
         reviewProgress && (
         <>
@@ -2012,6 +2063,7 @@ export default function Index() {
             scenesTotal={scenes.catalog?.scenes.length ?? 0}
             scenesStale={scenesEvaluationStale}
             onOpenScene={handleSelectScene}
+            onOpenReport={handleOpenReport}
             photoNote={
               scenes.catalog?.photo && scenes.catalog.photo.width < scenes.catalog.photo.sourceWidth
                 ? `the original ${scenes.catalog.photo.sourceWidth}×${scenes.catalog.photo.sourceHeight} photos (the photos shown here are ${scenes.catalog.photo.width}×${scenes.catalog.photo.height} copies)`
@@ -2093,6 +2145,37 @@ export default function Index() {
             : {})}
         />
         )
+      }
+      // (F7.5) The evaluation report, over the list and the 3D view (both stay
+      // mounted underneath — the canvas is not re-created).
+      overlay={
+        reportOn && scenesEvaluation && reportTables ? (
+          <EvaluationReport
+            scenes={scenesEvaluation}
+            scenesTotal={scenes.catalog?.scenes.length ?? 0}
+            stale={scenesEvaluationStale}
+            model={predictions.set?.model}
+            rules={evaluationRules}
+            drives={reportTables.drives}
+            comparison={reportTables.comparison}
+            unlabelled={{
+              status: sampleCheck.availability.status,
+              message:
+                sampleCheck.availability.status === 'loading'
+                  ? `Counted over all scenes: ${sampleCheck.availability.loaded} of ${sampleCheck.availability.total} are loaded…`
+                  : sampleCheck.availability.status === 'unavailable'
+                    ? sampleCheck.availability.reason
+                    : undefined,
+              count: sampleCheck.population,
+              falseAlarms: sampleCheck.falseAlarms,
+              minScore: DEFAULT_MIN_SCORE,
+              iouThreshold: IOU_THRESHOLD,
+              summary: sampleCheck.summary,
+            }}
+            onCheckSample={handleEnterSampleCheck}
+            onClose={handleCloseReport}
+          />
+        ) : undefined
       }
       timeline={
         // (F2-C) Autoplay controls are passed only when the dataset tracks
