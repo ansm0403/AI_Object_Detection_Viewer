@@ -1802,6 +1802,18 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
       photo" with a "Show the box" button; the box's thumbnail carries the marker; its row in the
       list always returns to its photo. Another frame still deselects. None of the 313 + 30 checks
       had clicked a thumbnail during the sample check (Edge_F#7.5 Case 5).
+  15. **(After the feature was pushed.) The user judged the sample, so change 13 no longer holds.**
+      All 100 boxes, one reviewer, 2026-11-27: real object without a label 83, model wrong 5,
+      unclear 12 → "real objects without a label" estimated at about 75–89 % of the 1,452 (model
+      wrong about 2–11 %). The exported file is kept at
+      `docs/evaluation/false-alarm-sample_20261127-1018.json` (47 KB); it was checked against the
+      shipped sample (same 100 boxes in the same order, summary = sum of its items). The README
+      carries the result with its conditions and one reading limit found while writing it: "no
+      label" means no label of THIS project's ground truth (projected 3D boxes) in that photo —
+      whether nuScenes has no annotation or the projection dropped it was not separated. Precision
+      is not recomputed. Of the 83, 62 are boxes under 50 px high (of 900).
+  16. **(Decision, 2026-11-27.) The UI stays English.** The user considered a Korean UI or a
+      language toggle before recording GIFs and settled on English (HANDOFF 3.6).
 - **Kept as designed:** simple random sample from a fixed order with a fixed seed; population at the
   FIXED default rules (never the slider's); the F4 keys and the review store (third scope); a separate
   export format (`review@2` untouched); estimates always with sample size and range, all three
@@ -1911,6 +1923,14 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
       "Showing FR — the box is in the F photo"와 "Show the box" 버튼을 보이며, 그 박스의 썸네일에 표시가 붙고, 목록의 줄을
       누르면 항상 그 사진으로 돌아간다. 다른 프레임으로 가면 여전히 풀린다. 확인 343항목 중 표본 검수에서 썸네일을 눌러 본
       것이 하나도 없었다(Edge_F#7.5 Case 5).
+  15. (push한 뒤) 사용자가 표본을 판정했다. 그래서 달라진 점 13은 이제 맞지 않는다. 100개 전부, 검수자 1명, 2026-11-27:
+      정답 없는 실제 물체 83, 모델이 틀림 5, 애매함 12 → "정답 없는 실제 물체"는 1,452개의 약 75~89%로 추정(모델이 틀림은
+      약 2~11%). 내보낸 파일은 `docs/evaluation/false-alarm-sample_20261127-1018.json`(47KB)에 두었고, 프로젝트가 뽑는
+      표본과 대조했다(같은 100개, 같은 순서, 요약 = 항목의 합). README에 조건과 함께 실었고, 쓰면서 찾은 읽는 법의 한계
+      하나도 적었다: "정답이 없다"는 이 프로젝트의 정답(3D 박스의 투영)이 그 사진에 없다는 뜻이고, nuScenes에 라벨이 없는
+      것인지 투영에서 빠진 것인지는 가리지 않았다. Precision은 고쳐 계산하지 않는다. 83개 중 62개는 높이 50px 미만(900 중)이다.
+  16. (결정, 2026-11-27) 화면은 영어로 둔다. 사용자가 GIF를 찍기 전에 한글 화면과 한/영 전환을 검토하고 영어로 확정했다
+      (HANDOFF 3.6).
 - 설계대로 둔 것: 고정된 순서에서 고정 시드로 뽑는 단순 무작위 표본, 모집단은 고정 규칙(슬라이더의 값이 아님), F4의 키와
   검수 저장소(세 번째 구역), 별도의 내보내기 형식(`review@2`는 그대로), 추정에는 항상 표본 크기와 범위, 세 판정의 분모는
   같음, "약 N개"로 환산하지 않음, 평가 모드 안의 상태(네 번째 모드 아님), 실린 960×540 사진으로 판정, IoU는 두 값
