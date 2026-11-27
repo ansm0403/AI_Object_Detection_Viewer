@@ -31,6 +31,32 @@ export type Frame = {
   // (F7) A small preview of the frame (its default camera's photo), for the
   // timeline and result lists. Absent → there is no preview.
   thumbnailUrl?: string;
+  // (F8) The car's pose in the GLOBAL frame for this frame — the frame every 3D
+  // box and LiDAR point above is expressed in. Kept so a box can be taken back
+  // to the dataset's own (global) terms and rebuilt from them when it is
+  // edited. nuScenes only; absent on COCO frames and unknown formats, and then
+  // the frame's boxes cannot be edited.
+  egoPose?: RigidPose;
+};
+
+// (F8) A position + orientation as the dataset writes it: translation in
+// metres, rotation as a quaternion in nuScenes order [w, x, y, z] (w first —
+// NOT the [x, y, z, w] of `Detection3D.bbox3D.rotation`). The same shape as
+// `Pose` in `lib/geometry/transforms`, declared here so this file imports nothing.
+export type RigidPose = {
+  translation: [number, number, number];
+  rotation: [number, number, number, number];
+};
+
+// (F8) What is needed to project a 3D box into one camera's photo again.
+export type CameraCalibration = {
+  // The car's pose at the moment THIS photo was taken (the six cameras do not
+  // fire together, see `lib/nuscenes/types`).
+  egoPose: RigidPose;
+  // The camera's pose on the car.
+  sensor: RigidPose;
+  // The 3×3 lens matrix K, row-major.
+  intrinsic: [[number, number, number], [number, number, number], [number, number, number]];
 };
 
 // (F7) Where a frame's point cloud is fetched from.
@@ -51,6 +77,9 @@ export type CameraView = {
   imageWidth: number;
   imageHeight: number;
   detections2D: Detection2D[];
+  // (F8) How this photo was taken, so an edited box can be projected into it
+  // with the same math the parser used. Absent → boxes cannot be re-projected.
+  calibration?: CameraCalibration;
 };
 
 export type Detection2D = {

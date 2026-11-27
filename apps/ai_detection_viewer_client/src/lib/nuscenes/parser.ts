@@ -7,20 +7,18 @@ import type {
 } from '@/lib/types';
 import { DEFAULT_CAMERA } from '@/lib/cameras/names';
 import {
-  egoQuatToThree,
   egoToThree,
-  globalQuatToEgo,
   globalToEgo,
-  nuSizeToLocal,
   sensorToGlobal,
   type Pose,
   type Vec3,
 } from '@/lib/geometry/transforms';
 import {
-  boxCornersEgo,
-  projectBoxCorners,
-  projectCornersToBbox,
-} from '@/lib/geometry/projection';
+  boxInCamera,
+  boxInFrame,
+  type GlobalBoxGeometry,
+  type ProjectionCamera,
+} from './box-views';
 import type {
   NuScenesAnnotation,
   NuScenesCalibratedSensor,
@@ -83,6 +81,12 @@ function buildFrame(pf: unknown): Frame | null {
     imageWidth: source.image.width,
     imageHeight: source.image.height,
     detections2D: [],
+    // (F8) Kept so an edited box can be projected into this photo again.
+    calibration: {
+      egoPose: poseOf(source.egoPose),
+      sensor: poseOf(source.sensor),
+      intrinsic: source.K,
+    },
   }));
 
   const detections3D: Detection3D[] = [];
@@ -105,58 +109,40 @@ function buildFrame(pf: unknown): Frame | null {
 
     const className = mapCategory(ann.category);
 
-    // Physical EGO frame (z-up): shared input for both the 3D render and the
-    // 2D projection. Computed once.
-    const centerEgo = globalToEgo(ann.translation, egoPose);
-    const quatEgo = globalQuatToEgo(ann.rotation, egoPose.rotation);
-    const localSize = nuSizeToLocal(ann.size);
+    // The box as the file writes it (global frame). Both the 3D box and every
+    // photo's 2D box are built from these values by `box-views` — the same two
+    // functions that rebuild a box when it is edited (F8).
+    const geometry: GlobalBoxGeometry = {
+      translation: ann.translation,
+      size: ann.size,
+      rotation: ann.rotation,
+    };
 
     const annotation = readAnnotationInfo(ann);
     detections3D.push({
       id: ann.instanceToken,
       class: className,
       confidence: 1.0,
-      bbox3D: {
-        center: egoToThree(centerEgo),
-        size: localSize,
-        rotation: egoQuatToThree(quatEgo),
-      },
+      bbox3D: boxInFrame(geometry, egoPose),
       ...(annotation ? { annotation } : {}),
     });
 
     // 2D box = AABB of the 3D box projected into a camera image. Skipped (but
     // the 3D box is kept) when the box is behind that camera or fully off its
     // image. (F6) Done once per camera: the same object gets a 2D box in every
-    // photo it appears in, always under the same id (Rule #1).
+    // photo it appears in, always under the same id (Rule #1). Each photo is
+    // projected with ITS OWN ego pose (the cameras fire at slightly different
+    // moments); for the base camera that is the frame's own pose, so its 2D
+    // boxes are exactly what they were before F6. (F4) The eight projected
+    // corners are kept too, so the camera view can draw the 3D box itself.
     sources.forEach((source, index) => {
-      // The box in the ego frame OF THIS PHOTO: the cameras fire at slightly
-      // different moments, and the car has moved in between (see
-      // `NuScenesCamera`). For the base camera this is the frame's own ego pose,
-      // so its 2D boxes are exactly what they were before F6.
-      const cornersEgo = boxCornersEgo(
-        globalToEgo(ann.translation, source.egoPose),
-        localSize,
-        globalQuatToEgo(ann.rotation, source.egoPose.rotation),
-      );
-      const bbox = projectCornersToBbox(
-        cornersEgo,
-        source.sensor,
-        source.K,
-        source.image.width,
-        source.image.height,
-      );
-      if (!bbox) return;
-      // (F4) Also keep the eight projected corners, so the camera view can draw
-      // the 3D box itself (edges + front face), not only this rectangle. A
-      // non-null bbox means every corner is in front of the camera, so the
-      // corner projection cannot fail here; the fallback is purely defensive.
-      const corners = projectBoxCorners(cornersEgo, source.sensor, source.K);
+      const projected = boxInCamera(geometry, projectionCamera(source));
+      if (!projected) return;
       views[index].detections2D.push({
         id: ann.instanceToken,
         class: className,
         confidence: 1.0,
-        bbox,
-        ...(corners ? { corners } : {}),
+        ...projected,
       });
     });
   }
@@ -177,6 +163,8 @@ function buildFrame(pf: unknown): Frame | null {
     pointCloud: lidarRef ? [] : buildLidarPoints(pf.lidar, egoPose, pf.token),
     source: 'nuscenes-measured',
     cameras: views,
+    // (F8) The frame the boxes above are expressed in, in global terms.
+    egoPose: poseOf(egoPose),
     ...(lidarRef ? { pointCloudSource: { url: lidarRef.path, count: lidarRef.pointCount } } : {}),
     ...(typeof thumb === 'string' && thumb !== '' ? { thumbnailUrl: thumb } : {}),
   };
@@ -220,6 +208,21 @@ type CameraSource = {
   sensor: Pose;
   K: NuScenesCalibratedSensor['cameraIntrinsic'];
 };
+
+/** Only the pose of a raw object that may carry more (a calibrated sensor also has its intrinsics). */
+function poseOf(pose: Pose): Pose {
+  return { translation: pose.translation, rotation: pose.rotation };
+}
+
+function projectionCamera(source: CameraSource): ProjectionCamera {
+  return {
+    egoPose: source.egoPose,
+    sensor: source.sensor,
+    intrinsic: source.K,
+    imageWidth: source.image.width,
+    imageHeight: source.image.height,
+  };
+}
 
 /**
  * (F6) The cameras of a prepped frame, default camera first.
