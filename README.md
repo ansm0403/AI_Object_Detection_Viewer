@@ -414,7 +414,7 @@ COCO를 대체하지 않고 **데이터셋 스위처로 공존**시켜, "추정 
 | 2D 오버레이 | SVG (`viewBox` + `<rect>`) | bbox 좌표를 산술 없이 매핑, 브라우저가 스케일링 처리 |
 | 3D 데이터 | nuScenes-mini, COCO val2017 | 실측 3D(nuScenes)와 추정 3D(COCO)를 데이터셋 스위처로 공존·비교 |
 | 데이터 파이프라인 | Python 3.13 (+ Pillow, 예측에는 ultralytics) | 오프라인 prep 스크립트가 nuScenes 관계형 테이블 → 장면별 정적 JSON으로 평탄화, `.pcd.bin` LiDAR를 `struct`로 디코드, 사진을 줄임 (devkit 미설치) |
-| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 / 채점·표본·검색 단위 + 통합 테스트 **985개** (2026-11-27). 평가 숫자는 저장소의 실제 파일로 계산해 고정 |
+| 테스트 | Vitest | 순수 함수 / Zustand store / 셀렉터 / 좌표변환·투영 / 채점·표본·검색 단위 + 통합 테스트 **989개** (2026-11-27). 평가 숫자는 저장소의 실제 파일로 계산해 고정 |
 | 모노레포 | Nx 22.7 | 단일 워크스페이스에서 client/server 분리 (server는 현재 범위 외) |
 | 배포 | Vercel | Next.js 공식, GitHub 연동 자동 배포. 런타임 백엔드 없이 정적 서빙 유지 |
 
@@ -490,7 +490,7 @@ npm install
 npx nx dev ai_detection_viewer_client
 # → http://localhost:3000
 
-# 3. 테스트 (Vitest, 985개)
+# 3. 테스트 (Vitest, 989개)
 npx nx test ai_detection_viewer_client
 # 또는 앱 디렉토리에서
 cd apps/ai_detection_viewer_client && npm test

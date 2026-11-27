@@ -1,7 +1,7 @@
 PASS  review mode (default): 41 frame cells in the scrubber, no page scroll, scene-0916
 PASS  review mode: the filter bar has the distance slider and no IoU control or "Sample check" (those are evaluate-only)
 PASS  F4: A approves the selected box (label scope) and moves to the next unreviewed one  — ["approved"]
-PASS  F4: R rejects and stays; 1 toggles the first reason  — {"frameId":"b5989651183643369174912bc5641d3b","objectId":"ca5b3ca5aea745ee8fe12b0f74d77f8e","verdict":"rejected","reasons":["wrong_class"],"note":"","reviewedAt":"2026-11-26T23:17:22.071Z"}
+PASS  F4: R rejects and stays; 1 toggles the first reason  — {"frameId":"b5989651183643369174912bc5641d3b","objectId":"ca5b3ca5aea745ee8fe12b0f74d77f8e","verdict":"rejected","reasons":["wrong_class"],"note":"","reviewedAt":"2026-11-27T00:08:45.397Z"}
 PASS  F4: typing "aru jk" in the note is text, not shortcuts  — [["approved",""],["rejected","aru jk"]]
 PASS  F4: the sample-check scope holds nothing after a label review
 PASS  F4: the top bar shows the progress "Reviewed 2 / …"  — AI Detection Viewer COCO nuScenes MEASURED Explore Review Evaluate Practice Frame 1/41 · 40 detections Reviewed 2 / 2424 1 rejected 0 unsure Export ▼

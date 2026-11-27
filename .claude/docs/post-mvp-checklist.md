@@ -1721,14 +1721,14 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
     same distance (10 rows, "night = 1 drive", how much of the gap the distance mix accounts for).
   - **F7.5-E — README:** a "카메라 탐지 평가 결과" section (conditions, totals at both IoUs, the drive
     table, day / night incl. per class and per band, the sample check's method, ten limits, the
-    relation to the official nuScenes evaluation) and the stale parts (tests 386 → 985, single camera
+    relation to the official nuScenes evaluation) and the stale parts (tests 386 → 989, single camera
     / single scene, structure, future work). A résumé one-liner was drafted for the user (three
     options; the user decides).
   - **F7.5-F — edge review** (run before fixing; two real problems, Edge_F#7.5 Cases 1–2, and a third —
     the report title cut at 390 px — found by eye in an edge capture), then these documents.
 - **Done when (design doc §8) — met, verified by driving the real app with Playwright on the final
   production build** (B 135, C 74, D 51, edge 48, floor cost 5, and 30 regression checks of the F4–F7
-  flows = 343 checks):
+  flows = 343 checks; 362 after the follow-up of change 14, which added 19):
   - Every number locked before F7.5 is unchanged: scene-0916 first ten frames 91 / 83 / 13 / 26 (front)
     and 349 / 182 / 107 / 180 (60 photos), frame 6 in 3D 28 / 16 / 17, all 404 frames 6,726 / 5,292 /
     3,514 / 5,278, "person within 20 m ≥ 5" 177 frames in 7 scenes, "model missed ≥ 15" 135.
@@ -1754,7 +1754,7 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
     (`review@2`, no sample records) / reload, `]` and the automatic camera, practice blocking
     evaluate, the outcome chip, a false-alarm selection, the score slider and Reset, "Crowded" 177,
     opening a hit in another scene (lands on its frame, selects nothing), K, the scene picker, COCO.
-  - Tests **861 → 985**. `tsc --noEmit` 0 errors. CI lint 0 errors (19 pre-existing warnings).
+  - Tests **861 → 989**. `tsc --noEmit` 0 errors. CI lint 0 errors (19 pre-existing warnings).
     Production build passes.
 - **Measurements (production build, software GL, 2026-11-27, ONE run each — indicative):** open the
   report 94 ms; enter the sample check (score all scenes, draw the sample, open box 1 in another scene)
@@ -1794,6 +1794,14 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
       → three.
   13. **The README states the sample check's method but not its result** — the user had not judged
       the sample when the feature closed; the line says so.
+  14. **(After the feature was pushed — found by the user on first real use.) Looking at another
+      camera no longer loses the box.** A thumbnail click deselected the sampled box (the F6 rule "a
+      prediction id is dropped when another camera's photo is shown") and it did not come back: no
+      yellow box, ZOOM identical to FULL. Now, in the sample check, the box stays selected while
+      another camera OF ITS OWN FRAME is on screen; the panel says "Showing FR — the box is in the F
+      photo" with a "Show the box" button; the box's thumbnail carries the marker; its row in the
+      list always returns to its photo. Another frame still deselects. None of the 313 + 30 checks
+      had clicked a thumbnail during the sample check (Edge_F#7.5 Case 5).
 - **Kept as designed:** simple random sample from a fixed order with a fixed seed; population at the
   FIXED default rules (never the slider's); the F4 keys and the review store (third scope); a separate
   export format (`review@2` untouched); estimates always with sample size and range, all three
@@ -1845,12 +1853,12 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
     "서로 다른 물체 654개, 주행 8번", 확인되지 않은 헛짚음 / 표본의 추정, 주행별 Recall 8줄, 같은 거리끼리의 낮/밤 10줄
     ("night = 1 drive", 차이 중 거리 분포가 설명하는 몫).
   - F7.5-E README: "카메라 탐지 평가 결과" 절(조건, 두 IoU의 전체 숫자, 주행 표, 낮/밤(클래스별, 구간별 포함), 표본 검수
-    방법, 한계 10가지, nuScenes 공식 평가와의 관계)과 낡은 부분(테스트 386 → 985, 단일 카메라 / 단일 장면, 구조, 향후
+    방법, 한계 10가지, nuScenes 공식 평가와의 관계)과 낡은 부분(테스트 386 → 989, 단일 카메라 / 단일 장면, 구조, 향후
     방향). 이력서 한 줄 초안 3개를 사용자에게 보였다(정하는 것은 사용자).
   - F7.5-F 엣지 검증(고치기 전에 먼저 돌림. 진짜 문제 2건, Edge_F#7.5 Case 1~2. 그리고 엣지 캡처를 눈으로 보다 찾은 세 번째:
     390px에서 보고서 제목이 잘림), 그리고 이 문서들.
 - 완료 기준(설계 문서 8장): 충족. 마지막 배포용 빌드에서 실제 앱을 조작해 확인(B 135, C 74, D 51, 엣지 48, 바닥 비용 5
-  = 313항목, 그리고 F4~F7의 기존 흐름 확인 30항목 = 343항목).
+  = 313항목, 그리고 F4~F7의 기존 흐름 확인 30항목 = 343항목. 달라진 점 14의 수정 뒤에는 19항목이 늘어 362항목).
   - F7.5 전에 잠긴 숫자는 모두 그대로다: scene-0916 첫 10프레임 91 / 83 / 13 / 26(앞), 349 / 182 / 107 / 180(60장),
     6번 프레임 3D 28 / 16 / 17, 전체 404프레임 6,726 / 5,292 / 3,514 / 5,278, 검색 177프레임(장면 7개) / 135프레임.
   - 새로 잠근 것(실제 파일로 계산): 모집단 1,452개이고 IoU 0.3과 0.5에서 같은 박스들이다(Explore의 "unlabelled" 수와도
@@ -1870,7 +1878,7 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
     있지 않았다): 정답 박스 판정 / 사유 / 메모 / N / 내보내기(`review@2`, 표본 기록 없음) / 새로 고침, `]`와 자동 카메라,
     연습 중 평가 막힘, 결과 칩, 헛짚음 선택, 점수 슬라이더와 Reset, "Crowded" 177, 다른 장면의 검색 결과 열기(그 프레임으로
     가고 아무것도 선택하지 않음), K, 장면 고르기, COCO.
-  - 테스트 861 → 985. `tsc --noEmit` 오류 0. CI 린트 오류 0(기존 경고 19개). 배포용 빌드 성공.
+  - 테스트 861 → 989. `tsc --noEmit` 오류 0. CI 린트 오류 0(기존 경고 19개). 배포용 빌드 성공.
 - 측정(배포용 빌드, 소프트웨어 렌더링, 2026-11-27, 각각 한 번씩 잰 참고값): 보고서 열기 94ms, 표본 검수 들어가기(전체
   장면 채점, 표본 뽑기, 다른 장면의 1번 박스 열기) 139ms, 판정 → 다른 장면의 다음 박스 41ms, 같은 장면 24ms.
 - 계획과 달라진 점과 이유:
@@ -1897,6 +1905,12 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
   11. 패널 제목 옆은 무엇을 채점했는지("6 cameras · 246 photos")를 말한다. 어떻게 채점했는지는 조건 한 줄이다.
   12. 기존 테스트 한 곳의 기대값이 바뀌었다: "검수 저장소는 빈 구역 2개로 시작" → 3개.
   13. README에는 표본 검수의 방법만 있고 결과는 없다. 기능을 마칠 때까지 사용자가 표본을 판정하지 않았다(그렇게 적었다).
+  14. (push한 뒤, 사용자가 처음 실제로 써 보다 찾음) 다른 카메라를 봐도 박스가 풀리지 않는다. 전에는 썸네일을 누르면 표본의
+      박스 선택이 풀렸고(F6의 규칙 "다른 카메라의 사진이 나오면 예측 ID를 버린다") 돌아와도 살아나지 않았다: 노란 박스가 없고
+      ZOOM이 FULL과 같았다. 이제 표본 검수에서는 **그 박스의 프레임을 다른 카메라로 보는 동안** 선택이 유지되고, 패널이
+      "Showing FR — the box is in the F photo"와 "Show the box" 버튼을 보이며, 그 박스의 썸네일에 표시가 붙고, 목록의 줄을
+      누르면 항상 그 사진으로 돌아간다. 다른 프레임으로 가면 여전히 풀린다. 확인 343항목 중 표본 검수에서 썸네일을 눌러 본
+      것이 하나도 없었다(Edge_F#7.5 Case 5).
 - 설계대로 둔 것: 고정된 순서에서 고정 시드로 뽑는 단순 무작위 표본, 모집단은 고정 규칙(슬라이더의 값이 아님), F4의 키와
   검수 저장소(세 번째 구역), 별도의 내보내기 형식(`review@2`는 그대로), 추정에는 항상 표본 크기와 범위, 세 판정의 분모는
   같음, "약 N개"로 환산하지 않음, 평가 모드 안의 상태(네 번째 모드 아님), 실린 960×540 사진으로 판정, IoU는 두 값

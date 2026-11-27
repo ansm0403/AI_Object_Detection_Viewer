@@ -1614,6 +1614,11 @@ review-store.reviews['nuscenes-false-alarms']["frameId/predictionId"] = ReviewRe
   (`toSampleVerdict`, spelled out in words in the export). Nothing that reads the two label scopes
   reads this one; the `storage` sync and `sanitizeReviews` cover it unchanged. A record whose box is
   not in the current sample is ignored.
+- **Looking around.** While the check is on, the sampled box stays selected when another camera OF ITS
+  FRAME is shown (`frameOfPredictionId(selectedId) === currentFrameId`) — the F6 rule that drops a
+  prediction id not in the photo on screen has this one exception (Edge_F#7.5 Case 5). The panel then
+  says where the box is and offers "Show the box"; the box's thumbnail carries the marker; opening a
+  sampled box sets its camera explicitly (`handleOpenSampleBox`). Another frame still deselects.
 - **Keys:** `resolveShortcut` unchanged; while the check is on, the page routes `verdict` / `clear` /
   `step` to the controller and ignores reasons and next-frame.
 - **`MIN_LOOK_MS` = 400:** a verdict is accepted only after its box has been current for that long
@@ -1703,6 +1708,9 @@ F7.5(2026-11-27)는 무엇을 평가하는지에는 아무것도 더하지 않�
   프레임과 물체를 함께 선택한다. 선택을 지우는 장면 전환 효과보다 뒤에 선언돼 있다(효과는 선언 순서로 실행된다).
 - 판정은 세 번째 구역의 보통 검수 기록이다. `approved` / `rejected` / `unsure`를 모델 박스에 대한 판정으로 읽는다
   (진짜 물체인데 정답 없음 / 모델이 틀림 / 애매함). 정답 박스 구역을 읽는 코드는 이 구역을 읽지 않는다.
+- 주변 보기: 표본 검수 중에는 **그 박스의 프레임을 다른 카메라로 보는 동안** 선택이 유지된다(사진에 없는 예측 ID를 버리는
+  F6 규칙의 예외 하나, Edge_F#7.5 Case 5). 패널이 박스가 어느 사진에 있는지와 "Show the box"를 보이고, 그 박스의 썸네일에
+  표시가 붙는다. 다른 프레임으로 가면 여전히 풀린다.
 - 키: `resolveShortcut`은 그대로다. 표본 검수 중에는 page가 판정 / 지우기 / 이동을 컨트롤러로 보내고 사유와 다음
   프레임 키는 무시한다.
 - `MIN_LOOK_MS` = 400: 박스가 화면에 그만큼 있은 뒤에만 판정을 받는다(Edge_F#7.5 Case 1). 재생 중에는 막는다.

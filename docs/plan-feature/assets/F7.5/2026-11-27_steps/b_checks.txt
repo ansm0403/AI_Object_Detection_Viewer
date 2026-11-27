@@ -6,29 +6,48 @@ PASS  the first five boxes are the locked ones, in order  — ["scene-0757 · fr
 PASS  on entering: row 1 is selected  — {"index":1,"title":"scene-0757 · frame 31 · CAM_FRONT"}
 PASS  on entering: the scene on screen is scene-0757  — Scene: scene-0757. Choose a scene
 PASS  on entering: the frame is 31  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 31/41 · 18 detectionsyolov8nPrecision 57%Recall 66%
-PASS  on entering: the photo is CAM_FRONT  — CAM_FRONT
+PASS  on entering: the photo is CAM_FRONT  — CAM_FRONT, sees the selected box
 PASS  on entering: the panel names the box (box 1 of …, scene-0757, frame 31, F)  — SAMPLE CHECK box 1 of 100 · scene-0757 · frame 31 · F The model says car, score 0.37 · 67×48 px No label of any class is under this box. Is the object
 PASS  on entering: the model box is drawn in the photo  — CAM_FRONT FULL ZOOM Z model · car 0.37 model label · approx. (projected 3D box)
 PASS  nothing is judged yet: "0 of 100 judged" and no estimate
 PASS  the 3D canvas was not re-created (entering + scene change)
+PASS  the thumbnail of the box's camera (and only that one) carries the marker  — ["CAM_FRONT"]
+PASS  on the box's own photo: zoomed, caption "model · car 0.37"  — model · car 0.37 / 408.8555555555555 393.95000000000005 248.88888888888889 140
+PASS  another camera clicked: the photo changes, and box 1 is STILL the selected sample box  — SAMPLE CHECK box 1 of 100 · scene-0757 · frame 31 · F The model says car, score 0.37 · 67×48 px Showing FR — the box is 
+PASS  …the panel says where the box is and offers the way back; the verdict buttons stay enabled  — SAMPLE CHECK box 1 of 100 · scene-0757 · frame 31 · F The model says car, score 0.37 · 67×48 px Showing FR — the box is in the F photo. Show the box A Real object R Model wrong U Unclear ESTIMATE SO F
+PASS  …that photo is shown whole (nothing to zoom on) and has no yellow caption  — 0 0 1600 900 / 
+PASS  …the note is inside the panel, not cut, and the verdict buttons are still visible without scrolling  — {"note":true,"buttons":true}
+PASS  "Show the box" returns to the box's photo: zoomed, yellow caption back  — CAM_FRONT, sees the selected box / model · car 0.37
+PASS  clicking the box's thumbnail again also brings the yellow box back  — model · car 0.37
+PASS  clicking the box's row in the list returns to its photo as well  — CAM_FRONT, sees the selected box / model · car 0.37
+PASS  ] steps to the next camera and keeps the box selected  — CAM_FRONT_RIGHT
+PASS  [ steps back: the yellow box is there again  — model · car 0.37
+PASS  another FRAME (not another camera) still deselects: the box is not in that frame  — SAMPLE CHECK No sampled box is selected. Pick a row in the list, or press J for 
+PASS  J after that: row 1 is selected  — {"index":1,"title":"scene-0757 · frame 31 · CAM_FRONT"}
+PASS  J after that: the scene on screen is scene-0757  — Scene: scene-0757. Choose a scene
+PASS  J after that: the frame is 31  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 31/41 · 18 detectionsyolov8nPrecision 57%Recall 66%
+PASS  J after that: the photo is CAM_FRONT  — CAM_FRONT, sees the selected box
+PASS  J after that: the panel names the box (box 1 of …, scene-0757, frame 31, F)  — SAMPLE CHECK box 1 of 100 · scene-0757 · frame 31 · F The model says car, score 0.37 · 67×48 px No label of any class is under this box. Is the object
+PASS  J after that: the model box is drawn in the photo  — CAM_FRONT FULL ZOOM Z model · car 0.37 model label · approx. (projected 3D box)
+PASS  the 3D canvas was not re-created by looking around
 PASS  after A: row 2 is selected  — {"index":2,"title":"scene-0655 · frame 26 · CAM_FRONT_RIGHT"}
 PASS  after A: the scene on screen is scene-0655  — Scene: scene-0655. Choose a scene
 PASS  after A: the frame is 26  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 26/41 · 66 detectionsyolov8nPrecision 59%Recall 76%
-PASS  after A: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after A: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after A: the panel names the box (box 2 of …, scene-0655, frame 26, FR)  — SAMPLE CHECK box 2 of 100 · scene-0655 · frame 26 · FR The model says car, score 0.26 · 90×32 px No label of any class is under this box. Is the objec
 PASS  after A: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.26 model label · approx. (projected 3D
 PASS  A marked box 1 "Real object, label missing"  — Real object, label missing
 PASS  after R: row 3 is selected  — {"index":3,"title":"scene-0916 · frame 9 · CAM_FRONT_RIGHT"}
 PASS  after R: the scene on screen is scene-0916  — Scene: scene-0916. Choose a scene
 PASS  after R: the frame is 9  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 9/41 · 72 detectionsyolov8nPrecision 77%Recall 68%
-PASS  after R: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after R: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after R: the panel names the box (box 3 of …, scene-0916, frame 9, FR)  — SAMPLE CHECK box 3 of 100 · scene-0916 · frame 9 · FR The model says car, score 0.25 · 84×25 px No label of any class is under this box. Is the object
 PASS  after R: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.25 model label · approx. (projected 3D
 PASS  R marked box 2 "Model is wrong"  — Model is wrong
 PASS  after U: row 4 is selected  — {"index":4,"title":"scene-0061 · frame 34 · CAM_FRONT_RIGHT"}
 PASS  after U: the scene on screen is scene-0061  — Scene: scene-0061. Choose a scene
 PASS  after U: the frame is 34  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 34/39 · 113 detectionsyolov8nPrecision 66%Recall 46%
-PASS  after U: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after U: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after U: the panel names the box (box 4 of …, scene-0061, frame 34, FR)  — SAMPLE CHECK box 4 of 100 · scene-0061 · frame 34 · FR The model says car, score 0.31 · 130×32 px No label of any class is under this box. Is the obje
 PASS  after U: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.31 model label · approx. (projected 3D
 PASS  U marked box 3 "Unclear"  — Unclear
@@ -39,7 +58,7 @@ PASS  the 3D canvas was not re-created (three scene changes)
 PASS  after K: row 3 is selected  — {"index":3,"title":"scene-0916 · frame 9 · CAM_FRONT_RIGHT"}
 PASS  after K: the scene on screen is scene-0916  — Scene: scene-0916. Choose a scene
 PASS  after K: the frame is 9  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 9/41 · 72 detectionsyolov8nPrecision 77%Recall 68%
-PASS  after K: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after K: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after K: the panel names the box (box 3 of …, scene-0916, frame 9, FR)  — SAMPLE CHECK box 3 of 100 · scene-0916 · frame 9 · FR The model says car, score 0.25 · 84×25 px C clear Judged: Unclear A Real object R Model wrong U 
 PASS  after K: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.25 model label · approx. (projected 3D
 PASS  C cleared the verdict of box 3  — Not judged
@@ -47,25 +66,25 @@ PASS  …and the progress went back to 2
 PASS  after U again: row 4 is selected  — {"index":4,"title":"scene-0061 · frame 34 · CAM_FRONT_RIGHT"}
 PASS  after U again: the scene on screen is scene-0061  — Scene: scene-0061. Choose a scene
 PASS  after U again: the frame is 34  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 34/39 · 113 detectionsyolov8nPrecision 66%Recall 46%
-PASS  after U again: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after U again: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after U again: the panel names the box (box 4 of …, scene-0061, frame 34, FR)  — SAMPLE CHECK box 4 of 100 · scene-0061 · frame 34 · FR The model says car, score 0.31 · 130×32 px No label of any class is under this box. Is the obje
 PASS  after U again: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.31 model label · approx. (projected 3D
 PASS  after J: row 5 is selected  — {"index":5,"title":"scene-0061 · frame 39 · CAM_FRONT_RIGHT"}
 PASS  after J: the scene on screen is scene-0061  — Scene: scene-0061. Choose a scene
 PASS  after J: the frame is 39  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 39/39 · 77 detectionsyolov8nPrecision 66%Recall 46%
-PASS  after J: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after J: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after J: the panel names the box (box 5 of …, scene-0061, frame 39, FR)  — SAMPLE CHECK box 5 of 100 · scene-0061 · frame 39 · FR The model says car, score 0.73 · 120×37 px No label of any class is under this box. Is the obje
 PASS  after J: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.73 model label · approx. (projected 3D
 PASS  after K: row 4 is selected  — {"index":4,"title":"scene-0061 · frame 34 · CAM_FRONT_RIGHT"}
 PASS  after K: the scene on screen is scene-0061  — Scene: scene-0061. Choose a scene
 PASS  after K: the frame is 34  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 34/39 · 113 detectionsyolov8nPrecision 66%Recall 46%
-PASS  after K: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after K: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after K: the panel names the box (box 4 of …, scene-0061, frame 34, FR)  — SAMPLE CHECK box 4 of 100 · scene-0061 · frame 34 · FR The model says car, score 0.31 · 130×32 px No label of any class is under this box. Is the obje
 PASS  after K: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.31 model label · approx. (projected 3D
 PASS  after clicking row 1: row 1 is selected  — {"index":1,"title":"scene-0757 · frame 31 · CAM_FRONT"}
 PASS  after clicking row 1: the scene on screen is scene-0757  — Scene: scene-0757. Choose a scene
 PASS  after clicking row 1: the frame is 31  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 31/41 · 18 detectionsyolov8nPrecision 57%Recall 66%
-PASS  after clicking row 1: the photo is CAM_FRONT  — CAM_FRONT
+PASS  after clicking row 1: the photo is CAM_FRONT  — CAM_FRONT, sees the selected box
 PASS  after clicking row 1: the panel names the box (box 1 of …, scene-0757, frame 31, F)  — SAMPLE CHECK box 1 of 100 · scene-0757 · frame 31 · F The model says car, score 0.37 · 67×48 px C clear Judged: Real object, label missing A Real obje
 PASS  after clicking row 1: the model box is drawn in the photo  — CAM_FRONT FULL ZOOM Z model · car 0.37 model label · approx. (projected 3D box)
 PASS  the panel shows box 1's verdict as the pressed button  — ["true:AReal object","false:RModel wrong","false:UUnclear"]
@@ -101,7 +120,7 @@ PASS  1024×768: no text in the panel is cut or sticks out
 PASS  1024×768: the estimate sentence is visible without scrolling the panel
 PASS  1024×768: no text in the sample bar is cut
 PASS  1024×768: no page scroll
-PASS  export: file name is false-alarm-sample_<date>.json  — false-alarm-sample_20261127-0816.json
+PASS  export: file name is false-alarm-sample_<date>.json  — false-alarm-sample_20261127-0904.json
 PASS  export: its own format, not review@2  — ai-detection-viewer/false-alarm-sample@1
 PASS  export: population 1,452, seed, 100 items
 PASS  export: 3 judged — the same number the screen shows
@@ -118,7 +137,7 @@ PASS  the 3D canvas was not re-created (whole run so far)
 PASS  with the slider at 0.65, re-entering: row 4 is selected  — {"index":4,"title":"scene-0061 · frame 34 · CAM_FRONT_RIGHT"}
 PASS  with the slider at 0.65, re-entering: the scene on screen is scene-0061  — Scene: scene-0061. Choose a scene
 PASS  with the slider at 0.65, re-entering: the frame is 34  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 34/39 · 113 detectionsyolov8nPrecision 66%Recall 46%
-PASS  with the slider at 0.65, re-entering: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  with the slider at 0.65, re-entering: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  with the slider at 0.65, re-entering: the panel names the box (box 4 of …, scene-0061, frame 34, FR)  — SAMPLE CHECK box 4 of 100 · scene-0061 · frame 34 · FR The model says car, score 0.31 · 130×32 px No label of any class is under this box. Is the obje
 PASS  with the slider at 0.65, re-entering: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.31 model label · approx. (projected 3D
 PASS  with the slider at 0.65: still "random 100 of 1,452" and the same five boxes
@@ -127,11 +146,11 @@ PASS  after a reload: the same five boxes in the same order  — ["scene-0757 ·
 PASS  after a reload: row 4 is selected  — {"index":4,"title":"scene-0061 · frame 34 · CAM_FRONT_RIGHT"}
 PASS  after a reload: the scene on screen is scene-0061  — Scene: scene-0061. Choose a scene
 PASS  after a reload: the frame is 34  — AI Detection ViewerCOCOnuScenesMeasuredExploreReviewEvaluateFrame 34/39 · 113 detectionsyolov8nPrecision 66%Recall 46%
-PASS  after a reload: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT
+PASS  after a reload: the photo is CAM_FRONT_RIGHT  — CAM_FRONT_RIGHT, sees the selected box
 PASS  after a reload: the panel names the box (box 4 of …, scene-0061, frame 34, FR)  — SAMPLE CHECK box 4 of 100 · scene-0061 · frame 34 · FR The model says car, score 0.31 · 130×32 px No label of any class is under this box. Is the obje
 PASS  after a reload: the model box is drawn in the photo  — CAM_FRONT_RIGHT FULL ZOOM Z model · car 0.31 model label · approx. (projected 3D
 PASS  after a reload: the three verdicts are there
 PASS  while the sequence plays the verdict buttons are disabled and A does nothing  — disabled=true
 PASS  no console errors
 
-b: 135 / 135 passed
+b: 154 / 154 passed

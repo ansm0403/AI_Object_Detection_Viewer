@@ -105,6 +105,41 @@ are still fully visible without scrolling the report.
 
 ---
 
+## Case 5 — Looking at another camera lost the box being judged (found by the user, fixed)
+
+**Symptom.** The user's first real session: after clicking the other camera thumbnails "to look from
+another angle", the yellow box was gone everywhere, FULL and ZOOM looked the same, and the panel said
+"No sampled box is selected". Reproduced on the user's own dev server.
+
+**Root cause.** A rule from F6: a prediction id in `selectedObjectId` is dropped as soon as the photo
+on screen does not contain that prediction ("otherwise an invisible selection would linger"). In
+ordinary evaluate mode that is right. In the sample check the selection IS the work item, and looking
+through the neighbouring cameras is how a reviewer gets context — so the first thumbnail click threw
+the work item away, and coming back to the box's camera did not restore it. Without a selection
+there is nothing to zoom on, hence ZOOM = FULL.
+
+**Why no check caught it.** None of the 343 checks clicked a camera thumbnail while the sample check
+was open. The scripts walked the path the author had in mind (judge, step, export); the user did what
+a reviewer does.
+
+**Fix.**
+- `page.tsx`: in the sample check, a prediction id whose FRAME is the current frame is kept while
+  another camera is shown (`frameOfPredictionId`, new in `lib/evaluation/parse.ts`). Another frame
+  still drops it.
+- `SamplePanel`: "Showing FR — the box is in the F photo." with a **Show the box** button. The verdict
+  buttons stay enabled (look around, then judge).
+- The thumbnail of the box's camera carries the "selected box" marker (the way back); clicking it, the
+  box's row in the list, or `[` / `]` back to it brings the zoomed photo and the yellow box back
+  (opening a sampled box now sets its camera explicitly — the selection did not change, so nothing
+  else would).
+- 19 checks added to the sample-check script; all scripts re-run on that build (B 154, C 74, D 51,
+  edge 48, regression 30, floor cost 5 = 362). Unit tests 985 → 989.
+
+**Also learned from the same session (no code change):** the two screenshots the user sent were not of
+the sample check at all — no "model / label" legend, no count badges on the thumbnails — but of review
+mode, where the full photo's box labels are tiny and ZOOM needs a selected box. The sample check has
+no on-screen cue other than the amber "SAMPLE CHECK" in the bar that says "you are in it".
+
 ## Checked, no change needed
 
 - **Scenes arriving slowly (6 s each):** the sample check says "The sample is drawn from all scenes: 1
