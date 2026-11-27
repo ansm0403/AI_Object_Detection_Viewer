@@ -36,6 +36,16 @@ import { Timeline, type TimelineBadge } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
 import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
 import {
+  BevEditor,
+  EDIT_BLOCK_MESSAGES,
+  EditBar,
+  EditPanel,
+  useBoxEditor,
+  useEditShortcuts,
+  useEditedFrames,
+  useStoredEdits,
+} from '@/components/box-edit';
+import {
   BoxColorLegend,
   EvaluationHeadline,
   EvaluationPanel,
@@ -240,7 +250,10 @@ export default function Index() {
     practice,
   );
   const sceneOnScreen = datasetId === 'nuscenes' ? scenes.onScreen : null;
-  const frames: Frame[] | null =
+  // (F8) `sceneFrames` are the frames as the DATA has them. `frames` (below,
+  // once the mode is known) are the same frames with the reviewer's box
+  // edits laid over — in review mode only.
+  const sceneFrames: Frame[] | null =
     datasetId === 'coco'
       ? coco.frames
       : scenes.status === 'ready'
@@ -256,6 +269,19 @@ export default function Index() {
   // and the selected object are shared by both modes (Rule #2: still one
   // `selectedObjectId`). nuScenes only; reset to 'review' on a dataset switch.
   const [mode, setMode] = useState<WorkMode>('review');
+  // (F8) The frames everything on screen is drawn from. In review mode the
+  // stored box edits are laid over the data's own boxes (the data itself is
+  // never changed). In evaluate and explore mode they are NOT: every number
+  // those modes report — and the sample check's population — is computed from
+  // the dataset's boxes, whatever was edited (those modes also read
+  // `sceneLibrary`, which is never overlaid). Practice edits are kept apart
+  // from edits of the real annotations, like the practice verdicts.
+  const storedEdits = useStoredEdits(plantedErrors ? 'nuscenes-practice' : 'nuscenes');
+  const frames = useEditedFrames(
+    sceneFrames,
+    storedEdits.edits,
+    datasetId === 'nuscenes' && mode === 'review',
+  );
   // The model's predictions for the scene on screen. They arrive with the scene
   // but are independent of it: if they fail, review still works (F5).
   const scenePredictions = sceneOnScreen?.predictions ?? null;
@@ -1180,6 +1206,29 @@ export default function Index() {
   const handleOpenReport = useCallback(() => setReportOpen(true), []);
   const handleCloseReport = useCallback(() => setReportOpen(false), []);
 
+  // ---- (F8) Box editing ---------------------------------------------------
+  // The editor's state and everything it derives live in `useBoxEditor`; the
+  // page only says what is on screen and puts the pieces into the workspace
+  // slots. WHICH box is edited is not a state of its own: it is the selected
+  // object of the current frame (Rule #2).
+  const labelFrame = useMemo(
+    () => sceneFrames?.find((f) => f.id === currentFrameId) ?? null,
+    [sceneFrames, currentFrameId],
+  );
+  const editor = useBoxEditor({
+    available: reviewEnabled && mode === 'review',
+    edits: storedEdits.edits,
+    labelFrame,
+    shownFrame: currentFrame,
+    selectedId: selectedObjectId,
+    block: reviewBlock,
+    points: framePointList,
+    stopPlayback,
+  });
+  useEditShortcuts({ onDone: editor.exit, onToggleView: editor.toggleView }, editor.editing);
+  const editing = editor.editing;
+  const enterEditor = editor.enter;
+
   // (F4-C) Keyboard shortcuts. `resolveShortcut` (lib/review) decides what a key
   // means; this decides what the action does — always through the same handlers
   // the buttons use, so mouse and keyboard cannot drift apart.
@@ -1196,6 +1245,10 @@ export default function Index() {
         if (action.type === 'step') return stepSample(action.direction);
         if (action.type !== 'toggle-zoom' && action.type !== 'camera') return;
       }
+      // (F8) While a box is being edited only looking around works (the other
+      // cameras, the photo zoom). The keys that WRITE a review are off: a stray
+      // "A" must not approve the box that is being changed.
+      if (editing && action.type !== 'toggle-zoom' && action.type !== 'camera') return;
       // (F5) Evaluate mode only looks: moving through the list (J / K) and the
       // camera zoom (Z) work; the keys that WRITE a review do nothing, so a
       // stray "A" cannot approve a box whose verdict is not even on screen.
@@ -1250,9 +1303,14 @@ export default function Index() {
         case 'toggle-zoom':
           setCameraZoom((z) => !z);
           break;
+        case 'edit':
+          enterEditor();
+          break;
       }
     },
     [
+      editing,
+      enterEditor,
       sampleCheckOn,
       judgeSample,
       clearSample,
@@ -1711,7 +1769,17 @@ export default function Index() {
       cameraAspect={cameraAspect}
       topBar={header}
       filterBar={
-        sampleCheckOn ? (
+        editing ? (
+          // (F8) One box is being edited: no class chips, no distance slider.
+          <EditBar
+            box={editor.target}
+            frameIndex={frameIndex}
+            view={editor.view}
+            onToggleView={editor.toggleView}
+            onDone={editor.exit}
+            notSaved={storedEdits.storageFailed}
+          />
+        ) : sampleCheckOn ? (
           // (F7.5) The sample is fixed: no score slider, no class chips.
           <SampleBar
             population={sampleCheck.population}
@@ -1947,7 +2015,19 @@ export default function Index() {
         ) : undefined
       }
       details={
-        sampleCheckOn ? (
+        editing ? (
+          <EditPanel
+            target={editor.target}
+            projector={editor.projector}
+            frameIndex={frameIndex}
+            pointsStatus={framePoints.status}
+            record={
+              selectedObjectId ? getReview(reviews, currentFrame.id, selectedObjectId) : undefined
+            }
+            emptyMessage={EDIT_BLOCK_MESSAGES[reviewBlock ?? 'not-in-frame']}
+            notSaved={storedEdits.storageFailed}
+          />
+        ) : sampleCheckOn ? (
           <SamplePanel
             status={sampleCheck.availability.status}
             message={sampleCheck.message}
@@ -2080,6 +2160,13 @@ export default function Index() {
                     onToggleReason={handleToggleReason}
                     onNote={handleNote}
                     onClear={handleClearReview}
+                    // (F8) The way into the top-view editor, for any box whose
+                    // frame can be edited.
+                    edit={
+                      editor.target
+                        ? { edited: editor.target.edited, onEdit: editor.enter }
+                        : undefined
+                    }
                     queueDone={queue.length > 0 && queueRemaining === 0}
                     onNextFrame={nextReviewFrameId ? handleNextReviewFrame : undefined}
                     hiddenUnreviewed={
@@ -2096,8 +2183,25 @@ export default function Index() {
       }
       // (F7.5) The evaluation report, over the list and the 3D view (both stay
       // mounted underneath — the canvas is not re-created).
+      // (F8) The top-view editor uses the same slot. Focus view: over the list
+      // and the 3D view. Split view: over the list only, with the list and the
+      // 3D column made equally wide — the 3D view is the same grid item in the
+      // same place in both, so its canvas is only resized.
+      overlayLabel={editing ? 'Top view' : undefined}
+      overlaySpan={editing && editor.view === 'split' ? 'list' : 'list+main'}
+      evenColumns={editing && editor.view === 'split'}
       overlay={
-        reportOn && scenesEvaluation && reportTables ? (
+        editing && editor.projector ? (
+          <BevEditor
+            frame={currentFrame}
+            points={framePointList}
+            pointsStatus={framePoints.status}
+            projector={editor.projector}
+            target={editor.target}
+            emptyMessage={EDIT_BLOCK_MESSAGES[reviewBlock ?? 'not-in-frame']}
+            growFrom={editor.growFrom}
+          />
+        ) : reportOn && scenesEvaluation && reportTables ? (
           <EvaluationReport
             scenes={scenesEvaluation}
             scenesTotal={scenes.catalog?.scenes.length ?? 0}

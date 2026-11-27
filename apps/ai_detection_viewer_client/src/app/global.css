@@ -71,6 +71,30 @@ pre {
     monospace;
 }
 
+/* (F8) The top-view editor grows out of the list row of the box being edited
+   (the component sets `transform-origin` to that row). Entrance only: closing
+   is immediate. Not shown to people who asked their system for less motion. */
+@keyframes bev-grow {
+  from {
+    transform: scale(0.02);
+    opacity: 0.4;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.bev-grow {
+  animation: bev-grow 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bev-grow {
+    animation: none;
+  }
+}
+
 svg {
   display: block;
   vertical-align: middle;

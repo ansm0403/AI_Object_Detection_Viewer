@@ -1,0 +1,149 @@
+PASS  0 · 1024px review: the top bar is one line  — spare 141px
+PASS  0 · 1024px: the app name is hidden
+PASS  0 · 1024px review, widest case (2424 reviewed + NOT SAVED): one line  — spare 42px
+PASS  0 · 1024px practice mode: one line
+PASS  0 · 1024px evaluate mode: one line
+PASS  0 · 1024px explore mode: one line
+PASS  0 · 1024px COCO: one line
+PASS  0 · 1024px: no page scroll
+PASS  0 · 1040px review: the top bar is one line  — spare 157px
+PASS  0 · 1040px: the app name is hidden
+PASS  0 · 1040px: no page scroll
+PASS  0 · 1100px review: the top bar is one line  — spare 217px
+PASS  0 · 1100px: the app name is hidden
+PASS  0 · 1100px: no page scroll
+PASS  0 · 1279px review: the top bar is one line  — spare 396px
+PASS  0 · 1279px: the app name is hidden
+PASS  0 · 1279px: no page scroll
+PASS  0 · 1280px review: the top bar is one line  — spare 56px
+PASS  0 · 1280px: the app name is shown
+PASS  0 · 1280px: no page scroll
+PASS  0 · 1536px review: the top bar is one line  — spare 312px
+PASS  0 · 1536px: the app name is shown
+PASS  0 · 1536px: no page scroll
+PASS  0 · 390px (stacked layout): the app name is shown
+PASS  B · no box selected: no "Edit box" button
+PASS  B · no box selected: E does not open the editor
+PASS  B · before editing: the class chips and the distance slider are in the filter bar
+PASS  B · a selected box shows the "Edit box" button in the review panel
+PASS  B · the status row holds the button on one line: nothing overlaps, nothing is cut  — {"overlap":false,"overflow":false,"inside":true,"oneLine":true}
+PASS  B · clicking "Edit box" opens the editor
+PASS  B · focus view: the editor covers the list and the 3D view  — {"x":8,"y":92,"w":1112,"h":508}
+PASS  B · focus view: the 3D cell underneath has not changed size
+PASS  B · focus view: the camera cell and the panel are where they were
+PASS  B · the 3D canvas is the same canvas
+PASS  B · the 3D name tag of the selected box does not show through the editor
+PASS  B · the box being edited is drawn, with its front edge
+PASS  B · the other 71 boxes of the frame are drawn as outlines  — 71
+PASS  B · ten handles: 4 corners, 4 sides, the rotate knob (and the box itself to move)  — back,back-left,back-right,front,front-left,front-right,left,right,rotate
+PASS  B · the box is fully inside the view and large enough to grab (longer side ≥ 100 px)  — 180px
+PASS  B · LiDAR points are painted, and some are inside the box (yellow)  — {"blue":4267,"yellow":331}
+PASS  B · no dashed label outline while the box is not edited
+PASS  B · the car marker is drawn
+PASS  B · the edit bar names the box and the frame  — EDIT BOX car 527702 · frame 9 Saved as an edit on top of the nuScenes label — the label itself is not changed 3D view V ↶ Undo Ctrl Z ↷ Redo Revert to label Done Esc
+PASS  B · Undo, Redo and Revert are disabled (nothing was changed)
+PASS  B · the class chips and the distance slider are not shown while editing
+PASS  B · the panel shows the five numbers of the box  — 4.27 / 1.77 / 1.64 / 171.5 / 0.00
+PASS  B · the panel names the two point counts differently  — EDIT BOX Frame 9 · car 527702 LiDAR 153 pts in the label In view 25 pts inside the box Length m Width m Height m Heading
+PASS  B · "Changed from the label: nothing"
+PASS  B · the panel says an edit does not set a verdict
+PASS  B · the wording never says correct / fixed / ground truth
+PASS  B · focus view 1536×700: nothing cut in the bar
+PASS  B · focus view 1536×700: nothing cut in the panel
+PASS  B · focus view 1536×700: nothing cut in the editor
+PASS  B · the five numbers and the "Changed" line are visible without scrolling
+PASS  B · focus view: no page scroll
+PASS  B · V: the 3D view is next to the top view, both the same width  — {"editor":{"x":8,"y":92,"w":552,"h":508},"view3d":{"x":568,"y":92,"w":552,"h":508}}
+PASS  B · split view: the 3D view is visible (not covered)
+PASS  B · split view: the 3D canvas is still the same canvas, resized
+PASS  B · split view: the "3D view" button is pressed
+PASS  B · split view: the box is still inside the top view
+PASS  B · split view: no page scroll, nothing cut in the editor
+PASS  B · clicking camera thumbnails keeps the editor open on the same box
+PASS  B · ] and Z still work while editing (camera, photo zoom)
+PASS  B · A / R / J do nothing while editing (no verdict written, same box)
+PASS  B · another frame: the editor stays open on the same object, in that frame
+PASS  B · clicking another box in the 3D view makes it the box being edited  — EDIT BOX bus 8a26f7 · frame 9 Saved as an edit on top of the nuScenes label — the label itself is not changed 3D view V ↶ Undo Ctrl Z ↷ Redo Revert to label Done Esc
+PASS  B · nothing selected while editing: the bar and the top view say so
+PASS  B · Esc closes the editor
+PASS  B · after closing: list, 3D view and panel are exactly where they were
+PASS  B · after closing: still the same 3D canvas
+PASS  B · after closing: the class chips are back
+PASS  B · the 3D floor cost is unchanged by all this (draw calls on this frame)  — 72 vs 72
+PASS  B · the view is remembered: E opens in split view again
+PASS  B · the Done button closes the editor
+PASS  B · while the sequence plays, E does not open the editor
+PASS  B · (paused again) E opens the editor
+PASS  B · switching to Evaluate closes the editor
+PASS  B · E does nothing in Evaluate mode
+PASS  B · back in Review the editor does not reopen by itself
+PASS  B · the 3D canvas survived all of it
+PASS  B · no page errors
+PASS  B · 1440×900 focus: the edit bar is one line and not cut  — {"overflow":0,"oneLine":true}
+PASS  B · 1440×900 focus: the top bar is one line
+PASS  B · 1440×900 focus: nothing cut in the panel
+PASS  B · 1440×900 focus: nothing cut in the top view
+PASS  B · 1440×900 focus: the legend and the scale bar do not overlap
+PASS  B · 1440×900 focus: numbers and "Changed" line visible without scrolling
+PASS  B · 1440×900 focus: the box is inside the view, longer side ≥ 100 px
+PASS  B · 1440×900 focus: no page scroll
+      1440×900 focus: top view 1016×708
+PASS  B · 1440×900 split: the edit bar is one line and not cut  — {"overflow":0,"oneLine":true}
+PASS  B · 1440×900 split: the top bar is one line
+PASS  B · 1440×900 split: nothing cut in the panel
+PASS  B · 1440×900 split: nothing cut in the top view
+PASS  B · 1440×900 split: the legend and the scale bar do not overlap
+PASS  B · 1440×900 split: numbers and "Changed" line visible without scrolling
+PASS  B · 1440×900 split: the box is inside the view, longer side ≥ 100 px
+PASS  B · 1440×900 split: no page scroll
+      1440×900 split: top view 504×708
+PASS  B · 1440×900: no page errors
+PASS  B · 1280×720 focus: the edit bar is one line and not cut  — {"overflow":0,"oneLine":true}
+PASS  B · 1280×720 focus: the top bar is one line
+PASS  B · 1280×720 focus: nothing cut in the panel
+PASS  B · 1280×720 focus: nothing cut in the top view
+PASS  B · 1280×720 focus: the legend and the scale bar do not overlap
+PASS  B · 1280×720 focus: numbers and "Changed" line visible without scrolling
+PASS  B · 1280×720 focus: the box is inside the view, longer side ≥ 100 px
+PASS  B · 1280×720 focus: no page scroll
+      1280×720 focus: top view 896×528
+PASS  B · 1280×720 split: the edit bar is one line and not cut  — {"overflow":0,"oneLine":true}
+PASS  B · 1280×720 split: the top bar is one line
+PASS  B · 1280×720 split: nothing cut in the panel
+PASS  B · 1280×720 split: nothing cut in the top view
+PASS  B · 1280×720 split: the legend and the scale bar do not overlap
+PASS  B · 1280×720 split: numbers and "Changed" line visible without scrolling
+PASS  B · 1280×720 split: the box is inside the view, longer side ≥ 100 px
+PASS  B · 1280×720 split: no page scroll
+      1280×720 split: top view 444×528
+PASS  B · 1280×720: no page errors
+PASS  B · 1024×768 focus: the edit bar is one line and not cut  — {"overflow":0,"oneLine":true}
+PASS  B · 1024×768 focus: the top bar is one line
+PASS  B · 1024×768 focus: nothing cut in the panel
+PASS  B · 1024×768 focus: nothing cut in the top view
+PASS  B · 1024×768 focus: the legend and the scale bar do not overlap
+PASS  B · 1024×768 focus: numbers and "Changed" line visible without scrolling
+PASS  B · 1024×768 focus: the box is inside the view, longer side ≥ 100 px
+PASS  B · 1024×768 focus: no page scroll
+      1024×768 focus: top view 640×576
+PASS  B · 1024×768 split: the edit bar is one line and not cut  — {"overflow":0,"oneLine":true}
+PASS  B · 1024×768 split: the top bar is one line
+PASS  B · 1024×768 split: nothing cut in the panel
+PASS  B · 1024×768 split: nothing cut in the top view
+PASS  B · 1024×768 split: the legend and the scale bar do not overlap
+PASS  B · 1024×768 split: numbers and "Changed" line visible without scrolling
+PASS  B · 1024×768 split: the box is inside the view, longer side ≥ 100 px
+PASS  B · 1024×768 split: no page scroll
+      1024×768 split: top view 316×576
+PASS  B · 1024×768: no page errors
+PASS  B · scene-0061 frame 20 is open (156 boxes)  — 156
+PASS  B · the editor grows in (animation "bev-grow", scale between 0 and 1 shortly after the key)  — {"scale":0.843074,"origin":"136px 173px","animation":"bev-grow"}
+PASS  B · it grows out of the list row of the box  — 136px 173px vs row 136px 173px
+PASS  B · the entrance lasts 0.32 s and then the editor is at full size  — animation 0.32s
+      key press -> end of the entrance, measured in the page (156 boxes, software GL): 383 ms
+PASS  B · 155 other boxes are drawn on the largest frame  — 155
+PASS  B · a small box (a pedestrian, 0.82 m) is shown large enough to grab (longer side ≥ 80 px)  — 157px
+PASS  B · largest frame: no page errors
+PASS  B · with "reduce motion" the editor appears at once (no animation)  — {"animation":"none","scale":1}
+
+b: 140 / 140 passed

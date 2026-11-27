@@ -124,6 +124,8 @@ export function ObjectList({
               <li
                 key={d.id}
                 ref={isSelected ? selectedRef : undefined}
+                // (F8) Lets the top-view editor find the row it grows out of.
+                data-selected={isSelected ? 'true' : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect?.(d.id);
