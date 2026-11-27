@@ -1,4 +1,4 @@
-F7.5 scripts re-run on the F8 step-B build (2026-11-27, production build, :3100, software GL)
+F7.5 scripts re-run on the F8 step-C build (2026-11-27, production build, :3100, software GL)
 reg: 30 / 30 passed
 perf: 5 / 5 passed
 c: 74 / 74 passed

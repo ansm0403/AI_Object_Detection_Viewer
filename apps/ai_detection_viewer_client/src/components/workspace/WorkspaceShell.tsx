@@ -92,6 +92,8 @@ export function WorkspaceShell({
   evenColumns = false,
   cameraAspect,
 }: WorkspaceShellProps) {
+  // The overlay lies over the whole 3D cell (and not just over the list).
+  const covered = Boolean(overlay) && overlaySpan === 'list+main';
   return (
     <div className="flex flex-col min-h-screen lg:h-screen lg:min-h-[640px]">
       {/* Wide: fixed bar heights so the grid below never shifts. Narrow: the
@@ -119,7 +121,16 @@ export function WorkspaceShell({
             tag is ordered inside this cell only. */}
         <section
           aria-label="3D view"
-          className="isolate order-1 aspect-[4/3] lg:aspect-auto lg:col-start-2 lg:row-start-1 min-h-0 min-w-0"
+          className={[
+            'isolate order-1 aspect-[4/3] lg:aspect-auto lg:col-start-2 lg:row-start-1 min-h-0 min-w-0',
+            // (F8) While something is laid over this whole cell (wide screens),
+            // the cell is not painted. It stays mounted and laid out — the
+            // canvas is NOT re-created and keeps its size — but the browser
+            // no longer has to composite a 3D picture nobody can see under
+            // the overlay (measured in software GL: 41-43 fps with the editor
+            // open over it, 60 with the cell hidden).
+            covered ? 'lg:invisible' : '',
+          ].join(' ')}
         >
           {main}
         </section>

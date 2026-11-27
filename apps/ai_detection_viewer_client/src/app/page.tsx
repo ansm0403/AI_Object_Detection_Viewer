@@ -40,7 +40,9 @@ import {
   EDIT_BLOCK_MESSAGES,
   EditBar,
   EditPanel,
+  useBoxDraft,
   useBoxEditor,
+  useDraftFrame,
   useEditShortcuts,
   useEditedFrames,
   useStoredEdits,
@@ -405,10 +407,17 @@ export default function Index() {
   // stored frame id is not in them for one render, until the effect above has
   // run. The first frame stands in for that render — returning "no frame" would
   // show the loading placeholder and tear the 3D canvas down.
-  const currentFrame = useMemo(() => {
+  const storedFrame = useMemo(() => {
     if (!frames) return null;
     return frames.find((f) => f.id === selectedFrameId) ?? frames[0] ?? null;
   }, [frames, selectedFrameId]);
+  // (F8) While a box is being dragged in the top view it is laid over this ONE
+  // frame, so the 3D view and the six photos follow the drag — they are drawn
+  // from `currentFrame` like always. `storedFrame` is the same frame without
+  // the drag: an element of `frames`, used where the frame's PLACE in the
+  // sequence matters (what to fetch ahead).
+  const boxDraft = useBoxDraft();
+  const currentFrame = useDraftFrame(storedFrame, boxDraft.draft);
   // The frame everything on screen is about. Use this — not the store's
   // `selectedFrameId` — wherever "the current frame" is meant.
   const currentFrameId = currentFrame?.id ?? null;
@@ -513,14 +522,14 @@ export default function Index() {
   // Fetch the coming frames' photos in the background (nuScenes only: the
   // frames that have several cameras).
   const preloadUrls = useMemo(() => {
-    if (!frames || !currentFrame?.cameras) return [];
-    return preloadOrder(frames, frames.indexOf(currentFrame), PRELOAD_FRAMES_AHEAD);
-  }, [frames, currentFrame]);
+    if (!frames || !storedFrame?.cameras) return [];
+    return preloadOrder(frames, frames.indexOf(storedFrame), PRELOAD_FRAMES_AHEAD);
+  }, [frames, storedFrame]);
   usePhotoPreload(preloadUrls, PHOTOS_KEPT);
   // (F7) The current frame's point cloud. nuScenes frames arrive without their
   // points (85 % of the data); they are fetched per frame, the same few frames
   // ahead as the photos. COCO frames carry their points and pass through.
-  const framePoints = useFramePoints(frames, currentFrame, PRELOAD_FRAMES_AHEAD, POINT_CLOUDS_KEPT);
+  const framePoints = useFramePoints(frames, storedFrame, PRELOAD_FRAMES_AHEAD, POINT_CLOUDS_KEPT);
   const framePointList = framePoints.points;
   // The frame as the 3D view draws it: the same boxes, with the fetched points.
   // Until they arrive the boxes are drawn without a cloud (and the name tag
@@ -1217,12 +1226,18 @@ export default function Index() {
   );
   const editor = useBoxEditor({
     available: reviewEnabled && mode === 'review',
+    scope: plantedErrors ? 'nuscenes-practice' : 'nuscenes',
     edits: storedEdits.edits,
     labelFrame,
     shownFrame: currentFrame,
     selectedId: selectedObjectId,
     block: reviewBlock,
     points: framePointList,
+    pointsLoading: framePoints.status === 'loading',
+    draft: boxDraft.draft,
+    setDraft: boxDraft.setDraft,
+    activeCamera,
+    setCamera,
     stopPlayback,
   });
   useEditShortcuts({ onDone: editor.exit, onToggleView: editor.toggleView }, editor.editing);
@@ -1776,6 +1791,9 @@ export default function Index() {
             frameIndex={frameIndex}
             view={editor.view}
             onToggleView={editor.toggleView}
+            onUndo={editor.undo}
+            onRedo={editor.redo}
+            onRevert={editor.revert}
             onDone={editor.exit}
             notSaved={storedEdits.storageFailed}
           />
@@ -1849,7 +1867,13 @@ export default function Index() {
         )
       }
       list={
-        sampleCheckOn ? (
+        editing ? (
+          // (F8) The top-view editor lies over this cell in both of its views,
+          // so the list is not drawn at all while it is open. Drawn but hidden,
+          // its rows (one per box, up to 156) were rebuilt on every pointer move
+          // of a drag for nobody to see. An empty panel keeps the cell's place.
+          <div className={`h-full w-full ${PANEL_CLASS}`} />
+        ) : sampleCheckOn ? (
           // (F7.5) The sample check lists the SAMPLED model boxes, across scenes.
           <SampleList
             sample={sampleCheck.sample}
@@ -2025,6 +2049,8 @@ export default function Index() {
               selectedObjectId ? getReview(reviews, currentFrame.id, selectedObjectId) : undefined
             }
             emptyMessage={EDIT_BLOCK_MESSAGES[reviewBlock ?? 'not-in-frame']}
+            locked={editor.locked}
+            onSetField={editor.setField}
             notSaved={storedEdits.storageFailed}
           />
         ) : sampleCheckOn ? (
@@ -2200,6 +2226,11 @@ export default function Index() {
             target={editor.target}
             emptyMessage={EDIT_BLOCK_MESSAGES[reviewBlock ?? 'not-in-frame']}
             growFrom={editor.growFrom}
+            locked={editor.locked}
+            onDragStart={editor.beginDrag}
+            onDrag={editor.dragTo}
+            onDragEnd={editor.endDrag}
+            onDragCancel={editor.cancelDrag}
           />
         ) : reportOn && scenesEvaluation && reportTables ? (
           <EvaluationReport

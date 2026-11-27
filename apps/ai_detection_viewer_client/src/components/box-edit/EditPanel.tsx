@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { BOX_FIELDS, readBoxField, type BevProjector, type BoxField } from '@/lib/editing';
 import type { ReviewRecord } from '@/lib/review';
 import { REJECT_REASON_LABELS, VERDICT_LABELS } from '@/components/review/labels';
@@ -18,6 +19,10 @@ type Props = {
   record: ReviewRecord | undefined;
   /** Shown instead of the numbers when there is no box to edit. */
   emptyMessage: string;
+  /** Why the box cannot be changed right now; the number fields are then read-only. */
+  locked: string | null;
+  /** A number was entered for one of the fields. */
+  onSetField: (field: BoxField, value: number) => void;
   /** The browser is not storing the edits. */
   notSaved?: boolean;
 };
@@ -37,8 +42,8 @@ const FIELD_UNITS: Record<BoxField, string> = {
   lift: 'm',
 };
 const FIELD_TITLES: Record<BoxField, string> = {
-  length: 'Length of the box, metres',
-  width: 'Width of the box, metres',
+  length: 'Length of the box, metres. Typing a number keeps the centre where it is.',
+  width: 'Width of the box, metres. Typing a number keeps the centre where it is.',
   height: 'Height of the box, metres. Changing it keeps the bottom of the box where it is.',
   heading:
     'Where the front of the box points, in degrees from the front of the car (0° = the same way as the car, +90° = to its left)',
@@ -57,6 +62,10 @@ const format = (field: BoxField, value: number) => {
  * what was changed from the dataset's label, and the facts a reviewer checks
  * the box against.
  *
+ * The top view changes position, length, width and heading by dragging; the
+ * HEIGHT and how high the box sits can only be set here, by number — a view
+ * from above cannot show them. Every field can be typed into.
+ *
  * Wording (Rule #6): the dataset's box is "the label", the box on screen is
  * "edited". Nothing here calls an edit correct — it is one reviewer's judgement.
  */
@@ -67,6 +76,8 @@ export function EditPanel({
   pointsStatus,
   record,
   emptyMessage,
+  locked,
+  onSetField,
   notSaved = false,
 }: Props) {
   const verdictText = record
@@ -112,7 +123,9 @@ export function EditPanel({
                 </span>
               ) : (
                 <>
-                  <span className="text-yellow-300">{target.pointsInView} pts</span>{' '}
+                  <span data-part="points-in-view" className="text-yellow-300">
+                    {target.pointsInView} pts
+                  </span>{' '}
                   <span className="text-zinc-600">inside the box</span>
                 </>
               )}
@@ -125,28 +138,18 @@ export function EditPanel({
                 shortest panel (232 px at 1536×700) without scrolling. */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 px-3 pt-2 pb-1.5">
               {BOX_FIELDS.map((field) => {
-                const value = readBoxField(target.values, field, { projector, label: target.label });
-                const original = readBoxField(target.label, field, { projector, label: target.label });
-                const changed = format(field, value) !== format(field, original);
+                const context = { projector, label: target.label };
+                const value = readBoxField(target.values, field, context);
+                const original = readBoxField(target.label, field, context);
                 return (
-                  <label key={field} className="flex items-center gap-1.5 min-w-0" title={FIELD_TITLES[field]}>
-                    <span className="shrink-0 w-12 text-[11px] text-zinc-500">{FIELD_LABELS[field]}</span>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      readOnly
-                      aria-label={FIELD_LABELS[field]}
-                      data-field={field}
-                      data-changed={changed ? 'true' : undefined}
-                      value={format(field, value)}
-                      className={[
-                        'flex-1 min-w-0 h-6 rounded bg-zinc-950 px-1.5 text-right font-mono text-xs tabular-nums',
-                        'ring-1 ring-inset focus:outline-none focus:ring-sky-400/60',
-                        changed ? 'text-amber-200 ring-amber-400/60' : 'text-zinc-200 ring-zinc-800',
-                      ].join(' ')}
-                    />
-                    <span className="shrink-0 w-2 text-[11px] text-zinc-600">{FIELD_UNITS[field]}</span>
-                  </label>
+                  <NumberField
+                    key={field}
+                    field={field}
+                    text={format(field, value)}
+                    changed={format(field, value) !== format(field, original)}
+                    disabled={locked !== null}
+                    onCommit={(next) => onSetField(field, next)}
+                  />
                 );
               })}
             </div>
@@ -179,5 +182,83 @@ export function EditPanel({
         </>
       )}
     </aside>
+  );
+}
+
+/**
+ * One number of the box. It shows the box's value; while it is being typed
+ * into, it shows the text. Enter or leaving the field takes the number; Escape
+ * puts the value back.
+ *
+ * A text that is not a number, or one that reads the same as what is shown, is
+ * not taken — so clicking into "4.27" and leaving does not round a box that
+ * really is 4.268 m long.
+ */
+function NumberField({
+  field,
+  text,
+  changed,
+  disabled,
+  onCommit,
+}: {
+  field: BoxField;
+  /** The box's value, formatted. */
+  text: string;
+  /** The value differs from the label's. */
+  changed: boolean;
+  disabled: boolean;
+  onCommit: (value: number) => void;
+}) {
+  const [typed, setTyped] = useState<string | null>(null);
+  // Escape leaves the field too (blur) — and that leave must not take the text.
+  const discard = useRef(false);
+
+  const finish = () => {
+    const entered = typed;
+    setTyped(null);
+    if (discard.current) {
+      discard.current = false;
+      return;
+    }
+    if (entered === null || entered.trim() === '') return;
+    const value = Number(entered.trim().replace(',', '.'));
+    if (!Number.isFinite(value)) return;
+    if (format(field, value) === text) return;
+    onCommit(value);
+  };
+
+  return (
+    <label className="flex items-center gap-1.5 min-w-0" title={FIELD_TITLES[field]}>
+      <span className="shrink-0 w-12 text-[11px] text-zinc-500">{FIELD_LABELS[field]}</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        spellCheck={false}
+        aria-label={FIELD_LABELS[field]}
+        data-field={field}
+        data-changed={changed ? 'true' : undefined}
+        disabled={disabled}
+        value={typed ?? text}
+        onChange={(event) => setTyped(event.target.value)}
+        onFocus={(event) => event.currentTarget.select()}
+        onBlur={finish}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+          if (event.key === 'Escape') {
+            discard.current = true;
+            event.currentTarget.blur();
+            // The editor's own Escape (close) must not also act on this press.
+            event.stopPropagation();
+          }
+        }}
+        className={[
+          'flex-1 min-w-0 h-6 rounded bg-zinc-950 px-1.5 text-right font-mono text-xs tabular-nums',
+          'ring-1 ring-inset focus:outline-none focus:ring-sky-400/60 disabled:opacity-50',
+          changed ? 'text-amber-200 ring-amber-400/60' : 'text-zinc-200 ring-zinc-800',
+        ].join(' ')}
+      />
+      <span className="shrink-0 w-2 text-[11px] text-zinc-600">{FIELD_UNITS[field]}</span>
+    </label>
   );
 }

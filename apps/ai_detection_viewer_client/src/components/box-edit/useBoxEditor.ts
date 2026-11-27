@@ -1,22 +1,43 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { pickCamera } from '@/lib/cameras';
 import {
   boxChange,
   canEditFrame,
+  canRedo,
+  canUndo,
   countInside,
   describeChange,
+  dragBox,
   getEdit,
   labelValuesOf,
   makeBevProjector,
+  nudgeBox,
+  pushHistory,
+  redoHistory,
+  replaceBoxes,
+  sameBoxValues,
+  setBoxField,
+  startHistory,
+  undoHistory,
   valuesOfEdit,
+  type BevPoint,
   type BevProjector,
   type BoxChange,
+  type BoxField,
   type BoxValues,
+  type DragHandle,
   type EditMap,
+  type EditScope,
+  type History,
 } from '@/lib/editing';
+import type { Vec3 } from '@/lib/geometry';
 import type { ReviewBlock } from '@/lib/review';
 import type { Detection3D, Frame, Point3D } from '@/lib/types';
+import { useEditStore } from '@/store';
+import { EDIT_BLOCK_MESSAGES } from './labels';
+import type { BoxDraft } from './useBoxDraft';
 
 /** How the editor shares the room with the 3D view (decision 1 of the F8 design). */
 export type EditView =
@@ -25,6 +46,15 @@ export type EditView =
   /** Half and half: the 3D view stays next to the top view. */
   | 'split';
 
+/**
+ * A change made from the KEYBOARD (an arrow key, a typed number) is accepted
+ * only after its box has been the one being edited for this long. Stepping to
+ * another box and pressing a key in the same breath must not change a box
+ * nobody has looked at yet (the F7.5 rule for verdicts, Edge_F#7.5 Case 1).
+ * A drag is not held back: the handle has to be found and grabbed first.
+ */
+export const MIN_LOOK_MS = 400;
+
 /** The box the editor is working on, with everything the screen says about it. */
 export type EditTarget = {
   frameId: string;
@@ -32,7 +62,7 @@ export type EditTarget = {
   className: string;
   /** The dataset's own box (in practice mode: the practice set's box). */
   label: BoxValues;
-  /** The box as it is now: the stored edit, or the label when there is none. */
+  /** The box as it is now: being dragged, or the stored edit, or the label. */
   values: BoxValues;
   /** Whether an edit is stored for it. */
   edited: boolean;
@@ -50,11 +80,13 @@ export type EditTarget = {
 type Options = {
   /** Review mode is on screen, on data whose boxes can be edited. */
   available: boolean;
-  /** The stored edits of the scope on screen. */
+  /** Which edits are being made: of the real annotations, or of the practice set. */
+  scope: EditScope;
+  /** The stored edits of that scope. */
   edits: EditMap;
   /** The current frame as the data has it — WITHOUT edits. */
   labelFrame: Frame | null;
-  /** The current frame as it is drawn (edits laid over). */
+  /** The current frame as it is drawn (stored edits and the drag laid over). */
   shownFrame: Frame | null;
   /** `selectedObjectId`: the box being edited is the selected one (Rule #2). */
   selectedId: string | null;
@@ -62,33 +94,59 @@ type Options = {
   block: ReviewBlock | null;
   /** The frame's points, when they have arrived. */
   points: readonly Point3D[] | null;
+  /** True while the frame's points are still on their way. */
+  pointsLoading: boolean;
+  /** The box while it is being dragged, and its setter (`useBoxDraft`). */
+  draft: BoxDraft | null;
+  setDraft: (draft: BoxDraft | null) => void;
+  /** The camera whose photo is on screen, and how to show another one. */
+  activeCamera: string | null;
+  setCamera: (name: string) => void;
   stopPlayback: () => void;
 };
 
+type Session = { key: string; history: History<BoxValues> };
+
 /**
- * (F8) The top-view editor's state: whether it is open, how it shares the room
- * with the 3D view, and which box it is about.
+ * (F8) The top-view editor: whether it is open, how it shares the room with
+ * the 3D view, which box it is about, and every way that box is changed.
  *
  * WHICH box is not stored anywhere — it is the selected object of the current
  * frame (`selectedObjectId`, the single selection of the app; Immutable Rule
  * #2). Selecting another box in the 3D view or the photo while the editor is
- * open makes that one the box being edited, exactly as a click selects it
- * everywhere else.
+ * open makes that one the box being edited.
  *
- * All box math is in `lib/editing` (Rule #3); this only holds view state and
- * joins the pieces. The page calls it and wires the results into the workspace
- * slots — no editing state or handler lives in `page.tsx`.
+ * What a change DOES to a box is `lib/editing` (Rule #3). This hook decides
+ * when a change is taken:
+ *  - while a handle is dragged, the box is a DRAFT (drawn, not stored);
+ *  - when the pointer is released — or a number is entered — it is stored
+ *    (`edit-store`) and becomes one undo step;
+ *  - a box that ends up equal to the dataset's box has its edit removed: there
+ *    is never an "edited" box that is not different from the label.
+ *
+ * The undo history belongs to one box for as long as the editor stays on it.
+ * The page calls this hook and wires the results into the workspace slots — no
+ * editing state or handler lives in `page.tsx`.
  */
 export function useBoxEditor({
   available,
+  scope,
   edits,
   labelFrame,
   shownFrame,
   selectedId,
   block,
   points,
+  pointsLoading,
+  draft,
+  setDraft,
+  activeCamera,
+  setCamera,
   stopPlayback,
 }: Options) {
+  const setEdit = useEditStore((s) => s.setEdit);
+  const removeEdit = useEditStore((s) => s.removeEdit);
+
   const [wanted, setWanted] = useState(false);
   // The view is remembered for the visit: someone who prefers the 3D view next
   // to the top view does not have to ask for it at every box.
@@ -109,29 +167,203 @@ export function useBoxEditor({
     [labelFrame],
   );
 
-  const target: EditTarget | null = useMemo(() => {
-    if (!labelFrame || !shownFrame || !selectedId || !editable) return null;
+  // The dataset's box and the stored state of the selected box.
+  const base = useMemo(() => {
+    if (!labelFrame || !selectedId || !editable) return null;
     const label = labelValuesOf(labelFrame, selectedId);
-    const shown = shownFrame.detections3D.find((d) => d.id === selectedId);
-    if (!label || !shown) return null;
+    if (!label) return null;
     const edit = getEdit(edits, labelFrame.id, selectedId);
-    const values = edit ? valuesOfEdit(edit) : label;
-    const change = boxChange(label, values);
     return {
+      key: `${labelFrame.id}/${selectedId}`,
       frameId: labelFrame.id,
       objectId: selectedId,
-      className: shown.class,
       label,
-      values,
+      stored: edit ? valuesOfEdit(edit) : label,
       edited: edit !== undefined,
+    };
+  }, [labelFrame, selectedId, editable, edits]);
+
+  const target: EditTarget | null = useMemo(() => {
+    const shown = base && shownFrame?.detections3D.find((d) => d.id === base.objectId);
+    if (!base || !shown) return null;
+    const dragged = draft && draft.frameId === base.frameId && draft.objectId === base.objectId;
+    const values = dragged ? draft.values : base.stored;
+    const change = boxChange(base.label, values);
+    return {
+      frameId: base.frameId,
+      objectId: base.objectId,
+      className: shown.class,
+      label: base.label,
+      values,
+      edited: base.edited,
       change,
       changeText: describeChange(change),
       labelLidarPoints: shown.annotation?.lidarPoints,
       pointsInView: points ? countInside(points, shown.bbox3D) : null,
       shown,
     };
-  }, [labelFrame, shownFrame, selectedId, editable, edits, points]);
+  }, [base, shownFrame, draft, points]);
 
+  // ---- the undo history of the box the editor is on -------------------------
+  // Started when the editor arrives at a box (with the box as it is stored
+  // then), dropped when it leaves. Kept in state and replaced while rendering.
+  const [session, setSession] = useState<Session | null>(null);
+  const sessionKey = editing && base ? base.key : null;
+  if ((session?.key ?? null) !== sessionKey) {
+    setSession(
+      sessionKey && base
+        ? { key: sessionKey, history: startHistory(base.stored) }
+        : null,
+    );
+  }
+  // When the box became the one being edited (for `MIN_LOOK_MS`). Stamped in
+  // an effect: reading the clock is not something a render may do.
+  const since = useRef(0);
+  useEffect(() => {
+    since.current = performance.now();
+  }, [sessionKey]);
+
+  // Why the box cannot be changed right now, in words; null = it can. The
+  // points are what a box is checked against, so nothing is changed while they
+  // are still on their way (a moment); if they could not be fetched at all,
+  // editing stays possible — the photos are still there — and the view says so.
+  const locked: string | null = !editing
+    ? null
+    : block !== null
+      ? EDIT_BLOCK_MESSAGES[block]
+      : !target
+        ? EDIT_BLOCK_MESSAGES['not-in-frame']
+        : pointsLoading
+          ? 'Loading the LiDAR points…'
+          : null;
+
+  /** Store `next` as the state of the box (or remove the edit when it is the label again). */
+  const store = useCallback(
+    (frameId: string, objectId: string, label: BoxValues, next: BoxValues) => {
+      if (sameBoxValues(next, label)) removeEdit(scope, frameId, objectId);
+      else setEdit(scope, frameId, objectId, next);
+    },
+    [scope, setEdit, removeEdit],
+  );
+
+  /** After a change: if the photo on screen no longer shows the box, show the one that does. */
+  const followWithCamera = useCallback(
+    (objectId: string, next: BoxValues) => {
+      if (!labelFrame || activeCamera === null) return;
+      const moved = replaceBoxes(labelFrame, new Map([[objectId, next]]));
+      const camera = pickCamera(moved, objectId, activeCamera);
+      if (camera !== null && camera !== activeCamera) setCamera(camera);
+    },
+    [labelFrame, activeCamera, setCamera],
+  );
+
+  /** Take a finished change: store it and make it one undo step. */
+  const commit = useCallback(
+    (next: BoxValues) => {
+      if (!base || !session || session.key !== base.key) return;
+      const history = pushHistory(session.history, next, sameBoxValues);
+      if (history === session.history) return; // nothing changed
+      store(base.frameId, base.objectId, base.label, next);
+      setSession({ ...session, history });
+      followWithCamera(base.objectId, next);
+    },
+    [base, session, store, followWithCamera],
+  );
+
+  // ---- dragging ---------------------------------------------------------------
+  const gesture = useRef<{
+    handle: DragHandle;
+    start: BoxValues;
+    from: Vec3;
+    latest: BoxValues;
+    frameId: string;
+    objectId: string;
+  } | null>(null);
+
+  /** Grab a handle at a top-view point. Returns false when the box cannot be changed now. */
+  const beginDrag = useCallback(
+    (handle: DragHandle, at: BevPoint): boolean => {
+      if (locked !== null || !base || !projector) return false;
+      const start = base.stored;
+      gesture.current = {
+        handle,
+        start,
+        from: projector.toGlobal(at, start.translation[2]),
+        latest: start,
+        frameId: base.frameId,
+        objectId: base.objectId,
+      };
+      return true;
+    },
+    [locked, base, projector],
+  );
+
+  const dragTo = useCallback(
+    (at: BevPoint) => {
+      const g = gesture.current;
+      if (!g || !projector) return;
+      // Always from the box as it was when the drag began (no accumulated rounding).
+      g.latest = dragBox(g.start, g.handle, g.from, projector.toGlobal(at, g.start.translation[2]));
+      setDraft({ frameId: g.frameId, objectId: g.objectId, values: g.latest });
+    },
+    [projector, setDraft],
+  );
+
+  const endDrag = useCallback(() => {
+    const g = gesture.current;
+    gesture.current = null;
+    if (!g) return;
+    // The store write and the end of the draft happen in the same update, so
+    // no frame is painted with the box back at its old place.
+    commit(g.latest);
+    setDraft(null);
+  }, [commit, setDraft]);
+
+  const cancelDrag = useCallback(() => {
+    gesture.current = null;
+    setDraft(null);
+  }, [setDraft]);
+
+  // ---- numbers and keys ---------------------------------------------------------
+  /** Set one of the panel's numbers. */
+  const setField = useCallback(
+    (field: BoxField, value: number) => {
+      if (locked !== null || !base || !projector) return;
+      if (performance.now() - since.current < MIN_LOOK_MS) return;
+      commit(setBoxField(base.stored, field, value, { projector, label: base.label }));
+    },
+    [locked, base, projector, commit],
+  );
+
+  /** Move the box by a step as the top view shows it (metres; x right, y down). */
+  const nudge = useCallback(
+    (delta: BevPoint) => {
+      if (locked !== null || !base || !projector || gesture.current) return;
+      if (performance.now() - since.current < MIN_LOOK_MS) return;
+      commit(nudgeBox(base.stored, delta, projector));
+    },
+    [locked, base, projector, commit],
+  );
+
+  const step = useCallback(
+    (move: (history: History<BoxValues>) => History<BoxValues>) => {
+      if (!base || !session || session.key !== base.key || gesture.current) return;
+      const history = move(session.history);
+      if (history === session.history) return;
+      store(base.frameId, base.objectId, base.label, history.present);
+      setSession({ ...session, history });
+      followWithCamera(base.objectId, history.present);
+    },
+    [base, session, store, followWithCamera],
+  );
+  const undo = useCallback(() => step(undoHistory), [step]);
+  const redo = useCallback(() => step(redoHistory), [step]);
+  /** Back to the dataset's box. An undo step like any other change. */
+  const revert = useCallback(() => {
+    if (base) commit(base.label);
+  }, [base, commit]);
+
+  // ---- opening and closing ------------------------------------------------------
   /**
    * Open the editor on the selected box. Does nothing when there is no box
    * that could be worked on — the same conditions that block a verdict
@@ -144,8 +376,14 @@ export function useBoxEditor({
     setWanted(true);
   }, [available, editable, block, selectedId, stopPlayback]);
 
-  const exit = useCallback(() => setWanted(false), []);
+  const exit = useCallback(() => {
+    gesture.current = null;
+    setDraft(null);
+    setWanted(false);
+  }, [setDraft]);
   const toggleView = useCallback(() => setView((v) => (v === 'focus' ? 'split' : 'focus')), []);
+
+  const history = session && base && session.key === base.key ? session.history : null;
 
   return {
     editing,
@@ -155,9 +393,22 @@ export function useBoxEditor({
     growFrom,
     projector,
     target,
+    /** Why the box cannot be changed right now; null = it can. */
+    locked,
+    dragging: draft !== null,
     enter,
     exit,
     toggleView,
+    beginDrag,
+    dragTo,
+    endDrag,
+    cancelDrag,
+    setField,
+    nudge,
+    /** Undefined when there is nothing to undo / redo / revert — the buttons are then disabled. */
+    undo: history && canUndo(history) && locked === null ? undo : undefined,
+    redo: history && canRedo(history) && locked === null ? redo : undefined,
+    revert: base?.edited && locked === null ? revert : undefined,
   };
 }
 

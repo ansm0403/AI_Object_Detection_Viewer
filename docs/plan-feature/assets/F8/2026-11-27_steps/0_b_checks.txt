@@ -32,10 +32,11 @@ PASS  B · focus view: the editor covers the list and the 3D view  — {"x":8,"y
 PASS  B · focus view: the 3D cell underneath has not changed size
 PASS  B · focus view: the camera cell and the panel are where they were
 PASS  B · the 3D canvas is the same canvas
+PASS  B · while the editor is open the list under it is not drawn (no rows), and the covered 3D cell is not painted
 PASS  B · the 3D name tag of the selected box does not show through the editor
 PASS  B · the box being edited is drawn, with its front edge
 PASS  B · the other 71 boxes of the frame are drawn as outlines  — 71
-PASS  B · ten handles: 4 corners, 4 sides, the rotate knob (and the box itself to move)  — back,back-left,back-right,front,front-left,front-right,left,right,rotate
+PASS  B · ten handles: 4 corners, 4 sides, the rotate knob, and the box itself to move  — back,back-left,back-right,front,front-left,front-right,left,move,right,rotate
 PASS  B · the box is fully inside the view and large enough to grab (longer side ≥ 100 px)  — 180px
 PASS  B · LiDAR points are painted, and some are inside the box (yellow)  — {"blue":4267,"yellow":331}
 PASS  B · no dashed label outline while the box is not edited
@@ -68,6 +69,7 @@ PASS  B · nothing selected while editing: the bar and the top view say so
 PASS  B · Esc closes the editor
 PASS  B · after closing: list, 3D view and panel are exactly where they were
 PASS  B · after closing: still the same 3D canvas
+PASS  B · after closing: the list is back with its 72 rows and the 3D cell is painted again
 PASS  B · after closing: the class chips are back
 PASS  B · the 3D floor cost is unchanged by all this (draw calls on this frame)  — 72 vs 72
 PASS  B · the view is remembered: E opens in split view again
@@ -137,13 +139,13 @@ PASS  B · 1024×768 split: no page scroll
       1024×768 split: top view 316×576
 PASS  B · 1024×768: no page errors
 PASS  B · scene-0061 frame 20 is open (156 boxes)  — 156
-PASS  B · the editor grows in (animation "bev-grow", scale between 0 and 1 shortly after the key)  — {"scale":0.843074,"origin":"136px 173px","animation":"bev-grow"}
+PASS  B · the editor grows in (animation "bev-grow", scale between 0 and 1 shortly after the key)  — {"scale":0.842881,"origin":"136px 173px","animation":"bev-grow"}
 PASS  B · it grows out of the list row of the box  — 136px 173px vs row 136px 173px
 PASS  B · the entrance lasts 0.32 s and then the editor is at full size  — animation 0.32s
-      key press -> end of the entrance, measured in the page (156 boxes, software GL): 383 ms
+      key press -> end of the entrance, measured in the page (156 boxes, software GL): 413 ms
 PASS  B · 155 other boxes are drawn on the largest frame  — 155
 PASS  B · a small box (a pedestrian, 0.82 m) is shown large enough to grab (longer side ≥ 80 px)  — 157px
 PASS  B · largest frame: no page errors
 PASS  B · with "reduce motion" the editor appears at once (no animation)  — {"animation":"none","scale":1}
 
-b: 140 / 140 passed
+b: 142 / 142 passed

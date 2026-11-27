@@ -6,12 +6,14 @@ import {
   footprintOf,
   footprintOfRendered,
   panView,
+  pixelToBev,
   scaleBarMetres,
   viewBoxOf,
   zoomView,
   type BevPoint,
   type BevProjector,
   type BevView,
+  type DragHandle,
   type PixelSize,
 } from '@/lib/editing';
 import type { Frame, Point3D } from '@/lib/types';
@@ -35,6 +37,19 @@ type Props = {
   emptyMessage?: string;
   /** CSS `transform-origin` of the entrance animation (the list row of the box), or `null`. */
   growFrom: string | null;
+  /** Why the box cannot be changed right now (shown; the handles do not react); `null` = it can. */
+  locked: string | null;
+  /**
+   * A handle (or the box itself: `'move'`) was grabbed at this top-view point.
+   * Returns false when the drag is not accepted; the pointer then pans the view.
+   */
+  onDragStart: (handle: DragHandle, at: BevPoint) => boolean;
+  /** The pointer is now at this top-view point (at most once per painted frame). */
+  onDrag: (at: BevPoint) => void;
+  /** The pointer was released: the change is taken. */
+  onDragEnd: () => void;
+  /** The drag was interrupted (the browser took the pointer away): the change is dropped. */
+  onDragCancel: () => void;
 };
 
 /** Sizes of the handles on screen, in pixels (they do not grow when zooming in). */
@@ -42,6 +57,21 @@ const CORNER_PX = 9;
 const SIDE_PX = 7;
 const KNOB_RADIUS_PX = 6;
 const KNOB_DISTANCE_PX = 26;
+/**
+ * What is grabbed is larger than what is drawn: the side of a handle's hit area,
+ * in pixels. On a box that is small on screen (zoomed far out, or a pedestrian)
+ * the hit areas shrink with it — never beyond a third of its shorter side — so
+ * the middle of the box is always free to grab the box itself. Without this a
+ * drag on a small box resized it instead of moving it.
+ */
+const HIT_PX = 18;
+/**
+ * Below this size on screen (the box's shorter side, in pixels) the handles are
+ * not offered at all: they would sit on top of each other and of the box, and a
+ * drag meant to move the box would resize it. The box can still be moved; to
+ * resize or turn it, zoom in (the view says so).
+ */
+const MIN_BOX_PX_FOR_HANDLES = 24;
 /** The arrow that marks the car, in pixels: a marker of where it is and which way it faces, not its outline. */
 const CAR_MARK_PX: readonly (readonly [number, number])[] = [
   [0, -11],
@@ -82,6 +112,11 @@ export function BevEditor({
   target,
   emptyMessage,
   growFrom,
+  locked,
+  onDragStart,
+  onDrag,
+  onDragEnd,
+  onDragCancel,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<PixelSize>({ width: 0, height: 0 });
@@ -152,22 +187,72 @@ export function BevEditor({
     return () => element.removeEventListener('wheel', onWheel);
   }, []);
 
-  // Dragging the background pans the view.
-  const pan = useRef<{ x: number; y: number } | null>(null);
+  // One pointer gesture at a time: a handle (or the box) being dragged, or the
+  // background being dragged to pan the view.
+  const gesture = useRef<{ kind: 'box' } | { kind: 'pan'; x: number; y: number } | null>(null);
+  // Pointer moves arrive faster than the screen is painted (a mouse can report
+  // hundreds per second). Only the latest one is applied, once per frame: every
+  // application rebuilds the box, its projections and the views that draw them.
+  const pending = useRef<BevPoint | null>(null);
+  const scheduled = useRef(0);
+  const flush = () => {
+    scheduled.current = 0;
+    const at = pending.current;
+    pending.current = null;
+    if (at) onDrag(at);
+  };
+  useEffect(() => () => cancelAnimationFrame(scheduled.current), []);
+
+  const pointOf = (event: ReactPointerEvent<SVGSVGElement>): BevPoint | null => {
+    if (!view) return null;
+    const rect = event.currentTarget.getBoundingClientRect();
+    return pixelToBev(view, size, [event.clientX - rect.left, event.clientY - rect.top]);
+  };
   const onPointerDown = (event: ReactPointerEvent<SVGSVGElement>) => {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    pan.current = { x: event.clientX, y: event.clientY };
+    if (event.button !== 0 || gesture.current) return;
+    const handle = (event.target as Element).closest('[data-handle]')?.getAttribute('data-handle');
+    const at = pointOf(event);
+    // Capture keeps the drag alive when the pointer leaves the view. It can be
+    // refused (the pointer is already gone); the drag then simply ends at the edge.
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* no capture: nothing to undo */
+    }
+    if (handle && at && onDragStart(handle as DragHandle, at)) {
+      gesture.current = { kind: 'box' };
+      return;
+    }
+    gesture.current = { kind: 'pan', x: event.clientX, y: event.clientY };
   };
   const onPointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
-    const from = pan.current;
-    if (!from) return;
-    const delta: [number, number] = [event.clientX - from.x, event.clientY - from.y];
-    pan.current = { x: event.clientX, y: event.clientY };
-    setFitted((current) => (current ? { key: current.key, view: panView(current.view, delta) } : current));
+    const current = gesture.current;
+    if (!current) return;
+    if (current.kind === 'box') {
+      pending.current = pointOf(event);
+      if (scheduled.current === 0) scheduled.current = requestAnimationFrame(flush);
+      return;
+    }
+    const delta: [number, number] = [event.clientX - current.x, event.clientY - current.y];
+    gesture.current = { kind: 'pan', x: event.clientX, y: event.clientY };
+    setFitted((state) => (state ? { key: state.key, view: panView(state.view, delta) } : state));
   };
-  const onPointerEnd = () => {
-    pan.current = null;
+  const onPointerUp = () => {
+    const current = gesture.current;
+    gesture.current = null;
+    if (current?.kind !== 'box') return;
+    // The last position must not be lost to the frame that has not come yet.
+    cancelAnimationFrame(scheduled.current);
+    flush();
+    onDragEnd();
+  };
+  const onPointerCancel = () => {
+    const current = gesture.current;
+    gesture.current = null;
+    cancelAnimationFrame(scheduled.current);
+    scheduled.current = 0;
+    pending.current = null;
+    if (current?.kind === 'box') onDragCancel();
   };
 
   const others = useMemo(
@@ -187,6 +272,10 @@ export function BevEditor({
       ]
     : null;
   const barMetres = view ? scaleBarMetres(view) : 0;
+  // The hit area of a handle, in metres (see HIT_PX).
+  const shorterPx = target && px > 0 ? Math.min(target.values.size[0], target.values.size[1]) / px : 0;
+  const hit = Math.max(SIDE_PX, Math.min(HIT_PX, shorterPx / 3)) * px;
+  const handlesShown = shorterPx >= MIN_BOX_PX_FOR_HANDLES;
 
   const pointsNote =
     pointsStatus === 'loading'
@@ -215,8 +304,8 @@ export function BevEditor({
           className="absolute inset-0 touch-none cursor-grab active:cursor-grabbing"
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
-          onPointerUp={onPointerEnd}
-          onPointerCancel={onPointerEnd}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerCancel}
         >
           {/* A ring every 10 m around the car. */}
           <g fill="none" stroke="#3f3f46" strokeWidth={1} strokeDasharray="2 4">
@@ -259,14 +348,16 @@ export function BevEditor({
             />
           )}
           {footprint && knob && (
-            <g data-part="target">
+            <g data-part="target" data-locked={locked ? 'true' : undefined}>
               <polygon
                 data-part="box"
+                data-handle="move"
                 points={polygon(footprint.corners)}
                 fill="rgba(255,255,255,0.07)"
                 stroke="#ffffff"
                 strokeWidth={2}
                 vectorEffect="non-scaling-stroke"
+                style={{ cursor: locked ? 'not-allowed' : 'move' }}
               />
               {/* The front edge: which way the box is heading. */}
               <line
@@ -280,32 +371,61 @@ export function BevEditor({
                 vectorEffect="non-scaling-stroke"
                 pointerEvents="none"
               />
-              <line
-                x1={footprint.sides.front[0]}
-                y1={footprint.sides.front[1]}
-                x2={knob[0]}
-                y2={knob[1]}
-                stroke="#38bdf8"
-                strokeWidth={1.5}
-                vectorEffect="non-scaling-stroke"
-                pointerEvents="none"
-              />
-              <circle
-                data-handle="rotate"
-                cx={knob[0]}
-                cy={knob[1]}
-                r={KNOB_RADIUS_PX * px}
-                fill="#0a0a0a"
-                stroke="#38bdf8"
-                strokeWidth={2}
-                vectorEffect="non-scaling-stroke"
-              />
-              {(['front', 'right', 'back', 'left'] as const).map((side) => (
-                <Square key={side} handle={side} at={footprint.sides[side]} size={SIDE_PX * px} fill="#e4e4e7" />
-              ))}
-              {(['front-left', 'front-right', 'back-right', 'back-left'] as const).map((corner, i) => (
-                <Square key={corner} handle={corner} at={footprint.corners[i]} size={CORNER_PX * px} fill="#ffffff" />
-              ))}
+              {handlesShown && (
+              <g opacity={locked ? 0.35 : 1}>
+                <line
+                  x1={footprint.sides.front[0]}
+                  y1={footprint.sides.front[1]}
+                  x2={knob[0]}
+                  y2={knob[1]}
+                  stroke="#38bdf8"
+                  strokeWidth={1.5}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="none"
+                />
+                <circle
+                  cx={knob[0]}
+                  cy={knob[1]}
+                  r={KNOB_RADIUS_PX * px}
+                  fill="#0a0a0a"
+                  stroke="#38bdf8"
+                  strokeWidth={2}
+                  vectorEffect="non-scaling-stroke"
+                  pointerEvents="none"
+                />
+                {/* What is grabbed is larger than what is drawn. */}
+                <circle
+                  data-handle="rotate"
+                  cx={knob[0]}
+                  cy={knob[1]}
+                  r={Math.max(hit * 0.6, KNOB_RADIUS_PX * px)}
+                  fill="transparent"
+                  style={{ cursor: locked ? 'not-allowed' : 'grab' }}
+                />
+                {(['front', 'right', 'back', 'left'] as const).map((side) => (
+                  <Square
+                    key={side}
+                    handle={side}
+                    at={footprint.sides[side]}
+                    size={SIDE_PX * px}
+                    hit={hit}
+                    fill="#e4e4e7"
+                    cursor={locked ? 'not-allowed' : resizeCursor(footprint.center, footprint.sides[side])}
+                  />
+                ))}
+                {(['front-left', 'front-right', 'back-right', 'back-left'] as const).map((corner, i) => (
+                  <Square
+                    key={corner}
+                    handle={corner}
+                    at={footprint.corners[i]}
+                    size={CORNER_PX * px}
+                    hit={hit}
+                    fill="#ffffff"
+                    cursor={locked ? 'not-allowed' : resizeCursor(footprint.center, footprint.corners[i])}
+                  />
+                ))}
+              </g>
+              )}
             </g>
           )}
         </svg>
@@ -325,6 +445,23 @@ export function BevEditor({
         </span>
       )}
 
+      {target && !locked && !handlesShown && view && (
+        <span
+          data-part="zoom-hint"
+          className="absolute top-9 left-2 z-10 pointer-events-none rounded px-1.5 py-0.5 text-[10px] font-medium text-zinc-300 bg-zinc-950/80 ring-1 ring-zinc-700 whitespace-nowrap"
+        >
+          Zoom in to resize or turn the box
+        </span>
+      )}
+      {target && locked && (
+        <span
+          data-part="locked"
+          role="status"
+          className="absolute top-9 left-2 z-10 pointer-events-none rounded px-1.5 py-0.5 text-[10px] font-medium text-amber-300 bg-zinc-950/80 ring-1 ring-amber-500/40 whitespace-nowrap"
+        >
+          {locked}
+        </span>
+      )}
       {!target && emptyMessage && (
         <p className="absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-zinc-400 pointer-events-none">
           <span className="rounded-md bg-zinc-950/80 px-3 py-2 ring-1 ring-zinc-700">{emptyMessage}</span>
@@ -344,7 +481,9 @@ export function BevEditor({
           {labelFootprint && <span className="text-zinc-300"> · - - - nuScenes label</span>}
         </span>
         {size.width >= LEGEND_HINT_MIN_WIDTH && (
-          <span className="block whitespace-nowrap">Wheel: zoom · drag the background: pan · rings: every 10 m</span>
+          <span className="block whitespace-nowrap">
+            Drag the box: move · squares: resize · knob: turn · wheel: zoom · background: pan
+          </span>
         )}
       </span>
       {view && (
@@ -364,28 +503,60 @@ export function BevEditor({
   );
 }
 
+/**
+ * The resize cursor for a handle that sits in direction `to` from `from` on
+ * screen: the double arrow that points along that direction, to the nearest 45°.
+ */
+function resizeCursor(from: BevPoint, to: BevPoint): string {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  // 0..180°, measured on screen (y down).
+  const angle = ((Math.atan2(dy, dx) * 180) / Math.PI + 180) % 180;
+  if (angle < 22.5 || angle >= 157.5) return 'ew-resize';
+  if (angle < 67.5) return 'nwse-resize';
+  if (angle < 112.5) return 'ns-resize';
+  return 'nesw-resize';
+}
+
 function Square({
   handle,
   at,
   size,
+  hit,
   fill,
+  cursor,
 }: {
   handle: string;
   at: BevPoint;
+  /** Side of the square that is drawn, in metres. */
   size: number;
+  /** Side of the (invisible) square that is grabbed, in metres. */
+  hit: number;
   fill: string;
+  cursor: string;
 }) {
   return (
-    <rect
-      data-handle={handle}
-      x={at[0] - size / 2}
-      y={at[1] - size / 2}
-      width={size}
-      height={size}
-      fill={fill}
-      stroke="#18181b"
-      strokeWidth={1}
-      vectorEffect="non-scaling-stroke"
-    />
+    <>
+      <rect
+        x={at[0] - size / 2}
+        y={at[1] - size / 2}
+        width={size}
+        height={size}
+        fill={fill}
+        stroke="#18181b"
+        strokeWidth={1}
+        vectorEffect="non-scaling-stroke"
+        pointerEvents="none"
+      />
+      <rect
+        data-handle={handle}
+        x={at[0] - hit / 2}
+        y={at[1] - hit / 2}
+        width={hit}
+        height={hit}
+        fill="transparent"
+        style={{ cursor }}
+      />
+    </>
   );
 }

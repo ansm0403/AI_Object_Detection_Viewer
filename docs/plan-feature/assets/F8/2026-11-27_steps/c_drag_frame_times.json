@@ -1,0 +1,126 @@
+{
+ "what": "Dragging a box in the top view, one pointer move per painted frame, 3 s windows, 3 rounds (median). Production build, headless Chromium, 1536x700. gpu = Intel UHD (D3D11), swiftshader = software GL.",
+ "measured": "2026-11-27",
+ "rows": [
+  {
+   "build": "before: list drawn under the editor",
+   "gl": "gpu",
+   "boxes": 156,
+   "view": "focus",
+   "idleFps": 60,
+   "dragFps": 42.3,
+   "framesOver25ms": "51/126  50/127  49/132",
+   "idleJsMsPerSec": 137,
+   "dragJsMsPerSec": 548,
+   "extraJsMsPerMove": 9.7
+  },
+  {
+   "build": "before: list drawn under the editor",
+   "gl": "gpu",
+   "boxes": 156,
+   "view": "split",
+   "idleFps": 60,
+   "dragFps": 41.1,
+   "framesOver25ms": "56/122  56/124  53/125",
+   "idleJsMsPerSec": 158,
+   "dragJsMsPerSec": 541,
+   "extraJsMsPerMove": 9.3
+  },
+  {
+   "build": "before: list drawn under the editor",
+   "gl": "gpu",
+   "boxes": 72,
+   "view": "focus",
+   "idleFps": 60,
+   "dragFps": 55,
+   "framesOver25ms": "19/161  15/165  9/171",
+   "idleJsMsPerSec": 113,
+   "dragJsMsPerSec": 534,
+   "extraJsMsPerMove": 7.6
+  },
+  {
+   "build": "before: list drawn under the editor",
+   "gl": "gpu",
+   "boxes": 72,
+   "view": "split",
+   "idleFps": 60,
+   "dragFps": 58.7,
+   "framesOver25ms": "4/176  2/178  6/174",
+   "idleJsMsPerSec": 76,
+   "dragJsMsPerSec": 528,
+   "extraJsMsPerMove": 7.7
+  },
+  {
+   "build": "final build",
+   "gl": "gpu",
+   "boxes": 156,
+   "view": "focus",
+   "idleFps": 60,
+   "dragFps": 60,
+   "framesOver25ms": "1/179  0/180  0/181",
+   "idleJsMsPerSec": 127,
+   "dragJsMsPerSec": 626,
+   "extraJsMsPerMove": 8.3
+  },
+  {
+   "build": "final build",
+   "gl": "gpu",
+   "boxes": 156,
+   "view": "split",
+   "idleFps": 60,
+   "dragFps": 60,
+   "framesOver25ms": "1/179  0/180  0/180",
+   "idleJsMsPerSec": 146,
+   "dragJsMsPerSec": 629,
+   "extraJsMsPerMove": 8
+  },
+  {
+   "build": "final build",
+   "gl": "gpu",
+   "boxes": 72,
+   "view": "focus",
+   "idleFps": 60,
+   "dragFps": 60,
+   "framesOver25ms": "0/180  0/180  0/180",
+   "idleJsMsPerSec": 49,
+   "dragJsMsPerSec": 471,
+   "extraJsMsPerMove": 7
+  },
+  {
+   "build": "final build",
+   "gl": "gpu",
+   "boxes": 72,
+   "view": "split",
+   "idleFps": 60,
+   "dragFps": 59.3,
+   "framesOver25ms": "0/180  7/173  2/178",
+   "idleJsMsPerSec": 71,
+   "dragJsMsPerSec": 476,
+   "extraJsMsPerMove": 6.8
+  },
+  {
+   "build": "final build",
+   "gl": "swiftshader",
+   "boxes": 156,
+   "view": "focus",
+   "idleFps": 52.7,
+   "dragFps": 8.2,
+   "framesOver25ms": "19/35  21/26  23/25",
+   "idleJsMsPerSec": 516,
+   "dragJsMsPerSec": 585,
+   "extraJsMsPerMove": 8
+  },
+  {
+   "build": "final build",
+   "gl": "swiftshader",
+   "boxes": 156,
+   "view": "split",
+   "idleFps": 7.5,
+   "dragFps": 10.6,
+   "framesOver25ms": "29/32  30/34  30/35",
+   "idleJsMsPerSec": 89,
+   "dragJsMsPerSec": 740,
+   "extraJsMsPerMove": 57.5
+  }
+ ]
+}
