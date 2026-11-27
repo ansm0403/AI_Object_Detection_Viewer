@@ -91,7 +91,15 @@ export function Header({
           supported desktop widths (≥ 1024px) it still fits one line, so nothing
           wraps there (Edge_F#5 Case 4). */}
       <div className="flex items-center flex-wrap gap-x-3 gap-y-1.5">
-        <span className="text-sm font-semibold text-zinc-100 tracking-tight">
+        {/* Hidden below 1280px on the fixed (lg) layout: with three mode buttons
+            and a four-digit box total the bar no longer fits one line there, and
+            its slot has a fixed height, so a wrapped line painted over the filter
+            bar (measured at 1024px: wraps; at 1040px: wraps once the reviewed
+            count has four digits). Of the things that could yield, only the
+            name frees enough room for the widest case — every box reviewed plus
+            the "Not saved" warning (42px to spare at 1024px). Below lg the bar
+            may wrap, so the name is shown again. The page title still carries it. */}
+        <span className="text-sm font-semibold text-zinc-100 tracking-tight lg:hidden xl:inline">
           AI Detection Viewer
         </span>
 
