@@ -64,6 +64,7 @@ import {
   IOU_THRESHOLD,
   cameraOfPredictionId,
   compareByDistance,
+  frameOfPredictionId,
   describeOtherViews,
   evaluateFrames,
   evaluateScenes,
@@ -746,12 +747,25 @@ export default function Index() {
   // frame changes, when evaluate mode is left, when the score slider moves past
   // it, or (F6) when another camera's photo is shown — otherwise an invisible
   // "selection" would linger.
+  //
+  // (F7.5) One exception, in the sample check: the box under judgment stays
+  // selected while ANOTHER CAMERA OF ITS OWN FRAME is on screen. Looking around
+  // through the other cameras is how a reviewer gets context, and before this
+  // the box was deselected by the first thumbnail click and did not come back
+  // (Edge_F#7.5 Case 5). Another frame still drops it.
   useEffect(() => {
     if (!selectedObjectId || !isPredictionId(selectedObjectId)) return;
+    if (
+      sampleCheckOn &&
+      frameOfPredictionId(selectedObjectId) === currentFrameId &&
+      cameraOfPredictionId(selectedObjectId) !== activeCamera
+    ) {
+      return;
+    }
     if (!photoEvaluation || !findResult(photoEvaluation, selectedObjectId)) {
       setSelectedObject(null);
     }
-  }, [selectedObjectId, photoEvaluation, setSelectedObject]);
+  }, [selectedObjectId, photoEvaluation, setSelectedObject, sampleCheckOn, currentFrameId, activeCamera]);
 
   const reviewProgress = useMemo(
     () => (reviewEnabled && frames ? summarizeProgress(frames, reviews) : null),
@@ -1124,6 +1138,20 @@ export default function Index() {
   // `useSampleCheckController` (pure functions of lib/sampling underneath); the
   // page only says where a box is opened and whether the check is on screen.
   const stopPlayback = useCallback(() => setIsPlaying(false), []);
+  // Opening a sampled box always ends on ITS photo. When the box is already the
+  // selection (the reviewer looked at another camera and clicks its row again)
+  // nothing about the selection changes, so the camera is put back explicitly.
+  // For a box in another scene the selection change does it (`useActiveCamera`).
+  const handleOpenSampleBox = useCallback(
+    (target: { scene: string; frameId: string; objectId: string }) => {
+      handleOpenHit(target);
+      const camera = cameraOfPredictionId(target.objectId);
+      if (camera !== null && target.scene === shownSceneName && pendingSceneName === null) {
+        setCamera(camera);
+      }
+    },
+    [handleOpenHit, shownSceneName, pendingSceneName, setCamera],
+  );
   const sampleCheck = useSampleCheckController({
     on: sampleCheckOn,
     setOn: setSampleChecking,
@@ -1137,8 +1165,13 @@ export default function Index() {
     selectedId: selectedObjectId,
     playing: isPlaying,
     stopPlayback,
-    openBox: handleOpenHit,
+    openBox: handleOpenSampleBox,
   });
+  // The photo the sampled box is in, and whether that photo is the one on screen.
+  const sampleBoxCamera = sampleCheck.current?.item.camera ?? null;
+  const handleShowSampleBox = useCallback(() => {
+    if (sampleBoxCamera !== null) setCamera(sampleBoxCamera);
+  }, [sampleBoxCamera, setCamera]);
   const enterSampleCheck = sampleCheck.enter;
   const handleEnterSampleCheck = useCallback(() => {
     setReportOpen(false); // from the report: the report gives way to the check
@@ -1595,9 +1628,17 @@ export default function Index() {
   // thumbnail also says how many labels the model missed in that photo.
   const showCameraStrip = cameraSlots > 1;
   const cameraThumbs: CameraThumb[] = cameraRow.map((view) => {
-    const box = selectedObjectId
-      ? view.detections2D.find((d) => d.id === selectedObjectId)
-      : undefined;
+    // (F7.5) In the sample check the "selected box" is a model box: it is in
+    // exactly one photo, and that thumbnail carries the marker — the way back
+    // after looking through another camera.
+    const sampled = sampleCheckOn ? sampleCheck.current?.item : undefined;
+    const box = sampled
+      ? sampled.camera === view.name && sampled.bbox
+        ? { bbox: sampled.bbox }
+        : undefined
+      : selectedObjectId
+        ? view.detections2D.find((d) => d.id === selectedObjectId)
+        : undefined;
     const photo =
       evaluating || exploringModel ? frameEvaluation?.byCamera.get(view.name) : undefined;
     // (F7) Explore with a model condition: how many of the results the search
@@ -1914,6 +1955,8 @@ export default function Index() {
             position={sampleCheck.current?.position ?? null}
             verdict={sampleCheck.current?.verdict ?? null}
             summary={sampleCheck.summary}
+            viewingCamera={activeCamera}
+            onShowBox={handleShowSampleBox}
             onVerdict={sampleCheck.judge}
             onClear={sampleCheck.clear}
             blocked={sampleCheck.blocked}

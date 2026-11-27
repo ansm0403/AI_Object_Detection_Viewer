@@ -27,6 +27,12 @@ type Props = {
   position: number | null;
   verdict: SampleVerdict | null;
   summary: SampleSummary | null;
+  /**
+   * The camera whose photo is on screen. When it is not the box's camera the
+   * panel says so and offers the way back — the box stays selected meanwhile.
+   */
+  viewingCamera?: string | null;
+  onShowBox?: () => void;
   onVerdict: (verdict: SampleVerdict) => void;
   onClear: () => void;
   /** Why a verdict cannot be given right now (e.g. the sequence is playing). */
@@ -67,6 +73,8 @@ export function SamplePanel({
   position,
   verdict,
   summary,
+  viewingCamera,
+  onShowBox,
   onVerdict,
   onClear,
   blocked,
@@ -74,6 +82,9 @@ export function SamplePanel({
   keys,
 }: Props) {
   const canJudge = status === 'ready' && item !== null && !blocked;
+  // Looking at the box's frame through another camera (for context).
+  const elsewhere =
+    item !== null && viewingCamera !== undefined && viewingCamera !== null && viewingCamera !== item.camera;
   return (
     <aside className={`flex flex-col h-full ${PANEL_CLASS}`}>
       <PanelHeader title="Sample check">
@@ -127,6 +138,18 @@ export function SamplePanel({
                 <p className="mt-0.5 text-[11px] text-zinc-400" aria-live="polite">
                   {blocked ? (
                     <span className="text-amber-300/90">{blocked}</span>
+                  ) : elsewhere ? (
+                    <span className="text-amber-300/90">
+                      Showing {cameraShortName(viewingCamera ?? '')} — the box is in the{' '}
+                      {cameraShortName(item.camera)} photo.{' '}
+                      <button
+                        type="button"
+                        onClick={onShowBox}
+                        className="rounded px-1 text-sky-200 ring-1 ring-inset ring-sky-400/40 hover:bg-sky-500/10"
+                      >
+                        Show the box
+                      </button>
+                    </span>
                   ) : verdict ? (
                     <>
                       Judged: <span className="text-zinc-200">{SAMPLE_VERDICT_NAME[verdict]}</span>

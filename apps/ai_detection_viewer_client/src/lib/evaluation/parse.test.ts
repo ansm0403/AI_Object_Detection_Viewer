@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cameraOfPredictionId, isPredictionId, parsePredictions, predictionId } from './parse';
+import {
+  cameraOfPredictionId,
+  frameOfPredictionId,
+  isPredictionId,
+  parsePredictions,
+  predictionId,
+} from './parse';
 
 const MODEL = { name: 'yolov8n', library: 'ultralytics 8.4.51', imageSize: 1280, minScore: 0.05 };
 /** A file in the F5 format: one camera for the whole file, one list per frame. */
@@ -252,6 +258,28 @@ describe('(F7.5) cameraOfPredictionId', () => {
     expect(cameraOfPredictionId('')).toBeNull();
     expect(cameraOfPredictionId(null)).toBeNull();
     expect(cameraOfPredictionId(undefined)).toBeNull();
+  });
+});
+
+describe('(F7.5) frameOfPredictionId', () => {
+  it('reads the frame out of a prediction id', () => {
+    expect(frameOfPredictionId(predictionId('abc', 'CAM_BACK_RIGHT', 12))).toBe('abc');
+  });
+
+  it('keeps a frame id that contains colons whole', () => {
+    expect(frameOfPredictionId(predictionId('scene:7:frame', 'CAM_BACK', 3))).toBe('scene:7:frame');
+  });
+
+  it('names the frame also for a single-camera frame (no camera name)', () => {
+    expect(frameOfPredictionId(predictionId('abc', '', 0))).toBe('abc');
+  });
+
+  it('is null for anything that is not a prediction id', () => {
+    expect(frameOfPredictionId('5999098c7e5e4a0f8d8f3f2b1c0d9e8f')).toBeNull();
+    expect(frameOfPredictionId('pred:abc')).toBeNull();
+    expect(frameOfPredictionId('')).toBeNull();
+    expect(frameOfPredictionId(null)).toBeNull();
+    expect(frameOfPredictionId(undefined)).toBeNull();
   });
 });
 

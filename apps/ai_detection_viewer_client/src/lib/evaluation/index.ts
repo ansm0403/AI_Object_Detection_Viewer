@@ -29,7 +29,13 @@ export {
   isRackMemberClass,
   toEvaluatedClass,
 } from './classes';
-export { cameraOfPredictionId, isPredictionId, parsePredictions, predictionId } from './parse';
+export {
+  cameraOfPredictionId,
+  frameOfPredictionId,
+  isPredictionId,
+  parsePredictions,
+  predictionId,
+} from './parse';
 export {
   isUnlabelledFalseAlarm,
   listUnlabelledFalseAlarms,

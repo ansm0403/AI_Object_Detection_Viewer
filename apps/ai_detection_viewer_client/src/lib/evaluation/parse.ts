@@ -22,11 +22,27 @@ export function isPredictionId(id: string | null | undefined): boolean {
 }
 
 /**
- * (F7.5) The camera a prediction id names, or `null` when `id` is not a
- * prediction id of that shape. A model box belongs to exactly one photo, so
- * selecting it says which camera to show (`useActiveCamera`'s `preferred`).
- * The index is the last `:` field and the camera the one before it, so a frame
- * id may itself contain colons.
+ * (F7.5) A prediction id names the one photo its box is in: a frame and a
+ * camera (`pred:<frameId>:<camera>:<index>`). A model box belongs to exactly
+ * one photo, so selecting it says which camera to show (`useActiveCamera`'s
+ * `preferred`), and the sample check uses the frame to tell "still looking at
+ * this box's frame, through another camera" from "moved on to another frame".
+ * The index is the last `:` field and the camera the one before it.
+ *
+ * The frame a prediction id names, or `null` when `id` is not one.
+ */
+export function frameOfPredictionId(id: string | null | undefined): string | null {
+  if (typeof id !== 'string' || !id.startsWith(PREDICTION_ID_PREFIX)) return null;
+  const parts = id.slice(PREDICTION_ID_PREFIX.length).split(':');
+  if (parts.length < 3) return null;
+  // Everything before the last two fields (camera, index): a frame id may contain colons.
+  const frame = parts.slice(0, -2).join(':');
+  return frame === '' ? null : frame;
+}
+
+/**
+ * (F7.5) The camera a prediction id names — see `frameOfPredictionId` above for
+ * the frame it names. `null` when `id` is not a prediction id of that shape.
  */
 export function cameraOfPredictionId(id: string | null | undefined): string | null {
   if (typeof id !== 'string' || !id.startsWith(PREDICTION_ID_PREFIX)) return null;
