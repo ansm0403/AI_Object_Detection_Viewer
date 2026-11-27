@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>F8 시안 — 위에서 본 화면에서 3D 박스 수정</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #09090b; color: #d4d4d8; font: 14px/1.6 system-ui, "Malgun Gothic", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: #18181b; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  h1 { margin: 0 0 8px; font-size: 15px; color: #f4f4f5; }
+  h1 small { font-weight: 400; color: #71717a; margin-left: 8px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; }
+  nav button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid #3f3f46; background: #27272a; color: #d4d4d8; cursor: pointer; }
+  nav button[aria-pressed="true"] { background: rgba(14,165,233,.2); border-color: rgba(56,189,248,.5); color: #bae6fd; }
+  main { padding: 14px 16px 40px; }
+  .note { max-width: 1536px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+  .note h2 { margin: 0 0 4px; font-size: 14px; color: #f4f4f5; }
+  .note p { margin: 4px 0; }
+  .note b { color: #f4f4f5; }
+  .tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; margin-right: 6px; }
+  .real { background: rgba(52,211,153,.15); color: #6ee7b7; }
+  .draw { background: rgba(251,191,36,.15); color: #fcd34d; }
+  .ask { background: rgba(56,189,248,.15); color: #7dd3fc; }
+  .shot { overflow-x: auto; }
+  .shot img { display: block; border: 1px solid #27272a; }
+  .hint { color: #71717a; font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>F8 시안 — 위에서 본 화면에서 3D 박스 수정 <small>2026-11-27 15:30 KST · 실제 앱(배포용 빌드, 3100번) 위에 그린 그림 · scene-0916의 9번째 프레임, 차 527702</small></h1>
+  <nav id="nav"></nav>
+</header>
+<main>
+  <div class="note" id="note"></div>
+  <div id="view"></div>
+  <p class="hint">← → 또는 숫자키로 넘긴다. 그림은 실제 크기(1:1)다. <span class="tag real">실제</span>는 앱이 지금 그리는 것, <span class="tag draw">그림</span>은 제안하는 UI를 화면 위에 그려 넣은 것이다(아직 코드가 아니다). <span class="tag ask">정할 것</span>은 먼저 골라 줘야 하는 것이다.</p>
+</main>
+<script>
+const DIR = '2026-11-27_mockups/';
+const SCREENS = [
+  {
+    key: '지금',
+    title: '1. 지금: 반려는 할 수 있지만 고칠 수는 없다',
+    img: 'm1_now_rejected.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag real">실제</span>아무것도 그려 넣지 않은 지금 화면이다. 차 <b>527702</b>를 골라 반려(R)하고 사유 두 개(크기, 위치)를 붙였다.</p>
+      <p><b>무엇을 보면 되는지:</b> 오른쪽 아래 Review 패널. "Rejected"와 사유가 남는 것이 끝이다. <b>이 박스를 맞게 고칠 방법이 없다.</b> F8이 채우는 자리다.</p>
+      <p>이 박스는 nuScenes의 진짜 라벨이고 실제로 틀린 박스는 아니다. 그림을 위해 고른 것이다(LiDAR 점이 153개로 많고, 차에서 14m, 오른쪽 앞 카메라에 잘 보인다).</p>`,
+  },
+  {
+    key: '들어가는 길',
+    title: '2. 편집으로 들어가는 길: "Edit box" 버튼과 E 키',
+    img: 'm2_entry.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag draw">그림</span>Review 패널 맨 아래 줄의 <b>Edit box [E]</b> 버튼 하나만 그려 넣었다.</p>
+      <p><b>무엇을 보면 되는지:</b> 맨 위 줄과 필터 줄에는 아무것도 더하지 않았다(1024px에서 맨 위 줄에 남는 자리가 없다). 버튼은 <b>판정을 내릴 수 있는 박스라면 어느 박스에나</b> 나온다. 반려한 박스만이 아니다. 반려해 둔 박스가 없어도 바로 써 볼 수 있다.</p>
+      <p>판정 버튼(Approve / Rejected / Unsure)과 사유는 그대로다. <b>고쳐도 판정은 바뀌지 않는다</b>: 판정은 "nuScenes의 라벨이 맞는가"이고, 수정은 "그래서 내가 이렇게 고쳤다"이다.</p>`,
+  },
+  {
+    key: '편집 화면 (추천 A)',
+    title: '3. 편집 화면, 추천안 A: 목록 자리가 넓어져 위에서 본 화면이 되고, 3D 화면은 옆에 남는다',
+    img: 'm3_A_edit_start.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag real">실제</span>3D 화면, 카메라 사진, 썸네일, 타임라인. 3D 화면은 폭만 832 → 552px로 줄었다(같은 캔버스다). 위에서 본 화면의 <b>박스와 LiDAR 점도 실제 데이터</b>를 앱의 파서로 읽어 그린 것이다. <span class="tag draw">그림</span>필터 줄 자리의 편집 줄, 위에서 본 화면의 손잡이, 오른쪽 아래의 Edit box 패널.</p>
+      <p><b>쉬운 말로:</b> 위에서 본 화면(BEV, bird's-eye view)은 하늘에서 내려다본 지도다. 3D 박스는 여기서 <b>기울어진 사각형</b>으로 보인다. 하늘색 굵은 변이 박스의 <b>앞</b>이다. 하늘색 점은 LiDAR가 찍은 점이고, <b>노란 점은 지금 박스 안에 들어온 점</b>이다. 점이 박스에 딱 들어차 있으면 박스가 맞는 것이다.</p>
+      <p><b>무엇을 보면 되는지:</b> ① 흰 네모 8개(모서리 4, 변 4)로 크기를, 박스 안을 끌어 위치를, 앞쪽에 달린 <b>동그란 손잡이</b>로 방향을 고친다. ② 높이는 오른쪽 아래 패널의 숫자 칸으로. ③ 편집 줄에 Undo / Redo / Revert to label / Done. ④ 목록은 편집하는 동안 보이지 않는다(박스 하나를 고치는 동안에는 쓰지 않는다).</p>
+      <p><span class="tag ask">정할 것</span>배치. <b>(2026-11-27 갱신)</b> 사용자의 제안으로 추천이 "A + B"가 됐다: 편집에 들어가면 8번 그림(집중 보기)이고, 버튼 <b>V</b>를 누르면 이 그림(함께 보기)이 된다. 두 보기를 오가는 것과 나타나는 움직임은 <a href="motion.html" style="color:#7dd3fc">움직임 데모</a>에서 눌러 볼 수 있다.</p>`,
+  },
+  {
+    key: 'A: 고친 뒤',
+    title: '4. 추천안 A: 박스를 옮기고, 늘리고, 돌린 뒤',
+    img: 'm4_A_edit_changed.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag draw">그림</span>위에서 본 화면의 박스를 왼쪽 위로 0.54m 옮기고, 길이를 0.35m 늘리고, 6° 돌린 모습을 그렸다.</p>
+      <p><b>무엇을 보면 되는지:</b> ① <b>회색 점선 사각형이 nuScenes의 원래 라벨</b>이다. 고친 박스와 나란히 보여서 얼마나 달라졌는지 바로 보인다. 원본은 지워지지 않는다. ② 패널의 바뀐 숫자 칸(Length, Heading)이 노란 테두리다. ③ 그 아래 한 줄 <b>"Changed from the label: moved 0.54 m · length +0.35 m · turned 6.0°"</b>. ④ 편집 줄의 Undo와 Revert to label이 켜졌다. ⑤ 맨 아래 "The verdict stays Rejected…": 판정은 그대로다.</p>
+      <p><b>이 그림이 보여 주지 못하는 것:</b> 실제로는 박스를 끄는 동안 <b>가운데 3D 화면의 박스와 오른쪽 위 사진의 박스(카메라 6대 모두)가 함께 움직인다.</b> 이 그림에서는 그 둘이 원래 자리 그대로다(그려 넣은 것은 위에서 본 화면뿐이다). 길이 4.27 → 4.62m, 방향 171.5 → 177.5°는 실제 값에 그림의 변화를 더한 것이고, "In view 31 pts"는 예시 값이다(고치기 전의 28개는 실제로 센 값).</p>`,
+  },
+  {
+    key: 'A: 1440×900',
+    title: '5. 추천안 A를 1440×900에서',
+    img: 'm6_A_1440x900.jpg', w: 1440, h: 900,
+    html: `<p><b>무엇을 보면 되는지:</b> 위에서 본 화면과 3D 화면이 504×708px씩이다. 패널은 432px 높이라 숫자 칸 아래가 넉넉히 남는다.</p>`,
+  },
+  {
+    key: 'A: 1280×720',
+    title: '6. 추천안 A를 1280×720에서',
+    img: 'm6b_A_1280x720.jpg', w: 1280, h: 720,
+    html: `<p><b>무엇을 보면 되는지:</b> 두 화면이 444×528px씩이다. 편집 줄의 안내 문장("Saved as an edit on top of…")은 1400px 아래에서 숨긴다. 버튼 네 개는 그대로 한 줄이다.</p>`,
+  },
+  {
+    key: 'A: 1024×768',
+    title: '7. 추천안 A를 가장 좁은 폭(1024×768)에서',
+    img: 'm5_A_1024x768.jpg', w: 1024, h: 768,
+    html: `<p><b>무엇을 보면 되는지:</b> 두 화면이 316×576px씩이다. 박스 주변 12m쯤을 보여 주면 4.6m짜리 차가 화면에서 약 120px라 손잡이를 잡을 수 있다. 페이지 스크롤은 없다.</p>
+      <p><b>이 그림에 보이는 문제 두 가지:</b></p>
+      <p>① 맨 위 줄에서 "Frame 9/41 · Reviewed · Export"가 아래 줄 위에 겹쳐 있다. <b>이것은 F8이 만든 것이 아니다.</b> 지금 <code>main</code>에서도 창 폭이 정확히 1024px이면 검수 모드에서 이렇게 된다(1060px부터는 괜찮다. 이번에 재다가 찾았다). 고칠지는 따로 묻는다.</p>
+      <p>② 위에서 본 화면 왼쪽 아래의 안내와 오른쪽 아래의 눈금("2 m")이 겹친다. 구현에서는 좁은 폭에서 안내를 한 줄로 줄이고 눈금을 위로 올린다.</p>`,
+  },
+  {
+    key: '대안 B',
+    title: '8. 대안 B: 위에서 본 화면이 목록과 3D 화면을 모두 덮는다 (F7.5의 보고서 창이 쓰는 자리)',
+    img: 'm7_B_over_list_and_3d.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag draw">그림</span>이미 있는 "덮는 자리"(평가 보고서 창이 쓰는 칸)에 위에서 본 화면을 넣은 모습이다. 1112×508px로 가장 넓다.</p>
+      <p><b>무엇을 보면 되는지:</b> <b>3D 화면이 보이지 않는다.</b> 그래서 범위 5번("고치는 동안 3D 화면의 박스가 따라 바뀐다")을 편집 중에는 볼 수 없고, 닫아야 확인할 수 있다. "3D 화면이 주 화면"이라는 규칙(#5)과도 가장 멀다. 넓은 것은 장점이지만, 박스 하나를 고치는 데 이만큼의 넓이가 필요하지는 않다(3번 그림의 552px에서도 손잡이를 잡는 데 문제가 없다).</p>
+      <p>만드는 일은 가장 적다(자리가 이미 있다).</p>
+      <p><b>(2026-11-27 갱신) "A + B"에서는 이 그림이 편집의 처음 상태(집중 보기)다.</b> 편집 줄에 "3D 화면 함께 보기 [V]" 버튼이 하나 더 생기고(이 그림에는 없다), 누르면 3번 그림처럼 3D 화면이 옆에 나온다. 사진과 썸네일은 이 보기에서도 보이므로, 끄는 동안 사진 위의 박스가 따라 움직이는 것은 여기서도 보인다.</p>`,
+  },
+  {
+    key: '대안 C',
+    title: '9. 대안 C: 화면 틀을 바꾸지 않고, 목록 칸(272px)에만 넣는다',
+    img: 'm8_C_list_column_only.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag draw">그림</span>칸의 폭을 그대로 두고 목록 자리에만 위에서 본 화면을 넣은 모습이다.</p>
+      <p><b>무엇을 보면 되는지:</b> 3D 화면은 지금 크기(832px) 그대로다. 대신 <b>위에서 본 화면이 272px(1280px 아래에서는 240px)</b>이다. 박스 주변 11m만 보이고, 위쪽 이름표 둘("TOP VIEW · LIDAR POINTS"와 "front of the car")이 서로 닿는다. 긴 버스(12m)는 화면에 다 들어오지 않는다. 조작하는 화면이 가장 작은 칸이 된다.</p>`,
+  },
+  {
+    key: '끝낸 뒤',
+    title: '10. 편집을 끝낸 뒤(Done): 검수 화면으로 돌아와 "수정됨"이 표시된다',
+    img: 'm9_after_done.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag draw">그림</span>네 군데에 "수정됨" 표시를 그려 넣었다.</p>
+      <p><b>무엇을 보면 되는지:</b> ① 목록의 그 줄에 <b>연필 표시</b>. ② 3D 화면 이름표가 <b>"LIDAR · MEASURED 3D · 1 BOX EDITED"</b>: 화면의 박스가 전부 nuScenes의 라벨은 아니라는 것을 숨기지 않는다. ③ 맨 위 줄에 <b>"1 edited"</b>(1280px 아래에서는 숨긴다). ④ 패널 맨 아래 줄의 버튼이 <b>"Edited · edit [E]"</b>로 바뀐다. 무엇이 달라졌는지("moved 0.54 m…")와 Revert 버튼은 패널을 스크롤하면 나오는 Selected 칸에 있다(이 창 높이에서는 패널이 232px라 가려진다).</p>
+      <p><b>표현:</b> 화면 어디에도 "정답"이나 "correct"라고 쓰지 않는다. 고친 박스는 "edited", 원본은 "label"(nuScenes의 라벨)이다.</p>
+      <p>이 그림에서도 3D 화면과 사진의 박스는 원래 자리다(실제로는 고친 자리에 그려진다).</p>`,
+  },
+  {
+    key: '후보: 연습 모드',
+    title: '11. 후보 ③: 연습 모드에서 고친 결과가 진짜 라벨에 얼마나 가까워졌는지 (1440×900)',
+    img: 'm10_practice_closeness.jpg', w: 1440, h: 900,
+    html: `<p><span class="tag real">실제</span>연습 모드를 켜고 "Reveal answers"를 누른 지금 화면이다. 이 프레임에 심어 둔 오류 4개(93d56d position 등)가 나온다. <span class="tag draw">그림</span>그 아래의 <b>"YOUR EDITS · DISTANCE TO THE REAL LABEL"</b> 칸과 맨 아래 줄의 "Edited" 버튼.</p>
+      <p><b>쉬운 말로:</b> 연습 모드는 진짜 라벨 몇 개를 일부러 틀리게 바꿔 놓은 것이다(F4). 바꾸기 전의 진짜 라벨을 앱이 알고 있으므로, 틀린 박스를 고친 뒤 <b>"심었을 때는 중심이 1.31m 벗어나 있었는데, 고친 뒤에는 0.12m"</b>처럼 숫자로 채점할 수 있다. 숫자는 예시다.</p>
+      <p><b>무엇을 보면 되는지:</b> 이 칸은 <b>"Reveal answers"를 누른 뒤에만</b> 나온다. 고치는 도중에 보이면 답을 알려 주는 셈이 된다. 지금 창 높이에서는 칸의 아래 두 줄이 스크롤해야 보인다.</p>
+      <p><span class="tag ask">정할 것</span>넣을지. 추천은 <b>넣는다</b>: 실제로 반려해 둔 박스가 없어도 "틀린 박스를 고쳐 본다"를 처음부터 끝까지 해 볼 수 있는 길이고, 편집이 제대로 되는지를 숫자로 보여 줄 수 있다. <b>(2026-11-27: 넣기로 정해졌다.)</b></p>`,
+  },
+  {
+    key: '맨 위 줄: 지금',
+    title: '12. F8과 무관한 문제: 1024px에서 검수 모드의 맨 위 줄 (지금의 main, 위쪽 132px만 찍음)',
+    img: 'h1_header_now_1024.jpg', w: 1024, h: 132,
+    html: `<p><span class="tag real">실제</span>지금 <code>main</code>의 화면이다. 그려 넣은 것이 없다.</p>
+      <p><b>무엇을 보면 되는지:</b> "Frame 1/41 · Reviewed 1 / 2424"와 Export 버튼이 둘째 줄로 내려가 <b>DISTANCE 슬라이더와 CLASSES 글자 위에 겹쳐 있다.</b> 맨 위 줄의 자리는 44px로 고정돼 있어서, 접힌 줄이 아래 줄 위에 그려진다.</p>
+      <p>1040px에서는 한 줄이지만 남는 폭이 18px뿐이라, 검수한 수가 네 자리("2424 / 2424")가 되면 다시 접힌다.</p>`,
+  },
+  {
+    key: '맨 위 줄: 고친 뒤',
+    title: '13. 고치는 방법(추천): 1280px 아래에서 앱 이름을 숨긴다',
+    img: 'h2_header_fix_1024.jpg', w: 1024, h: 132,
+    html: `<p><span class="tag real">실제</span>실행 중인 화면에서 앱 이름("AI Detection Viewer")만 숨기고 찍었다(소스는 아직 바꾸지 않았다).</p>
+      <p><b>무엇을 보면 되는지:</b> 한 줄이 됐다. 남는 폭이 141px다. 1280px부터는 지금과 똑같이 앱 이름이 보인다.</p>
+      <p><span class="tag ask">정할 것</span>이 방법으로 갈지. 다른 방법(진행 막대를 숨기거나 절반으로)은 보통 때는 되지만 다음 그림의 경우에 다시 접힌다.</p>`,
+  },
+  {
+    key: '맨 위 줄: 가장 넓은 경우',
+    title: '14. 같은 방법으로, 가장 넓은 경우: 2424개를 모두 검수했고 저장이 안 될 때',
+    img: 'h3_header_fix_worst_1024.jpg', w: 1024, h: 132,
+    html: `<p><span class="tag draw">그림</span>화면의 숫자를 "2424"로 바꾸고 "NOT SAVED" 경고를 그려 넣어 <b>이 줄이 가장 길어지는 경우</b>를 만들었다. 앱 이름은 숨긴 상태다.</p>
+      <p><b>무엇을 보면 되는지:</b> 여전히 한 줄이다(남는 폭 42px). "NOT SAVED"는 브라우저가 저장을 거부할 때만 나오는 드문 경고지만, 나올 때 화면이 깨지면 안 된다. 진행 막대를 숨기는 방법은 이 경우에 다시 접혔다.</p>`,
+  },
+];
+let at = 0;
+const nav = document.getElementById('nav');
+const note = document.getElementById('note');
+const view = document.getElementById('view');
+function show(i) {
+  at = (i + SCREENS.length) % SCREENS.length;
+  const s = SCREENS[at];
+  nav.innerHTML = SCREENS.map((x, k) => `<button aria-pressed="${k === at}" data-k="${k}">${k + 1}. ${x.key}</button>`).join('');
+  note.innerHTML = `<h2>${s.title}</h2>${s.html}`;
+  view.innerHTML = `<div class="shot"><img src="${DIR}${s.img}" width="${s.w}" height="${s.h}" style="width:${s.w}px;height:${s.h}px" alt=""></div>`;
+  try { history.replaceState(null, '', `#${at + 1}`); } catch (e) { /* 파일로 열었을 때 무시 */ }
+}
+nav.addEventListener('click', (e) => { const k = e.target?.dataset?.k; if (k !== undefined) show(Number(k)); });
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') show(at + 1);
+  else if (e.key === 'ArrowLeft') show(at - 1);
+  else if (/^[1-9]$/.test(e.key) && Number(e.key) <= SCREENS.length) show(Number(e.key) - 1);
+});
+show(Math.max(0, (parseInt(location.hash.slice(1), 10) || 1) - 1));
+</script>
+</body>
+</html>

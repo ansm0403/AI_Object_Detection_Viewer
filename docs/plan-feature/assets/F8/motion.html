@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>F8 움직임 데모 — 편집 화면이 나타나는 방법</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #09090b; color: #d4d4d8; font: 14px/1.6 system-ui, "Malgun Gothic", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: #18181b; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  h1 { margin: 0 0 8px; font-size: 15px; color: #f4f4f5; }
+  h1 small { font-weight: 400; color: #71717a; margin-left: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+  .group { display: inline-flex; gap: 6px; align-items: center; }
+  .group > span { color: #71717a; font-size: 12px; }
+  button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid #3f3f46; background: #27272a; color: #d4d4d8; cursor: pointer; }
+  button[aria-pressed="true"] { background: rgba(14,165,233,.2); border-color: rgba(56,189,248,.5); color: #bae6fd; }
+  button.go { border-color: rgba(251,191,36,.5); color: #fde68a; }
+  kbd { font: 600 11px ui-monospace, monospace; border: 1px solid #52525b; border-radius: 3px; padding: 0 4px; color: #a1a1aa; }
+  main { padding: 14px 16px 40px; }
+  .note { max-width: 1536px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+  .note p { margin: 4px 0; }
+  .note b { color: #f4f4f5; }
+  .wrap { overflow-x: auto; }
+  #stage { position: relative; width: 1536px; height: 700px; overflow: hidden; border: 1px solid #27272a; background: #000; }
+  #stage > div { position: absolute; background-repeat: no-repeat; background-size: 1536px 700px; }
+  #base, #chrome { inset: 0; }
+  #state { color: #a1a1aa; font-size: 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>F8 움직임 데모 — 편집 화면이 나타나는 방법 <small>2026-11-27 · 시안 그림 세 장(m2, m7, m4)을 겹쳐 움직임만 흉내 낸 것이다. 실제 앱이 아니다</small></h1>
+  <div class="row">
+    <span class="group"><button class="go" id="enter">Edit box <kbd>E</kbd></button><button id="done">Done <kbd>Esc</kbd></button><button id="toggle">3D 화면 함께 보기 <kbd>V</kbd></button></span>
+    <span class="group"><span>나타나는 방법</span>
+      <button data-motion="none">① 바로</button>
+      <button data-motion="subtle">② 짧게 (0.16초)</button>
+      <button data-motion="button">③ 누른 버튼에서 커짐 (0.32초)</button>
+      <button data-motion="row">④ 목록의 그 줄에서 커짐 (0.32초)</button>
+    </span>
+    <span class="group"><span>속도</span><button data-speed="1">실제</button><button data-speed="4">4배 느리게</button></span>
+  </div>
+</header>
+<main>
+  <div class="note">
+    <p><b>해 볼 것:</b> <kbd>E</kbd>를 눌러 편집 화면을 열고, <kbd>V</kbd>로 3D 화면을 함께 보다가, <kbd>Esc</kbd>로 닫는다. "나타나는 방법"을 바꿔 가며 여러 번 눌러 본다. <b>박스 열 개를 연달아 고친다고 생각하고</b> E → Esc를 열 번 반복해 보면 어느 것이 편한지 드러난다.</p>
+    <p><b>집중 보기</b>(처음 상태): 위에서 본 화면이 목록과 3D 화면의 자리를 모두 쓴다(1112×508px). 사진과 썸네일은 그대로 보인다. <b>함께 보기</b>(<kbd>V</kbd>): 반씩 나눠 3D 화면이 옆에 나온다(552×508px씩).</p>
+    <p><b>V로 바꿀 때는 움직임을 넣지 않았다.</b> 3D 화면의 폭이 바뀌는 동안 매 순간 3D 그림을 새 크기로 다시 만들어야 해서 끊겨 보인다.</p>
+  </div>
+  <div class="wrap">
+    <div id="stage">
+      <div id="base" style="background-image:url('2026-11-27_mockups/m2_entry.jpg')"></div>
+      <div id="chrome" hidden></div>
+      <div id="cover" hidden style="left:8px;top:92px;width:1112px;height:508px;background-image:url('2026-11-27_mockups/m2_entry.jpg');background-position:-8px -92px"></div>
+      <div id="bev" hidden style="left:8px;top:92px;height:508px;background-position:-8px -92px;border-radius:8px"></div>
+    </div>
+  </div>
+  <p id="state"></p>
+</main>
+<script>
+const DIR = '2026-11-27_mockups/';
+const IMG = { focus: DIR + 'm7_B_over_list_and_3d.jpg', split: DIR + 'm4_A_edit_changed.jpg' };
+// where the growth starts, relative to the top-left corner of the top view (left 8, top 92)
+const ORIGIN = { button: '1238px 491px', row: '136px 365px', subtle: '50% 50%' };
+const $ = (id) => document.getElementById(id);
+let editing = false;
+let view = 'focus';
+let motion = 'subtle';
+let speed = 1;
+[IMG.focus, IMG.split].forEach((src) => { new Image().src = src; });
+
+function paint() {
+  $('chrome').hidden = !editing;
+  $('cover').hidden = !editing;
+  $('bev').hidden = !editing;
+  if (editing) {
+    $('chrome').style.backgroundImage = `url('${IMG[view]}')`;
+    $('bev').style.backgroundImage = `url('${IMG[view]}')`;
+    $('bev').style.width = view === 'focus' ? '1112px' : '552px';
+    $('cover').style.width = $('bev').style.width;
+  }
+  for (const b of document.querySelectorAll('[data-motion]')) b.setAttribute('aria-pressed', String(b.dataset.motion === motion));
+  for (const b of document.querySelectorAll('[data-speed]')) b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === speed));
+  $('toggle').setAttribute('aria-pressed', String(editing && view === 'split'));
+  $('toggle').disabled = !editing;
+  $('done').disabled = !editing;
+  $('enter').disabled = editing;
+  $('state').textContent = editing
+    ? `편집 중 · ${view === 'focus' ? '집중 보기 (위에서 본 화면 1112×508)' : '함께 보기 (위에서 본 화면 552×508 + 3D 화면 552×508)'}`
+    : '검수 화면 (편집 화면이 없는 평소 상태)';
+}
+
+function enter() {
+  if (editing) return;
+  editing = true;
+  paint();
+  const el = $('bev');
+  if (motion === 'none') return;
+  const big = motion !== 'subtle';
+  el.style.transformOrigin = ORIGIN[motion];
+  el.animate(
+    big
+      ? [{ transform: 'scale(0.02)', opacity: 0.4 }, { transform: 'scale(1)', opacity: 1 }]
+      : [{ transform: 'scale(0.97)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }],
+    { duration: (big ? 320 : 160) * speed, easing: 'cubic-bezier(.2,.8,.2,1)' },
+  );
+}
+function done() { editing = false; paint(); }
+function toggle() { if (!editing) return; view = view === 'focus' ? 'split' : 'focus'; paint(); }
+
+$('enter').onclick = enter;
+$('done').onclick = done;
+$('toggle').onclick = toggle;
+for (const b of document.querySelectorAll('[data-motion]')) b.onclick = () => { motion = b.dataset.motion; paint(); };
+for (const b of document.querySelectorAll('[data-speed]')) b.onclick = () => { speed = Number(b.dataset.speed); paint(); };
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'e' || e.key === 'E' || e.code === 'KeyE') enter();
+  else if (e.key === 'Escape') done();
+  else if (e.key === 'v' || e.key === 'V' || e.code === 'KeyV') toggle();
+});
+paint();
+</script>
+</body>
+</html>

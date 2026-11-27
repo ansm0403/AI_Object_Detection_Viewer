@@ -40,7 +40,7 @@ Post-MVP 기능을 **구현하기 전에** 쓰는 설계 문서 모음이다. �
 | F6.5 | three.js 상시 비용 (기능이 아니라 성능 수정) | 없음 (원인을 찾기 전에는 설계할 것이 없어 쓰지 않았다) | **완료 (2026-11-26).** 전후 숫자는 체크리스트 F6.5 항목, 원인과 측정은 `docs/edgecases/Edge_F#6.5.md`. 전후 캡처는 [assets/F6.5/](assets/F6.5/README.md) |
 | F7 | 장면 탐색 | [F7_scene_exploration.md](F7_scene_exploration.md) | **구현 완료 (2026-11-27).** 결과와 계획 대비 달라진 점은 체크리스트 F7 항목, 경계 사례는 `docs/edgecases/Edge_F#7.md`. 시안과 단계별·경계 캡처는 [assets/F7/](assets/F7/README.md) |
 | F7.5 | 평가 결과를 믿을 수 있게 (F7 설계 문서 13.1의 "묶음 가") | [F7.5_trustworthy_evaluation.md](F7.5_trustworthy_evaluation.md) | **구현 완료 (2026-11-27).** 결과와 계획 대비 달라진 점은 체크리스트 F7.5 항목, 경계 사례는 `docs/edgecases/Edge_F#7.5.md`. 시안과 단계별·엣지 캡처는 [assets/F7.5/](assets/F7.5/README.md) |
-| F8 (도전) | 위에서 본 화면에서 3D 박스 수정 | 아직 없음 | |
+| F8 (도전) | 위에서 본 화면에서 3D 박스 수정 | [F8_bev_box_edit.md](F8_bev_box_edit.md) | **초안 (승인 대기, 2026-11-27).** 시안은 [assets/F8/](assets/F8/README.md) |
 
 **F4 이후 문서를 지금 쓰지 않는 이유:** 뒤 기능의 설계는 앞 기능의 결과에 달려 있다.
 예를 들어 F4의 검수 버튼이 어디에 놓일지는 F3의 화면 배치가 확정돼야 정할 수 있다. 미리 쓰면
