@@ -32,11 +32,18 @@ type State = {
  * before switching.
  *
  * `enabled = false` pins the default camera (a mode that only has data for it).
+ *
+ * (F7.5) `preferred`: the camera the selection ITSELF names, if it does. A
+ * model box belongs to exactly one photo, and its id says which; selecting it
+ * from anywhere (the sample list, a box in another scene) must show that
+ * photo. An object, by contrast, can be in several photos — `pickCamera`
+ * decides. Still following from the one selection (Rule #2).
  */
 export function useActiveCamera(
   frame: Frame | null,
   selectedObjectId: string | null,
   enabled = true,
+  preferred: string | null = null,
 ): {
   /** The camera to show: always a camera of `frame`; null without a frame. */
   activeCamera: string | null;
@@ -51,7 +58,10 @@ export function useActiveCamera(
     const key = `${frame.id}|${selectedObjectId ?? ''}`;
     if (state.key !== key) {
       const current = hasCamera(frame, camera) ? camera : defaultCameraName(frame);
-      camera = pickCamera(frame, selectedObjectId, current);
+      camera =
+        preferred !== null && hasCamera(frame, preferred)
+          ? preferred
+          : pickCamera(frame, selectedObjectId, current);
       setState({ camera, key });
     }
   }

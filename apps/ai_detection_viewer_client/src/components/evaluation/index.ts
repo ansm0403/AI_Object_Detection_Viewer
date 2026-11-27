@@ -1,6 +1,8 @@
 export { ModeSwitch, type WorkMode } from './ModeSwitch';
 export { EvaluationHeadline } from './EvaluationHeadline';
 export { EvaluationPanel } from './EvaluationPanel';
+export { IouChoice } from './IouChoice';
+export { EvaluationReport, type UnlabelledFacts } from './EvaluationReport';
 export { SceneScores } from './SceneScores';
 export { OutcomeIcon } from './icons';
 export { ResultList } from './ResultList';

@@ -39,6 +39,8 @@ import {
   BoxColorLegend,
   EvaluationHeadline,
   EvaluationPanel,
+  EvaluationReport,
+  IouChoice,
   ModeSwitch,
   OverlayLegend,
   ResultList,
@@ -50,9 +52,19 @@ import {
   type WorkMode,
 } from '@/components/evaluation';
 import {
+  SampleBar,
+  SampleList,
+  SamplePanel,
+  useSampleCheckController,
+} from '@/components/sample-check';
+import { toSampleVerdict } from '@/lib/sampling';
+import {
   BICYCLE_RACK_CLASS,
   DEFAULT_MIN_SCORE,
   IOU_THRESHOLD,
+  cameraOfPredictionId,
+  compareByDistance,
+  frameOfPredictionId,
   describeOtherViews,
   evaluateFrames,
   evaluateScenes,
@@ -62,6 +74,7 @@ import {
   outcomeCountLabel,
   recallOf,
   selectionIdOf,
+  summarizeDrives,
   visibilityText,
   type EvalKind,
   type EvaluationRules,
@@ -267,8 +280,27 @@ export default function Index() {
   // ones (a result row that is "open" simply IS the selected frame).
   const [conditions, setConditions] = useState<SearchCondition[]>([]);
   const [hitOrder, setHitOrder] = useState<HitOrder>('scene');
-  // A frame to open once its scene is on screen (a search result in another scene).
-  const [pendingFrame, setPendingFrame] = useState<{ scene: string; frameId: string } | null>(null);
+  // A frame to open once its scene is on screen (a search result in another
+  // scene). (F7.5) `objectId`: what to select in that frame once it is open —
+  // a sampled model box in another scene.
+  const [pendingFrame, setPendingFrame] = useState<{
+    scene: string;
+    frameId: string;
+    objectId?: string;
+  } | null>(null);
+  // (F7.5) The overlap a model box needs to count as having found a label: this
+  // tool's default (0.3) or the usual benchmark value (0.5). A VIEW setting of
+  // evaluate mode, like the mode itself: not stored, reset by Reset and by a
+  // dataset switch. Explore and the sample check do not read it (fixed rules).
+  const [iouThreshold, setIouThreshold] = useState(IOU_THRESHOLD);
+  // (F7.5) The sample check: judging a random sample of the false alarms that
+  // have no label nearby. A state of evaluate mode (not a fourth mode); a VIEW
+  // setting like the mode itself. Which box is being judged is NOT stored — it
+  // is `selectedObjectId` (Rule #2).
+  const [sampleChecking, setSampleChecking] = useState(false);
+  // (F7.5) The evaluation report is open (laid over the list and the 3D view).
+  // A VIEW flag of evaluate mode.
+  const [reportOpen, setReportOpen] = useState(false);
 
   // (F2-C) Whether the active dataset tracks objects across frames. nuScenes ids
   // are `instance` tokens — stable for the SAME object across frames — so the
@@ -414,13 +446,22 @@ export default function Index() {
   // (F7) Explore mode is on screen. It searches the dataset's REAL boxes in
   // every scene, so — like evaluate — it is not available on a practice set.
   const exploring = mode === 'explore' && reviewEnabled && plantedErrors === null;
+  // (F7.5) The sample check is on screen.
+  const sampleCheckOn = evaluating && sampleChecking;
+  const reportOn = evaluating && reportOpen && !sampleChecking;
 
   // (F6) Which camera the camera cell shows. A VIEW setting (not a selection,
   // Rule #2): it follows the selected object — the photo that shows the box is
   // put on screen — and a thumbnail click overrides it until the selection or
   // the frame changes. The same in both modes: evaluate mode scores every
   // camera's photo, and shows the one on screen.
-  const { activeCamera, setCamera, resetCamera } = useActiveCamera(currentFrame, selectedObjectId);
+  // (F7.5) A selected model box names its own photo (its id carries the camera).
+  const { activeCamera, setCamera, resetCamera } = useActiveCamera(
+    currentFrame,
+    selectedObjectId,
+    true,
+    cameraOfPredictionId(selectedObjectId),
+  );
   // The current frame AS THAT CAMERA SEES IT: its photo and its 2D boxes in
   // the usual fields. Everything that deals with one photo (the 2D viewer,
   // the 2D filter, the details panel's 2D row) takes this frame; everything
@@ -556,9 +597,15 @@ export default function Index() {
   // at the current minimum score. Computed here, at the selector level, from
   // (frames, predictions, score) — nothing is filtered when the file is parsed,
   // so moving the slider re-scores everything. Only computed in evaluate mode.
+  // (F7.5) During the sample check everything on screen is scored at the FIXED
+  // default rules — the rules the sample's population is defined with — so the
+  // sampled box is always a result on screen, whatever the slider was left at.
   const evaluationRules = useMemo<EvaluationRules>(
-    () => ({ minScore: confidenceThreshold, iouThreshold: IOU_THRESHOLD }),
-    [confidenceThreshold],
+    () =>
+      sampleCheckOn
+        ? DEFAULT_EVALUATION_RULES
+        : { minScore: confidenceThreshold, iouThreshold },
+    [sampleCheckOn, confidenceThreshold, iouThreshold],
   );
   const evaluation = useMemo(
     () =>
@@ -636,8 +683,10 @@ export default function Index() {
     objectOutcomes: frameEvaluation?.objects ?? null,
     boxFrame: currentFrame,
     selectedId: selectedObjectId,
-    classes: exploring ? NO_CLASS_FILTER : visibleClasses,
-    kinds: exploring ? NO_KIND_FILTER : shownKinds,
+    // (F7.5) The sample check shows no class / outcome controls, so neither
+    // filter may hide the box being judged.
+    classes: exploring || sampleCheckOn ? NO_CLASS_FILTER : visibleClasses,
+    kinds: exploring || sampleCheckOn ? NO_KIND_FILTER : shownKinds,
   });
   // ---- (F7) Evaluate: every scene, once the slider rests ------------------
   // The scene on screen is scored at once (above). Scoring all ten scenes takes
@@ -657,6 +706,8 @@ export default function Index() {
                 name: info.name,
                 night: info.night,
                 drive: info.log?.name ?? null,
+                driveDate: info.log?.date,
+                driveLocation: info.log?.location,
                 frames: loaded.frames,
                 predictions: loaded.predictions,
               },
@@ -667,6 +718,21 @@ export default function Index() {
     );
   }, [evaluating, catalogScenes, sceneLibrary, deferredRules]);
   const scenesEvaluationStale = deferredRules !== evaluationRules;
+  // (F7.5) The report's two tables: the same scores regrouped per drive, and
+  // day against night band by band. Only computed while the report is open.
+  const reportTables = useMemo(
+    () =>
+      reportOn && scenesEvaluation
+        ? {
+            drives: summarizeDrives(scenesEvaluation.scenes),
+            comparison: compareByDistance(
+              scenesEvaluation.day.byDistance,
+              scenesEvaluation.night.byDistance,
+            ),
+          }
+        : null,
+    [reportOn, scenesEvaluation],
+  );
   const handleToggleKind = useCallback((kind: EvalKind) => {
     setShownKinds((prev) => {
       const next = new Set(prev);
@@ -681,12 +747,25 @@ export default function Index() {
   // frame changes, when evaluate mode is left, when the score slider moves past
   // it, or (F6) when another camera's photo is shown — otherwise an invisible
   // "selection" would linger.
+  //
+  // (F7.5) One exception, in the sample check: the box under judgment stays
+  // selected while ANOTHER CAMERA OF ITS OWN FRAME is on screen. Looking around
+  // through the other cameras is how a reviewer gets context, and before this
+  // the box was deselected by the first thumbnail click and did not come back
+  // (Edge_F#7.5 Case 5). Another frame still drops it.
   useEffect(() => {
     if (!selectedObjectId || !isPredictionId(selectedObjectId)) return;
+    if (
+      sampleCheckOn &&
+      frameOfPredictionId(selectedObjectId) === currentFrameId &&
+      cameraOfPredictionId(selectedObjectId) !== activeCamera
+    ) {
+      return;
+    }
     if (!photoEvaluation || !findResult(photoEvaluation, selectedObjectId)) {
       setSelectedObject(null);
     }
-  }, [selectedObjectId, photoEvaluation, setSelectedObject]);
+  }, [selectedObjectId, photoEvaluation, setSelectedObject, sampleCheckOn, currentFrameId, activeCamera]);
 
   const reviewProgress = useMemo(
     () => (reviewEnabled && frames ? summarizeProgress(frames, reviews) : null),
@@ -1020,18 +1099,20 @@ export default function Index() {
   }, [exploring, sceneLibrary]);
   // Open a search result: the frame, in whatever scene it is. Another scene is
   // requested first and the frame is selected when that scene is on screen.
+  // (F7.5) `objectId`: what to select in that frame — a sampled model box.
   const handleOpenHit = useCallback(
-    (hit: { scene: string; frameId: string }) => {
+    (hit: { scene: string; frameId: string; objectId?: string }) => {
       setIsPlaying(false);
       if (hit.scene === shownSceneName && pendingSceneName === null) {
         setPendingFrame(null);
         setSelectedFrame(hit.frameId);
+        if (hit.objectId) setSelectedObject(hit.objectId);
         return;
       }
       handleSelectScene(hit.scene);
-      setPendingFrame({ scene: hit.scene, frameId: hit.frameId });
+      setPendingFrame({ scene: hit.scene, frameId: hit.frameId, objectId: hit.objectId });
     },
-    [shownSceneName, pendingSceneName, handleSelectScene, setSelectedFrame],
+    [shownSceneName, pendingSceneName, handleSelectScene, setSelectedFrame, setSelectedObject],
   );
   const handleOpenSceneHits = useCallback(
     (scene: string) => {
@@ -1040,19 +1121,81 @@ export default function Index() {
     },
     [search, handleOpenHit],
   );
+  // Declared AFTER the scene-change effect above on purpose: that one clears
+  // the selection when another scene comes on screen, and this one then
+  // selects what was asked for in it (effects run in declaration order).
   useEffect(() => {
     if (!pendingFrame || !frames || shownSceneName !== pendingFrame.scene) return;
     if (frames.some((frame) => frame.id === pendingFrame.frameId)) {
       setSelectedFrame(pendingFrame.frameId);
+      if (pendingFrame.objectId) setSelectedObject(pendingFrame.objectId);
     }
     setPendingFrame(null);
-  }, [pendingFrame, frames, shownSceneName, setSelectedFrame]);
+  }, [pendingFrame, frames, shownSceneName, setSelectedFrame, setSelectedObject]);
+
+  // ---- (F7.5) Sample check ------------------------------------------------
+  // The population, the drawn sample, its summary and the actions on it live in
+  // `useSampleCheckController` (pure functions of lib/sampling underneath); the
+  // page only says where a box is opened and whether the check is on screen.
+  const stopPlayback = useCallback(() => setIsPlaying(false), []);
+  // Opening a sampled box always ends on ITS photo. When the box is already the
+  // selection (the reviewer looked at another camera and clicks its row again)
+  // nothing about the selection changes, so the camera is put back explicitly.
+  // For a box in another scene the selection change does it (`useActiveCamera`).
+  const handleOpenSampleBox = useCallback(
+    (target: { scene: string; frameId: string; objectId: string }) => {
+      handleOpenHit(target);
+      const camera = cameraOfPredictionId(target.objectId);
+      if (camera !== null && target.scene === shownSceneName && pendingSceneName === null) {
+        setCamera(camera);
+      }
+    },
+    [handleOpenHit, shownSceneName, pendingSceneName, setCamera],
+  );
+  const sampleCheck = useSampleCheckController({
+    on: sampleCheckOn,
+    setOn: setSampleChecking,
+    // The report shows how many such false alarms there are and what the
+    // sample says so far, so it needs the same derived state.
+    alsoNeeded: reportOn,
+    sceneNames,
+    loaded: sceneLibrary,
+    failed: scenes.library.errors,
+    rules: DEFAULT_EVALUATION_RULES,
+    selectedId: selectedObjectId,
+    playing: isPlaying,
+    stopPlayback,
+    openBox: handleOpenSampleBox,
+  });
+  // The photo the sampled box is in, and whether that photo is the one on screen.
+  const sampleBoxCamera = sampleCheck.current?.item.camera ?? null;
+  const handleShowSampleBox = useCallback(() => {
+    if (sampleBoxCamera !== null) setCamera(sampleBoxCamera);
+  }, [sampleBoxCamera, setCamera]);
+  const enterSampleCheck = sampleCheck.enter;
+  const handleEnterSampleCheck = useCallback(() => {
+    setReportOpen(false); // from the report: the report gives way to the check
+    enterSampleCheck();
+  }, [enterSampleCheck]);
+  const handleOpenReport = useCallback(() => setReportOpen(true), []);
+  const handleCloseReport = useCallback(() => setReportOpen(false), []);
 
   // (F4-C) Keyboard shortcuts. `resolveShortcut` (lib/review) decides what a key
   // means; this decides what the action does — always through the same handlers
   // the buttons use, so mouse and keyboard cannot drift apart.
+  const { judge: judgeSample, clear: clearSample, step: stepSample } = sampleCheck;
   const handleReviewAction = useCallback(
     (action: ReviewAction) => {
+      // (F7.5) Sample check: the same keys as the label review, applied to the
+      // sampled model box — A / R / U judge it, C clears, J / K walk the sample.
+      // Zoom and camera keys fall through to the shared handling below; every
+      // other key (reject reasons, next frame) does nothing here.
+      if (sampleCheckOn) {
+        if (action.type === 'verdict') return judgeSample(toSampleVerdict(action.verdict));
+        if (action.type === 'clear') return clearSample();
+        if (action.type === 'step') return stepSample(action.direction);
+        if (action.type !== 'toggle-zoom' && action.type !== 'camera') return;
+      }
       // (F5) Evaluate mode only looks: moving through the list (J / K) and the
       // camera zoom (Z) work; the keys that WRITE a review do nothing, so a
       // stray "A" cannot approve a box whose verdict is not even on screen.
@@ -1110,6 +1253,10 @@ export default function Index() {
       }
     },
     [
+      sampleCheckOn,
+      judgeSample,
+      clearSample,
+      stepSample,
       evaluating,
       exploring,
       orderedHits,
@@ -1129,7 +1276,9 @@ export default function Index() {
       setSelectedObject,
     ],
   );
-  useReviewShortcuts(handleReviewAction, reviewEnabled && currentFrame !== null);
+  // (F7.5) While the report covers the list and the 3D view, the keys must not
+  // act on what is hidden underneath.
+  useReviewShortcuts(handleReviewAction, reviewEnabled && currentFrame !== null && !reportOn);
 
   // Frame switch. The object-selection policy is DATASET-AWARE (F2-C):
   //  - COCO: clear the selection. COCO ids are `imageId-annId`, unstable across
@@ -1199,6 +1348,9 @@ export default function Index() {
       setQueueOrder('scene'); // (F4) back to the dataset order
       setPractice(false); // (F4-F) practice is a nuScenes-only mode
       setMode('review'); // (F5) evaluate is a nuScenes-only mode
+      setSampleChecking(false); // (F7.5) the sample check is part of evaluate mode
+      setReportOpen(false); // (F7.5) so is the report
+      setIouThreshold(IOU_THRESHOLD); // (F7.5) back to the default overlap
       setShownKinds(new Set()); // (F5) show every outcome again
       resetCamera(); // (F6) back to the default camera
     },
@@ -1219,6 +1371,8 @@ export default function Index() {
       if (next === mode) return;
       if (next !== 'review' && evaluateBlocked) return;
       setMode(next);
+      setSampleChecking(false); // (F7.5) the sample check does not outlive a mode switch
+      setReportOpen(false); // (F7.5) nor does the report
       setConfidenceThreshold(next === 'evaluate' ? DEFAULT_MIN_SCORE : 0);
     },
     [mode, evaluateBlocked, setConfidenceThreshold],
@@ -1232,6 +1386,7 @@ export default function Index() {
     resetFilters();
     setMaxDistance(maxDistance);
     setConfidenceThreshold(DEFAULT_MIN_SCORE);
+    setIouThreshold(IOU_THRESHOLD); // (F7.5) Reset means the default rules again
   }, [resetFilters, setMaxDistance, maxDistance, setConfidenceThreshold]);
 
   // (F4-F) Enter / leave practice mode. The scene's practice set is built and
@@ -1305,16 +1460,34 @@ export default function Index() {
           )}
         </span>
       ) : evaluating ? (
+        <>
+        {!sampleCheckOn && (
+          <button
+            type="button"
+            onClick={reportOn ? handleCloseReport : handleOpenReport}
+            aria-pressed={reportOn}
+            title="All scenes on one screen: conditions, totals, recall by drive, day and night at the same distance, the unchecked false alarms"
+            className={[
+              'text-xs px-2 py-0.5 rounded border transition-colors whitespace-nowrap',
+              reportOn
+                ? 'border-sky-400/50 bg-sky-500/15 text-sky-200'
+                : 'border-zinc-700 text-zinc-300 hover:border-sky-400/40 hover:text-zinc-100',
+            ].join(' ')}
+          >
+            Report
+          </button>
+        )}
         <EvaluationHeadline
           summary={evaluation?.summary ?? null}
           status={predictions.status === 'none' ? 'failed' : predictions.status}
           modelName={predictions.set?.model.name}
           basis={
             evaluation
-              ? `${shownSceneName ?? 'This scene'}: all ${evaluation.evaluatedPhotos} evaluated photos (${evaluation.evaluatedFrames} frames × ${evaluation.byCamera.length} camera${evaluation.byCamera.length === 1 ? '' : 's'}), each scored on its own · score ≥ ${confidenceThreshold.toFixed(2)} · IoU ≥ ${IOU_THRESHOLD} · one scene of one drive — see "All scenes" in the panel`
+              ? `${shownSceneName ?? 'This scene'}: all ${evaluation.evaluatedPhotos} evaluated photos (${evaluation.evaluatedFrames} frames × ${evaluation.byCamera.length} camera${evaluation.byCamera.length === 1 ? '' : 's'}), each scored on its own · score ≥ ${evaluationRules.minScore.toFixed(2)} · IoU ≥ ${evaluationRules.iouThreshold} · one scene of one drive — see "All scenes" in the panel`
               : undefined
           }
         />
+        </>
       ) : (
         reviewProgress && (
         <>
@@ -1455,9 +1628,17 @@ export default function Index() {
   // thumbnail also says how many labels the model missed in that photo.
   const showCameraStrip = cameraSlots > 1;
   const cameraThumbs: CameraThumb[] = cameraRow.map((view) => {
-    const box = selectedObjectId
-      ? view.detections2D.find((d) => d.id === selectedObjectId)
-      : undefined;
+    // (F7.5) In the sample check the "selected box" is a model box: it is in
+    // exactly one photo, and that thumbnail carries the marker — the way back
+    // after looking through another camera.
+    const sampled = sampleCheckOn ? sampleCheck.current?.item : undefined;
+    const box = sampled
+      ? sampled.camera === view.name && sampled.bbox
+        ? { bbox: sampled.bbox }
+        : undefined
+      : selectedObjectId
+        ? view.detections2D.find((d) => d.id === selectedObjectId)
+        : undefined;
     const photo =
       evaluating || exploringModel ? frameEvaluation?.byCamera.get(view.name) : undefined;
     // (F7) Explore with a model condition: how many of the results the search
@@ -1530,7 +1711,19 @@ export default function Index() {
       cameraAspect={cameraAspect}
       topBar={header}
       filterBar={
-        exploring && search ? (
+        sampleCheckOn ? (
+          // (F7.5) The sample is fixed: no score slider, no class chips.
+          <SampleBar
+            population={sampleCheck.population}
+            size={sampleCheck.size}
+            sizes={sampleCheck.sizes}
+            onChangeSize={sampleCheck.setSize}
+            minScore={DEFAULT_MIN_SCORE}
+            onExport={sampleCheck.exportFile}
+            canExport={sampleCheck.population !== null}
+            onExit={sampleCheck.exit}
+          />
+        ) : exploring && search ? (
           <ExploreBar
             conditions={conditions}
             onChange={setConditions}
@@ -1564,11 +1757,42 @@ export default function Index() {
           onToggleClass={toggleClass}
           onReset={evaluating ? handleResetEvaluationFilters : resetFilters}
           onDeselect={() => setSelectedObject(null)}
+          // (F7.5) Evaluate mode: the overlap threshold, next to the score.
+          afterMetric={
+            evaluating ? <IouChoice value={iouThreshold} onChange={setIouThreshold} /> : undefined
+          }
+          afterMetricIsDefault={!evaluating || iouThreshold === IOU_THRESHOLD}
+          // (F7.5) The way into the sample check, next to the numbers it is about.
+          extra={
+            evaluating ? (
+              <button
+                type="button"
+                onClick={handleEnterSampleCheck}
+                title="Judge a random sample of the false alarms that have no label nearby: is the model wrong, or is the label missing?"
+                aria-label="Sample check"
+                className="text-xs px-2 py-0.5 rounded border border-amber-400/30 text-amber-200 hover:border-amber-300/60 hover:text-amber-100 transition-colors whitespace-nowrap"
+              >
+                {/* Below 1280 px the class chips need the room (the bar is one line). */}
+                Sample<span className="hidden xl:inline"> check</span>
+              </button>
+            ) : undefined
+          }
         />
         )
       }
       list={
-        exploring && search ? (
+        sampleCheckOn ? (
+          // (F7.5) The sample check lists the SAMPLED model boxes, across scenes.
+          <SampleList
+            sample={sampleCheck.sample}
+            records={sampleCheck.records}
+            summary={sampleCheck.summary}
+            selectedId={sampleCheck.current?.item.predictionId ?? null}
+            onOpen={sampleCheck.open}
+            unavailable={sampleCheck.message}
+            stepHint={`${SHORTCUT_KEYS.next} / ${SHORTCUT_KEYS.previous} to step`}
+          />
+        ) : exploring && search ? (
           // (F7) Explore mode lists the FRAMES that match the search.
           <ExploreResults
             hits={orderedHits}
@@ -1723,7 +1947,27 @@ export default function Index() {
         ) : undefined
       }
       details={
-        exploring && search && frameSearch ? (
+        sampleCheckOn ? (
+          <SamplePanel
+            status={sampleCheck.availability.status}
+            message={sampleCheck.message}
+            item={sampleCheck.current?.item ?? null}
+            position={sampleCheck.current?.position ?? null}
+            verdict={sampleCheck.current?.verdict ?? null}
+            summary={sampleCheck.summary}
+            viewingCamera={activeCamera}
+            onShowBox={handleShowSampleBox}
+            onVerdict={sampleCheck.judge}
+            onClear={sampleCheck.clear}
+            blocked={sampleCheck.blocked}
+            storageFailed={reviewStorageFailed}
+            keys={{
+              verdicts: [SHORTCUT_KEYS.approve, SHORTCUT_KEYS.reject, SHORTCUT_KEYS.unsure],
+              clear: SHORTCUT_KEYS.clear,
+              step: SHORTCUT_KEYS.next,
+            }}
+          />
+        ) : exploring && search && frameSearch ? (
           <SearchPanel
             conditions={conditions}
             frameIndex={frameIndex}
@@ -1767,6 +2011,7 @@ export default function Index() {
             scenesTotal={scenes.catalog?.scenes.length ?? 0}
             scenesStale={scenesEvaluationStale}
             onOpenScene={handleSelectScene}
+            onOpenReport={handleOpenReport}
             photoNote={
               scenes.catalog?.photo && scenes.catalog.photo.width < scenes.catalog.photo.sourceWidth
                 ? `the original ${scenes.catalog.photo.sourceWidth}×${scenes.catalog.photo.sourceHeight} photos (the photos shown here are ${scenes.catalog.photo.width}×${scenes.catalog.photo.height} copies)`
@@ -1848,6 +2093,32 @@ export default function Index() {
             : {})}
         />
         )
+      }
+      // (F7.5) The evaluation report, over the list and the 3D view (both stay
+      // mounted underneath — the canvas is not re-created).
+      overlay={
+        reportOn && scenesEvaluation && reportTables ? (
+          <EvaluationReport
+            scenes={scenesEvaluation}
+            scenesTotal={scenes.catalog?.scenes.length ?? 0}
+            stale={scenesEvaluationStale}
+            model={predictions.set?.model}
+            rules={evaluationRules}
+            drives={reportTables.drives}
+            comparison={reportTables.comparison}
+            unlabelled={{
+              status: sampleCheck.availability.status,
+              message: sampleCheck.message,
+              count: sampleCheck.population,
+              falseAlarms: sampleCheck.falseAlarms,
+              minScore: DEFAULT_MIN_SCORE,
+              iouThreshold: IOU_THRESHOLD,
+              summary: sampleCheck.summary,
+            }}
+            onCheckSample={handleEnterSampleCheck}
+            onClose={handleCloseReport}
+          />
+        ) : undefined
       }
       timeline={
         // (F2-C) Autoplay controls are passed only when the dataset tracks

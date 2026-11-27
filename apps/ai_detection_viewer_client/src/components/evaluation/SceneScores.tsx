@@ -11,6 +11,8 @@ type Props = {
   stale?: boolean;
   currentScene?: string | null;
   onOpenScene?: (scene: string) => void;
+  /** (F7.5) Opens the report (drives, day / night by distance, false alarms). */
+  onOpenReport?: () => void;
 };
 
 const number = (n: number) => n.toLocaleString('en-US');
@@ -22,7 +24,14 @@ const number = (n: number) => n.toLocaleString('en-US');
  *
  * Pure presentation: every number comes from `evaluateScenes` (lib/evaluation).
  */
-export function SceneScores({ evaluation, scenesTotal, stale = false, currentScene, onOpenScene }: Props) {
+export function SceneScores({
+  evaluation,
+  scenesTotal,
+  stale = false,
+  currentScene,
+  onOpenScene,
+  onOpenReport,
+}: Props) {
   const { total, scenes, day, night, notEvaluated } = evaluation;
   const labels = total.counts.found + total.counts.missed;
   const pending = scenesTotal - scenes.length - notEvaluated.length;
@@ -97,6 +106,15 @@ export function SceneScores({ evaluation, scenesTotal, stale = false, currentSce
         <GroupRow label="Day" group={day} />
         <GroupRow label="Night" group={night} tone="night" />
       </dl>
+      {onOpenReport && (
+        <button
+          type="button"
+          onClick={onOpenReport}
+          className="mt-1.5 text-[11px] text-sky-300 hover:text-sky-200"
+        >
+          By drive, by distance, false alarms → open the report
+        </button>
+      )}
       {notEvaluated.length > 0 && (
         <p className="mt-1 text-[11px] text-amber-300/90">
           Not evaluated (no predictions): {notEvaluated.join(', ')}

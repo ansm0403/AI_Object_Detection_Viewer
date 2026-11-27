@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>F7.5 단계별 확인</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #09090b; color: #d4d4d8; font: 14px/1.6 system-ui, "Malgun Gothic", sans-serif; }
+  header { position: sticky; top: 0; z-index: 5; background: #18181b; border-bottom: 1px solid #27272a; padding: 10px 16px; }
+  h1 { margin: 0 0 8px; font-size: 15px; color: #f4f4f5; }
+  h1 small { font-weight: 400; color: #71717a; margin-left: 8px; }
+  nav { display: flex; flex-wrap: wrap; gap: 6px; }
+  nav button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid #3f3f46; background: #27272a; color: #d4d4d8; cursor: pointer; }
+  nav button[aria-pressed="true"] { background: rgba(14,165,233,.2); border-color: rgba(56,189,248,.5); color: #bae6fd; }
+  main { padding: 14px 16px 40px; }
+  .note { max-width: 1536px; background: #18181b; border: 1px solid #27272a; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+  .note h2 { margin: 0 0 4px; font-size: 14px; color: #f4f4f5; }
+  .note p { margin: 4px 0; }
+  .note b { color: #f4f4f5; }
+  .note ul { margin: 4px 0; padding-left: 20px; }
+  .tag { display: inline-block; font-size: 11px; padding: 0 6px; border-radius: 4px; margin-right: 6px; }
+  .pass { background: rgba(52,211,153,.15); color: #6ee7b7; }
+  .fix { background: rgba(251,191,36,.15); color: #fcd34d; }
+  .shot { overflow-x: auto; }
+  .shot img { display: block; border: 1px solid #27272a; }
+  pre { max-width: 1536px; margin: 0 0 12px; padding: 10px 14px; background: #0f0f12; border: 1px solid #27272a; border-radius: 8px; font: 12px/1.5 ui-monospace, Consolas, monospace; color: #a1a1aa; white-space: pre-wrap; }
+  .hint { color: #71717a; font-size: 12px; margin-top: 6px; }
+  code { font: 12px ui-monospace, Consolas, monospace; color: #e4e4e7; }
+</style>
+</head>
+<body>
+<header>
+  <h1>F7.5 단계별 확인 <small>배포용 빌드(3100번) · 실제 앱을 조작한 결과 · 캡처는 1:1 크기</small></h1>
+  <nav id="nav"></nav>
+</header>
+<main>
+  <div class="note" id="note"></div>
+  <div id="view"></div>
+  <p class="hint">← → 로 넘긴다. <span class="tag pass">통과</span>는 스크립트가 실제 앱을 조작해 확인한 항목 수, <span class="tag fix">고침</span>은 확인하다 찾아서 고친 것이다.</p>
+</main>
+<script>
+const DIR = '2026-11-27_steps/';
+const SCREENS = [
+  {
+    key: 'A 로직',
+    title: '단계 A — 순수 함수와 테스트 (화면 변화 없음)',
+    html: `<p><span class="tag pass">통과</span>단위 테스트 <b>861 → 977개</b>(전부 통과), 타입 오류 0, 린트 오류 0(경고 19개 그대로). 2026-11-27 07:00 KST.</p>
+      <p><b>만든 것:</b> 표본 뽑기와 추정(<code>lib/sampling</code>), "근처에 정답 없는 헛짚음" 목록, 주행 단위 집계, 거리별 비교, 조건 설명(<code>lib/evaluation</code>), 검수 기록의 세 번째 구역.</p>
+      <p><b>테스트가 실제 파일로 잠근 숫자</b> (바뀌면 테스트가 깨진다):</p>
+      <ul>
+        <li>기본 규칙의 전체 숫자는 그대로다: 6,726 / 5,292 / 3,514 / 5,278.</li>
+        <li>모집단은 <b>1,452개</b>이고, IoU 0.3과 0.5에서 <b>같은 박스들</b>이다. Explore의 "근처에 정답 없는 헛짚음" 조건이 세는 수와 같다.</li>
+        <li>IoU 0.5: 5,462 / 6,556 / 5,231 / 5,278 → Precision 51.1% / Recall 45.4%, 낮 52.3%, 밤 25.9%.</li>
+        <li>정답 12,018개는 서로 다른 물체 <b>654개</b>(낮 483, 밤 171). 주행 8줄의 숫자.</li>
+        <li>거리 구간별 낮/밤의 찾음 / 정답 10줄. 거리 분포를 맞춘 밤 Recall 33.9%(그대로는 32.7%).</li>
+        <li>표본의 <b>첫 다섯 박스</b>(장면, 프레임, 예측 ID). 같은 시드는 같은 순서를 내고, 200개 표본은 100개 표본으로 시작한다.</li>
+        <li>100개 중 41개 → 32.2~50.5%. 표본 100 / 200 / 300의 폭 ±9 / ±6 / ±5%p.</li>
+      </ul>
+      <p><b>기존 테스트에서 고친 곳 1개:</b> "검수 저장소는 빈 구역 2개로 시작한다" → 3개(구역을 하나 더했기 때문이다). 기존 두 구역의 동작과 저장된 기록은 그대로다.</p>`,
+  },
+  {
+    key: 'B1 들어가기',
+    title: '단계 B — 표본 검수: 들어가면',
+    img: 'b1_enter.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>135 / 135. 평가 모드의 위쪽 줄 오른쪽에 생긴 <b>Sample check</b> 버튼을 누른 직후다.</p>
+      <p><b>무엇을 보면 되는지:</b></p>
+      <ul>
+        <li><b>위쪽 줄:</b> "random 100 of 1,452". 점수 슬라이더가 없다(표본은 고정이다).</li>
+        <li><b>왼쪽:</b> 표본 100개가 뽑힌 순서대로. 1번이 선택돼 있다.</li>
+        <li><b>화면이 그 박스로 옮겨 갔다:</b> 1번 박스는 scene-0757의 31번째 프레임, 앞 카메라에 있다. 장면, 프레임, 사진이 자동으로 바뀌고 사진이 그 박스로 확대됐다(노란 사각형, "model · car 0.37").</li>
+        <li><b>오른쪽 아래:</b> "The model says car, score 0.37 · 67×48 px"와 판정 버튼 셋. 아직 "0 of 100 judged", "Nothing judged yet — no estimate."</li>
+      </ul>`,
+  },
+  {
+    key: 'B2 판정 3개',
+    title: '단계 B — A, R, U를 한 번씩 누른 뒤',
+    img: 'b2_three_verdicts.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>키보드로 <b>A</b>(진짜 물체, 정답 빠짐) → <b>R</b>(모델이 틀림) → <b>U</b>(애매함)를 눌렀다. 누를 때마다 다음 박스로 넘어갔고, 그때마다 <b>장면이 바뀌었다</b>(0757 → 0655 → 0916 → 0061). 3D 캔버스는 다시 만들어지지 않았다.</p>
+      <p><b>무엇을 보면 되는지:</b></p>
+      <ul>
+        <li>왼쪽 목록의 1~3번에 판정 아이콘(초록 상자, 빨간 X, 회색 물음표). 위에 개수와 "97 to go".</li>
+        <li>오른쪽 아래 <b>"3 of 100 judged — not final"</b>, 그리고 <b>"1 of 3 sampled boxes → about 6–79% of all 1,452"</b>. 3개만 봤을 때의 범위는 이렇게 넓다. 결과가 항상 "N개 중 M개 + 범위"로 나오고, 전체를 센 것처럼 쓰이지 않는다.</li>
+        <li>그 아래 작은 글씨: "A sample estimate, not a count of all 1,452 boxes…"</li>
+      </ul>
+      <p>이 세 판정은 스크립트가 누른 것이다. <b>네 브라우저에는 들어 있지 않다</b>(스크립트는 별도의 브라우저를 쓴다).</p>
+      <p><span class="tag fix">고침</span>처음 찍은 화면에서는 버튼 글자가 "Real · label mi…"로 잘려 있었다. 스크립트는 통과했는데 캡처를 눈으로 보다 찾았다. 버튼 이름을 <b>Real object / Model wrong / Unclear</b>로 줄이고(풀어 쓴 이름은 툴팁과 "Judged: Real object, label missing"에), 스크립트에 <b>"말줄임 처리된 글자가 실제로 잘렸는지"(scrollWidth > clientWidth)</b> 검사를 더했다.</p>`,
+  },
+  {
+    key: 'B3 200개',
+    title: '단계 B — 표본 크기를 200으로',
+    img: 'b3_size_200.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>위쪽 줄의 <b>200</b>을 눌렀다.</p>
+      <p><b>무엇을 보면 되는지:</b> 목록이 200개가 됐고 <b>앞의 다섯 개가 그대로</b>다. 판정 3개도 그대로이고 "3 of 200 judged"로 바뀌었다. 100개를 다 본 뒤 더 보고 싶을 때 이어서 할 수 있다는 뜻이다. 다시 100을 누르면 원래대로 돌아온다.</p>`,
+  },
+  {
+    key: 'B4 새로 고침',
+    title: '단계 B — 새로 고친 뒤 다시 들어가면',
+    img: 'b4_after_reload.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>페이지를 새로 열고 Evaluate → Sample check.</p>
+      <p><b>무엇을 보면 되는지:</b> <b>같은 100개가 같은 순서</b>로 나온다. 판정 3개가 남아 있고, <b>아직 판정하지 않은 첫 박스(4번)</b>에서 다시 시작한다. 저장은 F4 검수 기록과 같은 저장소의 별도 구역(<code>nuscenes-false-alarms</code>)에 한다. 검수(Review) 모드의 진행률은 "Reviewed 0 / 604" 그대로다(서로 섞이지 않는다).</p>
+      <p>함께 확인한 것: 내보내기 파일(<code>false-alarm-sample_날짜.json</code>, 형식 <code>false-alarm-sample@1</code>, 100줄, 판정은 <code>real-object / model-wrong / unclear</code>), 평가 모드의 점수 슬라이더를 0.65로 옮겨도 표본은 그대로이고 슬라이더 값도 나올 때 그대로, 재생 중에는 판정 버튼이 꺼지고 A가 듣지 않음.</p>`,
+  },
+  {
+    key: 'B5 1280',
+    title: '단계 B — 1280×720',
+    img: 'b5_1280x720.jpg', w: 1280, h: 720,
+    html: `<p><span class="tag pass">통과</span>글자가 잘리거나 칸 밖으로 나가는지를 <b>글자 내용이 아니라 위치로</b> 확인했다(1536×700, 1440×900, 1280×720, 1024×768 각각): 판정 버튼 셋이 패널 안에 있고 스크롤 없이 보이는가, 추정 문장이 스크롤 없이 보이는가, 목록의 열두 줄에서 잘린 칸이 없는가, 위쪽 줄에서 잘린 글자가 없는가, 페이지 스크롤이 없는가.</p>
+      <p><b>무엇을 보면 되는지:</b> 위쪽 줄의 설명 글("same boxes every time…")은 1440px보다 좁으면 <b>아예 숨긴다</b>(잘린 문장을 보여 주지 않는다. 같은 내용은 "random 100 of 1,452"의 툴팁에 있다).</p>`,
+  },
+  {
+    key: 'B6 1024',
+    title: '단계 B — 1024×768 (지원하는 가장 좁은 폭)',
+    img: 'b6_1024x768.jpg', w: 1024, h: 768,
+    html: `<p><span class="tag pass">통과</span>가장 좁은 폭이다.</p>
+      <p><span class="tag fix">고침</span>처음에는 목록의 클래스 이름이 "c…", "b…"로 잘렸다. 장면 칸을 "scene-0757"에서 <b>"0757"</b>로 줄여 고쳤다(전체 이름은 줄에 마우스를 올리면 나온다).</p>
+      <p><b>무엇을 보면 되는지:</b> car / bicycle / person이 다 보인다. 판정 버튼 셋이 한 줄에 들어가 있다. 이 화면은 1번 박스를 마우스로 다시 고른 상태라 "Judged: Real object, label missing"과 "C clear"가 보인다.</p>`,
+  },
+  {
+    key: 'C1 조건 한 줄',
+    title: '단계 C — IoU 고르기와 조건 한 줄: 기본값(0.3)',
+    img: 'c1_default.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>74 / 74. 단계 B의 135항목도 이 빌드에서 다시 돌려 모두 통과했다. 단위 테스트 981개 통과, 타입 오류 0, 린트 오류 0(경고 19개).</p>
+      <p><b>무엇을 보면 되는지:</b></p>
+      <ul>
+        <li><b>위쪽 줄:</b> 점수 슬라이더 옆에 <b>MIN OVERLAP (IoU) [0.3 | 0.5]</b>. 0.3이 눌려 있고 옆에 "this tool's default". 오른쪽 끝에 노란 테두리의 <b>Sample check</b>.</li>
+        <li><b>오른쪽 아래 패널:</b> 새로 생긴 한 줄 <b>"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3"</b>. 마우스를 올리면 근거가 나온다("Weights yolov8n.pt as released (trained on COCO); not trained on nuScenes…"). 모델 이름은 예측 파일에 적힌 그대로다. 패널 제목 옆은 "6 cameras · 246 photos"로 바꿨다(무엇을 채점했는지는 제목 옆에, 어떻게 채점했는지는 이 한 줄에).</li>
+        <li><b>숫자는 그대로다:</b> Precision 77%, Recall 68%, 첫 프레임 23 missed. 기본값을 바꾸지 않았기 때문이다.</li>
+      </ul>`,
+  },
+  {
+    key: 'C2 IoU 0.5',
+    title: '단계 C — 0.5를 누르면',
+    img: 'c2_iou05.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>위쪽 줄의 <b>0.5</b>를 눌렀다.</p>
+      <p><b>무엇을 보면 되는지:</b> 같은 장면이 Precision 77% → <b>57%</b>, Recall 68% → <b>54%</b>. 첫 프레임은 놓침 23 → 28, 헛짚음 5 → 11, 찾음 21 → 16. 목록, 사진, 3D 색, 타임라인, 썸네일의 숫자가 모두 따라 바뀐다. 조건 한 줄의 끝이 노란 <b>"IoU ≥ 0.5"</b>가 됐고 버튼 옆에 "benchmark value"가 붙었다. Reset이 켜졌다(누르면 0.3으로 돌아간다).</p>
+      <p>3D 캔버스는 다시 만들어지지 않았다.</p>`,
+  },
+  {
+    key: 'C3 전체 장면',
+    title: '단계 C — 0.5에서 전체 장면의 숫자',
+    img: 'c3_iou05_all_scenes.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>같은 상태에서 패널을 "All scenes"까지 내렸다.</p>
+      <p><b>무엇을 보면 되는지:</b> 전체 <b>Precision 51% · Recall 45%</b>(5,462 of 12,018). 그 아래 낮 52%(4,659 / 8,916), 밤 26%(803 / 3,102). <b>F7 때 조사해 문서에 적어 둔 값(51% / 45%, 52% / 26%)과 같다.</b> 기준 하나로 전체가 10~15%p 움직이고, 낮과 밤의 차이는 두 기준 모두에서 남는다.</p>
+      <p>함께 확인한 것: 0.5를 고른 채 Explore로 가도 검색 결과는 그대로다("Model missed ≥ 15" 135프레임, "Crowded" 177프레임 / 장면 7개). 표본 검수도 그대로다(1,452개 중 100개, 같은 첫 박스). 표본 검수에서 나오면 0.5가 그대로 눌려 있다. 데이터셋을 바꿨다 돌아오면 0.3이다.</p>`,
+  },
+  {
+    key: 'C4 1024',
+    title: '단계 C — 1024×768에서 위쪽 줄',
+    img: 'c4_1024x768.jpg', w: 1024, h: 768,
+    html: `<p><span class="tag pass">통과</span>가장 좁은 폭, IoU 0.5. 위치로 확인한 것(네 가지 창 크기 × 두 값): 위쪽 줄이 한 줄(40px)인가, IoU 버튼이 줄 안에 있고 다른 것과 겹치지 않는가, 잘린 글자가 없는가, 조건 한 줄이 패널 안에 있고 잘리지 않았는가, 이 장면의 Precision / Recall이 스크롤 없이 보이는가, 페이지 스크롤이 없는가.</p>
+      <p><b>알아 둘 대가:</b> 위쪽 줄에 IoU 버튼과 Sample check가 들어가면서 <b>클래스 칩이 쓸 수 있는 폭이 줄었다.</b> 1024px에서 368px이다(잰 값). 그 전에는 약 570px이었다(잰 값이 아니라, 368에 IoU 97px, 버튼 58px, 사이 간격 약 45px을 더한 계산값). 칩이 다 들어가지 않으면 지금처럼 옆으로 밀어 본다(F3부터 있던 동작이다). 줄이려고 한 것: 1280px보다 좁으면 "MIN OVERLAP (IoU)"를 "IoU"로, "Sample check"를 "Sample"로 줄이고, 설명 글은 1440px 이상에서만 보인다. 0.5의 설명 글도 "benchmark value — strict for projected labels"에서 "benchmark value"로 줄였다(긴 설명은 툴팁과 패널 아래 설명에 있다).</p>`,
+  },
+  {
+    key: 'C5 1280',
+    title: '단계 C — 1280×720',
+    img: 'c5_1280x720.jpg', w: 1280, h: 720,
+    html: `<p><span class="tag pass">통과</span>1280×720, IoU 0.5. 클래스 칩 자리 494px.</p>
+      <p><b>무엇을 보면 되는지:</b> 위쪽 줄이 한 줄에 들어가 있고, 패널의 조건 한 줄이 잘리지 않았다(패널 폭 360px).</p>`,
+  },
+  {
+    key: 'D1 보고서',
+    title: '단계 D — 보고서 창 (주행 표, 거리별 낮/밤, 헛짚음)',
+    img: 'd1_report.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>51 / 51. 같은 빌드에서 단계 B 135항목, 단계 C 74항목도 다시 돌려 모두 통과했다. 단위 테스트 985개 통과, 타입 오류 0, 린트 오류 0(경고 19개).</p>
+      <p>평가 모드의 맨 위 줄에 생긴 <b>Report</b> 버튼을 누른 화면이다. 목록과 3D 화면 자리 위에 뜬다(3D 캔버스는 밑에 그대로 있고 다시 만들어지지 않았다). <b>Esc</b>로 닫는다. 패널의 "All scenes" 아래에도 여는 링크가 있다.</p>
+      <p><b>무엇을 보면 되는지 (위에서 아래로, 왼쪽에서 오른쪽으로):</b></p>
+      <ul>
+        <li><b>조건이 숫자보다 먼저 나온다:</b> yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3 · "labels = 3D boxes projected into the photo (approximate)".</li>
+        <li><b>TOTAL:</b> Precision 65.7%(6,726 / 10,240), Recall 56.0%(6,726 / 12,018). 그 아래 "12,018 labels are <b>654 distinct objects</b> … in <b>8 drives</b>. Observed on this data under these rules — not "the model's performance"."</li>
+        <li><b>FALSE ALARMS:</b> "1,452 of 3,514 (41%) have no label of any class nearby", 그리고 노란 상자 <b>"Not checked yet"</b>와 표본 검수로 가는 버튼.</li>
+        <li><b>RECALL BY DRIVE:</b> 주행 8줄. 날짜와 장소, 장면 수, 서로 다른 물체 수, Recall, 찾음 / 정답. 맨 아래 노란 줄이 밤 주행 하나(장면 3개, 물체 171개, 32.7%)다.</li>
+        <li><b>DAY VS NIGHT AT THE SAME DISTANCE:</b> 구간 10줄. 0~50m의 다섯 줄은 모두 밤이 낮고, 50~60m와 70~80m는 차이가 없거나 뒤집힌다. 오른쪽 위에 <b>"night = 1 drive"</b>. 아래 글: "밤의 거리 분포를 낮과 같게 맞추면 밤 Recall은 32.7%가 아니라 33.9% … 거리 분포가 설명하는 것은 31.4점 중 1.2점 … 나머지가 무엇 때문인지는 이것으로 밝혀지지 않는다: 밤 장면 3개는 모두 한 주행이다."</li>
+      </ul>
+      <p><span class="tag fix">고침</span>처음에는 주행 표의 "날짜 · 장소" 칸이 잘렸다(장소 이름이 길다). 날짜와 장소를 두 줄로 나누고, 주행 표에 더 넓은 칸을 줬다. 스크립트의 위치 검사가 잡아냈다.</p>`,
+  },
+  {
+    key: 'D2 보고서 0.5',
+    title: '단계 D — 보고서를 연 채 IoU 0.5를 누르면',
+    img: 'd2_report_iou05.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>보고서는 위쪽 줄을 가리지 않으므로 연 채로 IoU를 바꿀 수 있다.</p>
+      <p><b>무엇을 보면 되는지:</b> 전체가 <b>Precision 51.1% / Recall 45.4%</b>, 낮 52.3%, 밤 25.9%가 되고 조건의 칩이 "IoU ≥ 0.5"로 바뀐다. 주행 표와 거리 표의 숫자도 따라 바뀐다. <b>FALSE ALARMS의 "1,452 of 3,514"는 바뀌지 않는다</b>(표본 검수의 고정 규칙으로 센 것이라고 그 아래에 적혀 있다).</p>`,
+  },
+  {
+    key: 'D3 판정 뒤',
+    title: '단계 D — 표본을 판정한 뒤의 보고서',
+    img: 'd3_report_after_verdicts.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag pass">통과</span>보고서의 "Check a sample of 100 →"을 누르면 보고서가 닫히고 표본 검수가 열린다. 스크립트가 두 개(A, R)를 판정하고 나와서 보고서를 다시 열었다.</p>
+      <p><b>무엇을 보면 되는지:</b> 노란 "Not checked yet"이 <b>"Sample check: 2 of 100 judged — not final"</b>과 "1 of 2 sampled boxes → about …% of all 1,452"로 바뀌었다. 그 아래 "A sample estimate, judged by one person. Precision still counts all of them as false alarms — nothing was re-scored." 버튼은 "Continue the sample check →".</p>
+      <p>네가 100개를 다 판정하면 이 자리에 "100 of 100 judged"와 범위가 나온다.</p>`,
+  },
+  {
+    key: 'D4 1280',
+    title: '단계 D — 1280×720',
+    img: 'd4_1280x720.jpg', w: 1280, h: 720,
+    html: `<p><span class="tag pass">통과</span>1536px보다 좁으면 전체 숫자와 헛짚음 블록이 위로 올라가고 두 표가 그 아래에 나란히 놓인다. 보고서 안에서 스크롤한다.</p>
+      <p>위치로 확인한 것(네 가지 창 크기): 잘린 글자가 없는가, 보고서 밖으로 나간 것이 없는가, 표의 칸이 서로 겹치지 않는가, 1536×700과 1440×900에서는 두 표가 스크롤 없이 다 보이는가, 그보다 좁으면 스크롤해서 마지막 줄까지 갈 수 있는가, 맨 위 줄이 한 줄인가, 페이지 스크롤이 없는가.</p>`,
+  },
+  {
+    key: 'D5 1024',
+    title: '단계 D — 1024×768',
+    img: 'd5_1024x768.jpg', w: 1024, h: 768,
+    html: `<p><span class="tag pass">통과</span>가장 좁은 폭에서는 한 줄로 쌓인다. 주행 표가 보이고 거리 표는 아래로 스크롤하면 나온다.</p>
+      <p><b>이번에 만든 것이 아닌 것 하나 (적어 두고 고치지 않았다):</b> 오른쪽 패널의 "1364 of 1778 model boxes matched a la…"가 잘려 있다. 패널 폭이 360px일 때 생기는 말줄임이고, F7.5를 시작하기 전의 코드(<code>4b4597e</code>)에 이미 있었다. 고칠지는 네가 정하면 된다.</p>`,
+  },
+  {
+    key: 'E README',
+    title: '단계 E — README 갱신과 이력서 한 줄 초안 (화면 변화 없음)',
+    html: `<p><span class="tag pass">통과</span>README에 적은 숫자 55개를 계산 결과(앱의 채점 코드를 저장소의 파일에 돌린 값)와 스크립트로 다시 대조했다. 모두 같다.</p>
+      <p><b>README에서 바뀐 것</b> (593줄 → 약 800줄):</p>
+      <ul>
+        <li><b>소개:</b> nuScenes 쪽이 "인지 데이터의 품질을 보는 도구"가 됐다는 것과 세 모드(Review / Evaluate / Explore). "실무 도구의 핵심 흐름을 1인용으로 재현"이라고 적었다.</li>
+        <li><b>주요 기능:</b> 카메라 6대, 장면 10개 나눠 받기, 카메라 탐지 평가, 장면 탐색, 헛짚음 표본 검수, 보고서 창. 검수 설명도 지금 동작에 맞췄다.</li>
+        <li><b>새 절 "카메라 탐지 평가 결과":</b> 조건 표 → 전체(IoU 0.3과 0.5) → 주행 단위 표 8줄 → 낮/밤(클래스별, 거리 구간 10줄 포함) → 확인되지 않은 헛짚음과 표본 검수 → 한계 10가지 → nuScenes 공식 평가와의 관계.</li>
+        <li><b>낡은 부분:</b> 테스트 수 386 → 985, "단일 카메라 · 단일 scene" 한계, 프로젝트 구조, 향후 개선 방향(이미 한 것을 지우고 다음 작업으로), Lighthouse 표의 "현재 배포본"이라는 이름.</li>
+        <li><b>성능 기록:</b> 가만히 있을 때의 3D 비용, 데이터 40배, 전체 장면 재채점 세 줄을 더했다(각각 잰 날짜와 환경 포함).</li>
+      </ul>
+      <p><b>표기 방침(F7 설계 문서 9장)을 지킨 곳:</b></p>
+      <ul>
+        <li>절의 첫 줄: "모델의 성능 수치가 아닙니다."</li>
+        <li>낮 64.1% 대 밤 32.7%는 <b>"관찰됐습니다"</b>로 쓰고, 표의 머리에 <b>"밤 장면 3개 (주행 1번)"</b>, 아래에 "원인은 이 자료로 밝혀지지 않습니다".</li>
+        <li>숫자 옆에 조건: YOLOv8n, 추가 학습 없음, 입력 1280, 점수 0.25, IoU 0.3, 3D 정답을 투영한 기준.</li>
+        <li>공식 평가 문장은 공식 문서(nuscenes-devkit의 탐지 평가 README)를 확인한 범위까지만: "공식 순위표의 수치와 나란히 놓을 수 없습니다". "비교할 공개 수치가 세상에 없다"고는 쓰지 않았다.</li>
+      </ul>
+      <p><b>아직 비어 있는 것:</b> 표본 검수의 판정 결과. "아직 이 문서에 싣지 않았습니다"라고 적어 두었다. 네가 판정한 뒤 넣을지 정하면 된다.</p>
+      <p><b>고치지 않은 것:</b> README 맨 위의 움직이는 그림 8장(예전 화면이다. 새로 찍어 올리는 것은 네가 해야 한다), Lighthouse 점수(다시 재지 않았다고 적었다).</p>`,
+  },
+  {
+    key: 'F 엣지 1',
+    title: '단계 F — 엣지 케이스 검증: 고치기 전에 먼저 돌렸다',
+    img: 'edge2_scene_failed.jpg', w: 1536, h: 700, dir: '2026-11-27_edge/',
+    html: `<p><span class="tag pass">통과</span>엣지 48 / 48, 3D 바닥 비용 5 / 5, F4~F7의 기존 흐름 30 / 30. 마지막 빌드에서 B 135, C 74, D 51도 다시 돌려 모두 통과(합 343항목). 단위 테스트 985개, 타입 오류 0, 린트 오류 0(경고 19개), 배포용 빌드 성공.</p>
+      <p><b>단계 확인에서 해 보지 않은 조건 16가지</b>를 고치기 전에 먼저 돌렸다: 장면이 늦게 올 때, 장면 하나가 실패했을 때, 예측이 없는 장면, 쉬지 않고 연달아 누른 키, 한글 입력 상태, 마우스로 누른 뒤의 Space, 표본이 아닌 것을 고른 상태, 지금 박스가 표본 밖으로 나가게 크기 줄이기, 새로 고침, 탭 두 개, 데이터셋 전환, 슬라이더가 파일의 최솟값 아래, 최소 높이(640px), 390px, 1024px에서 300줄, 저장이 안 될 때, 낡았거나 깨진 저장값.</p>
+      <p><b>처음 결과: 42 / 48.</b> 진짜 문제 2건, 그리고 첫 문제 때문에 개수가 하나씩 밀려 생긴 연쇄 실패 4건.</p>
+      <p><span class="tag fix">고침 1</span><b>쉬지 않고 A 다음 R을 누르면, 보지도 않은 두 번째 박스가 판정됐다.</b> 판정하면 바로 다음 박스로 넘어가는데(다른 장면이어도 41ms), 그 직후에 들어온 키가 새 박스에 적용됐다. 표본에서는 판정 하나하나가 추정에 들어가므로 보지 않은 판정이 섞이면 안 된다. → <b>박스가 화면에 400ms 있은 뒤에만 판정을 받는다.</b> 사진을 보는 데 걸리는 시간보다 훨씬 짧아서 평소에는 느껴지지 않는다.</p>
+      <p><span class="tag fix">고침 2</span><b>390px에서 보고서의 주행 표 첫 칸이 잘렸다.</b> → 휴대폰 폭에서는 표가 그 칸 안에서 옆으로 스크롤된다.</p>
+      <p><b>이 그림에서 볼 것:</b> 장면 하나(scene-0655)를 받지 못하게 만든 화면이다. 표본 검수는 <b>나머지 아홉 장면으로 표본을 뽑지 않고</b> "The sample cannot be drawn — scene-0655 could not be loaded…"라고 이유를 말한다. 일부만으로 뽑으면 다른 표본이 되고, 저장된 판정이 조용히 어긋나기 때문이다.</p>`,
+  },
+  {
+    key: 'F 엣지 2',
+    title: '단계 F — 390px(휴대폰 폭)의 보고서',
+    img: 'edge13_390_report.jpg', w: 390, h: 844, dir: '2026-11-27_edge/',
+    html: `<p><span class="tag pass">통과</span>지원하는 가장 좁은 폭이다. 화면이 세로로 쌓이고 보고서가 맨 위에 온다.</p>
+      <p><b>무엇을 보면 되는지:</b> 가로로 넘치는 것이 없고, 표의 칸이 잘리지 않는다(주행 표는 그 칸 안에서 옆으로 민다).</p>
+      <p><span class="tag fix">고침 3</span>이 캡처를 눈으로 보다가 <b>보고서 제목이 "all 10 scenes · 404 frame…"으로 잘린 것</b>을 찾았다. 스크립트가 이 폭에서는 표의 칸과 문단만 보고 제목은 보지 않았다. 제목이 두 줄로 줄바꿈되게 고치고, 검사에 제목, 버튼, 조건 칩을 넣은 뒤 모든 스크립트를 다시 돌렸다. 지금 보이는 그림이 고친 뒤의 것이다.</p>
+      <p>함께 확인하고 바꿀 것이 없던 것: 한글 입력 상태의 키, 마우스로 버튼을 누른 뒤의 Space / Enter, 탭 두 개(한 탭의 판정이 다른 탭에 바로 보이고 서로 덮어쓰지 않음), 저장이 안 될 때(판정은 되고 "새로 고치면 사라진다"는 경고가 보임), F7.5 전의 저장값(정답 박스 검수 기록이 그대로 남음), 슬라이더 0 + IoU 0.5의 조건 한 줄("score ≥ 0.05 (file minimum) · IoU ≥ 0.5", 두 줄로 줄바꿈되고 잘리지 않음).</p>`,
+  },
+  {
+    key: 'F 비용과 기존 흐름',
+    title: '단계 F — 3D 바닥 비용과 F4~F7의 기존 흐름',
+    img: 'edge1_loading.jpg', w: 1536, h: 700, dir: '2026-11-27_edge/',
+    html: `<p><span class="tag pass">통과</span><b>3D 바닥 비용은 그대로다:</b> 박스 40개 프레임(scene-0916의 첫 프레임)의 그리기 호출 41번(1440×900) / 42번(1536×700). 평가 모드와 보고서를 연 상태에서도 42번이다(보고서와 표본 검수는 3D 객체를 하나도 더하지 않는다).</p>
+      <p><b>새 조작에 걸리는 시간</b>(배포용 빌드, 소프트웨어 렌더링, <b>한 번씩 잰 참고값</b>): 보고서 열기 94ms, 표본 검수 들어가기 139ms(전체 장면 채점 + 표본 뽑기 + 다른 장면의 1번 박스 열기), 판정 → 다른 장면의 다음 박스 41ms, 같은 장면 24ms. 네 실제 브라우저에서는 재지 않았다.</p>
+      <p><b>F4~F7의 기존 흐름 30항목:</b> 이번에 여러 모드가 함께 쓰는 코드(위쪽 줄의 자리, 카메라 고르기, 화면 틀, 검수 기록의 구역, "프레임 열기", 단축키 처리)를 건드렸는데, F7 때의 확인 스크립트는 세션이 바뀌어 남아 있지 않았다. 그래서 새로 만들어 돌렸다: 정답 박스 판정 / 사유 / 메모에 타자 / N / 내보내기(<code>review@2</code> 그대로, 표본 기록이 섞이지 않음) / 새로 고침, <code>]</code>와 자동 카메라, 연습 모드에서 평가가 막힘, 결과 칩, 헛짚음 선택, 점수 슬라이더와 Reset, "Crowded" 177프레임, 다른 장면의 검색 결과 열기(그 프레임으로 가고 아무것도 선택하지 않음), K, 장면 고르기, COCO. F7 때(163항목)만큼 넓지는 않다.</p>
+      <p><b>이 그림에서 볼 것:</b> 장면 파일이 늦게 오는 상황(장면마다 6초 늦춤)에서 표본 검수에 들어간 화면이다. "Preparing the sample… 1 of 10 are loaded"라고 말하고 Export가 꺼져 있다. 마지막 장면이 도착하면 1번 박스가 저절로 열린다.</p>
+      <p><b>확인하지 못한 것:</b> 네 실제 브라우저와 GPU, Vercel 배포, 400ms가 사람에게 맞는지(재지 않고 정한 값이다), 새로 넣은 "잘린 글자" 검사가 고치기 전 화면에서 실제로 실패하는지.</p>`,
+  },
+  {
+    key: '뒤에 고친 것',
+    title: 'push한 뒤 — 다른 카메라를 봐도 박스가 풀리지 않게',
+    img: 'b7_other_camera.jpg', w: 1536, h: 700,
+    html: `<p><span class="tag fix">고침</span>사용자가 표본 검수를 처음 해 보다가 찾은 것이다. <b>다른 카메라의 썸네일을 누르면 박스 선택이 풀렸고, 원래 카메라로 돌아와도 노란 박스가 살아나지 않았다</b>(패널은 "No sampled box is selected", ZOOM은 FULL과 같아짐). 주변을 다른 각도로 보는 것은 검수자가 당연히 하는 일인데, 확인 343항목 중 표본 검수에서 썸네일을 눌러 본 것이 하나도 없었다.</p>
+      <p><span class="tag pass">통과</span>고친 뒤: 표본 검수 154(새 검사 19개 포함), IoU 74, 보고서 51, 엣지 48, 기존 흐름 30, 3D 바닥 비용 5 = 362항목. 단위 테스트 989개.</p>
+      <p><b>이 그림에서 볼 것</b> (1번 박스는 앞 카메라 F에 있고, 지금은 FR을 보고 있다):</p>
+      <ul>
+        <li>왼쪽 목록에서 <b>1번이 여전히 선택돼 있다.</b></li>
+        <li>오른쪽 아래: <b>"Showing FR — the box is in the F photo."</b>와 <b>Show the box</b> 버튼. 판정 버튼 셋은 켜져 있다(주변을 본 뒤 그 자리에서 판정할 수 있다).</li>
+        <li>썸네일 줄의 <b>F에 작은 흰 표시</b>가 있다. 박스가 있는 사진이다.</li>
+        <li>FR 사진에는 노란 박스가 없다. 정상이다: 모델의 박스는 사진 한 장에만 있다.</li>
+      </ul>
+      <p><b>돌아가는 방법 네 가지:</b> Show the box 버튼, F 썸네일, 목록의 그 줄, <code>[</code> <code>]</code>. 다른 <b>프레임</b>(타임라인)으로 가면 여전히 선택이 풀린다(그 프레임에는 그 박스가 없다). 그때는 <code>J</code>.</p>`,
+  },
+];
+let at = 0;
+const nav = document.getElementById('nav');
+const note = document.getElementById('note');
+const view = document.getElementById('view');
+function show(i) {
+  at = (i + SCREENS.length) % SCREENS.length;
+  const s = SCREENS[at];
+  nav.innerHTML = SCREENS.map((x, k) => `<button aria-pressed="${k === at}" data-k="${k}">${x.key}</button>`).join('');
+  note.innerHTML = `<h2>${s.title}</h2>${s.html}`;
+  view.innerHTML = (s.pre ? `<pre>${s.pre}</pre>` : '') + (s.img ? `<div class="shot"><img src="${s.dir ?? DIR}${s.img}" width="${s.w}" height="${s.h}" style="width:${s.w}px;height:${s.h}px" alt=""></div>` : '');
+  try { history.replaceState(null, '', `#${at + 1}`); } catch (e) { /* 파일로 열었을 때 무시 */ }
+}
+nav.addEventListener('click', (e) => { const k = e.target?.dataset?.k; if (k !== undefined) show(Number(k)); });
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') show(at + 1);
+  else if (e.key === 'ArrowLeft') show(at - 1);
+});
+show(Math.max(0, (parseInt(location.hash.slice(1), 10) || 1) - 1));
+</script>
+</body>
+</html>

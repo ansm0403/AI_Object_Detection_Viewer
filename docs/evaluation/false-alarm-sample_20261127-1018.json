@@ -1,0 +1,1868 @@
+{
+  "format": "ai-detection-viewer/false-alarm-sample@1",
+  "exportedAt": "2026-11-27T01:18:46.231Z",
+  "dataset": "nuscenes",
+  "population": {
+    "definition": "Model boxes counted as false alarms that overlap no label of any class in their photo (IoU below 0.1 with every label, scored or not).",
+    "rules": {
+      "minScore": 0.25,
+      "iouThreshold": 0.3,
+      "noLabelWithinIou": 0.1
+    },
+    "size": 1452,
+    "scenes": [
+      "scene-0061",
+      "scene-0103",
+      "scene-0553",
+      "scene-0655",
+      "scene-0757",
+      "scene-0796",
+      "scene-0916",
+      "scene-1077",
+      "scene-1094",
+      "scene-1100"
+    ]
+  },
+  "sample": {
+    "method": "simple random sample without replacement (seeded shuffle, first N)",
+    "seed": 20261127,
+    "size": 100
+  },
+  "verdicts": {
+    "real-object": "A real object (a vehicle or a person) is in the box and the dataset has no label for it. Does not assert that the model named its exact class.",
+    "model-wrong": "No such object is there (background, a reflection, a picture of a person, …).",
+    "unclear": "The photo cannot settle it."
+  },
+  "summary": {
+    "judged": 100,
+    "complete": true,
+    "counts": {
+      "real-object": 83,
+      "model-wrong": 5,
+      "unclear": 12
+    },
+    "estimates": {
+      "real-object": {
+        "count": 83,
+        "share": 0.83,
+        "low": 0.7478,
+        "high": 0.8893
+      },
+      "model-wrong": {
+        "count": 5,
+        "share": 0.05,
+        "low": 0.0222,
+        "high": 0.1089
+      },
+      "unclear": {
+        "count": 12,
+        "share": 0.12,
+        "low": 0.0713,
+        "high": 0.195
+      }
+    },
+    "caveat": "Judged by one person on 960x540 copies of the photos. The interval treats the boxes as independent; the same object is often boxed again in the next frame, so the true uncertainty is somewhat larger."
+  },
+  "items": [
+    {
+      "index": 1,
+      "scene": "scene-0757",
+      "frameIndex": 31,
+      "frameId": "bad8a002637046178fe0f8216e5bc355",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:bad8a002637046178fe0f8216e5bc355:CAM_FRONT:8",
+      "class": "car",
+      "score": 0.3667,
+      "bbox": [
+        499.8,
+        440.1,
+        67,
+        47.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:11.040Z"
+    },
+    {
+      "index": 2,
+      "scene": "scene-0655",
+      "frameIndex": 26,
+      "frameId": "0402e40724984f3b833496067d46c771",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:0402e40724984f3b833496067d46c771:CAM_FRONT_RIGHT:21",
+      "class": "car",
+      "score": 0.2561,
+      "bbox": [
+        562.1,
+        491.9,
+        89.9,
+        31.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:12.185Z"
+    },
+    {
+      "index": 3,
+      "scene": "scene-0916",
+      "frameIndex": 9,
+      "frameId": "5b7cb170eee6468aa1fdbd3abcf63c5a",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:5b7cb170eee6468aa1fdbd3abcf63c5a:CAM_FRONT_RIGHT:22",
+      "class": "car",
+      "score": 0.2533,
+      "bbox": [
+        1516.4,
+        411.5,
+        83.6,
+        25.2
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:13.207Z"
+    },
+    {
+      "index": 4,
+      "scene": "scene-0061",
+      "frameIndex": 34,
+      "frameId": "b73152cab88f49d9ba195da81fde1809",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:b73152cab88f49d9ba195da81fde1809:CAM_FRONT_RIGHT:6",
+      "class": "car",
+      "score": 0.3092,
+      "bbox": [
+        472.9,
+        472.5,
+        130.3,
+        32.2
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:14.480Z"
+    },
+    {
+      "index": 5,
+      "scene": "scene-0061",
+      "frameIndex": 39,
+      "frameId": "ed5fc18c31904f96a8f0dbb99ff069c0",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:ed5fc18c31904f96a8f0dbb99ff069c0:CAM_FRONT_RIGHT:0",
+      "class": "car",
+      "score": 0.7326,
+      "bbox": [
+        1117.5,
+        472,
+        119.7,
+        37.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:16.155Z"
+    },
+    {
+      "index": 6,
+      "scene": "scene-1094",
+      "frameIndex": 31,
+      "frameId": "9cc9718713c14974b5e3094e1c4eae1c",
+      "camera": "CAM_BACK",
+      "predictionId": "pred:9cc9718713c14974b5e3094e1c4eae1c:CAM_BACK:3",
+      "class": "car",
+      "score": 0.2934,
+      "bbox": [
+        435.6,
+        470.2,
+        29.2,
+        29.6
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T01:16:21.066Z"
+    },
+    {
+      "index": 7,
+      "scene": "scene-0655",
+      "frameIndex": 20,
+      "frameId": "252b65dd79ce4712af1b898b64ea3b98",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:252b65dd79ce4712af1b898b64ea3b98:CAM_BACK_RIGHT:8",
+      "class": "bicycle",
+      "score": 0.2871,
+      "bbox": [
+        131.2,
+        519.9,
+        87.4,
+        83.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:22.342Z"
+    },
+    {
+      "index": 8,
+      "scene": "scene-0061",
+      "frameIndex": 18,
+      "frameId": "2ff86dc19c4644a1a88ce5ba848f56e5",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:2ff86dc19c4644a1a88ce5ba848f56e5:CAM_FRONT:5",
+      "class": "person",
+      "score": 0.3684,
+      "bbox": [
+        1087.4,
+        454.3,
+        25,
+        46.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:44.268Z"
+    },
+    {
+      "index": 9,
+      "scene": "scene-0655",
+      "frameIndex": 37,
+      "frameId": "c5a8f6d7a0fe4858b318aeac2524098f",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:c5a8f6d7a0fe4858b318aeac2524098f:CAM_FRONT_RIGHT:3",
+      "class": "car",
+      "score": 0.3915,
+      "bbox": [
+        1378.7,
+        484.3,
+        48.7,
+        21.4
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:45.980Z"
+    },
+    {
+      "index": 10,
+      "scene": "scene-1100",
+      "frameIndex": 20,
+      "frameId": "ace4b20b94cf47d0b68addac79fe68de",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:ace4b20b94cf47d0b68addac79fe68de:CAM_FRONT:4",
+      "class": "car",
+      "score": 0.2599,
+      "bbox": [
+        258.9,
+        460.4,
+        27.1,
+        19.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:50.208Z"
+    },
+    {
+      "index": 11,
+      "scene": "scene-0916",
+      "frameIndex": 8,
+      "frameId": "a5afebb0aa5e4d7c95665788ce51ec58",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:a5afebb0aa5e4d7c95665788ce51ec58:CAM_BACK_RIGHT:7",
+      "class": "car",
+      "score": 0.4556,
+      "bbox": [
+        502.9,
+        444.7,
+        21.7,
+        21.4
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:52.793Z"
+    },
+    {
+      "index": 12,
+      "scene": "scene-0103",
+      "frameIndex": 1,
+      "frameId": "3e8750f331d7499e9b5123e9eb70f2e2",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:3e8750f331d7499e9b5123e9eb70f2e2:CAM_FRONT_LEFT:6",
+      "class": "person",
+      "score": 0.2616,
+      "bbox": [
+        1463.2,
+        499.2,
+        30.9,
+        62.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:54.119Z"
+    },
+    {
+      "index": 13,
+      "scene": "scene-0103",
+      "frameIndex": 34,
+      "frameId": "9fcdc52b791045e99c623c5fc643331f",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:9fcdc52b791045e99c623c5fc643331f:CAM_FRONT:5",
+      "class": "car",
+      "score": 0.863,
+      "bbox": [
+        711.6,
+        483.8,
+        55.3,
+        46
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:54.789Z"
+    },
+    {
+      "index": 14,
+      "scene": "scene-0916",
+      "frameIndex": 9,
+      "frameId": "5b7cb170eee6468aa1fdbd3abcf63c5a",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:5b7cb170eee6468aa1fdbd3abcf63c5a:CAM_BACK_RIGHT:20",
+      "class": "car",
+      "score": 0.3769,
+      "bbox": [
+        504.8,
+        442.2,
+        24.6,
+        21.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:55.491Z"
+    },
+    {
+      "index": 15,
+      "scene": "scene-0655",
+      "frameIndex": 40,
+      "frameId": "9c56003504024697a5c8d1cb9355a335",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:9c56003504024697a5c8d1cb9355a335:CAM_FRONT_RIGHT:2",
+      "class": "car",
+      "score": 0.3304,
+      "bbox": [
+        1297.1,
+        454.9,
+        34.6,
+        14.2
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:56.169Z"
+    },
+    {
+      "index": 16,
+      "scene": "scene-0103",
+      "frameIndex": 13,
+      "frameId": "0d0700a2284e477db876c3ee1d864668",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:0d0700a2284e477db876c3ee1d864668:CAM_FRONT_RIGHT:4",
+      "class": "car",
+      "score": 0.2539,
+      "bbox": [
+        1026.3,
+        441.5,
+        60.1,
+        42.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:57.162Z"
+    },
+    {
+      "index": 17,
+      "scene": "scene-0103",
+      "frameIndex": 27,
+      "frameId": "9e7683e8586542a1b6032980c45f15ce",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:9e7683e8586542a1b6032980c45f15ce:CAM_FRONT:22",
+      "class": "car",
+      "score": 0.3646,
+      "bbox": [
+        0,
+        593.9,
+        32.8,
+        80.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:59.695Z"
+    },
+    {
+      "index": 18,
+      "scene": "scene-0103",
+      "frameIndex": 28,
+      "frameId": "cc57c1ea80fe46a7abddfdb15654c872",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:cc57c1ea80fe46a7abddfdb15654c872:CAM_BACK_RIGHT:4",
+      "class": "car",
+      "score": 0.3679,
+      "bbox": [
+        76.2,
+        418.1,
+        51.1,
+        29.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:00.613Z"
+    },
+    {
+      "index": 19,
+      "scene": "scene-0103",
+      "frameIndex": 28,
+      "frameId": "cc57c1ea80fe46a7abddfdb15654c872",
+      "camera": "CAM_BACK_LEFT",
+      "predictionId": "pred:cc57c1ea80fe46a7abddfdb15654c872:CAM_BACK_LEFT:10",
+      "class": "car",
+      "score": 0.3554,
+      "bbox": [
+        984.2,
+        522.5,
+        31.9,
+        17
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:02.016Z"
+    },
+    {
+      "index": 20,
+      "scene": "scene-1100",
+      "frameIndex": 20,
+      "frameId": "ace4b20b94cf47d0b68addac79fe68de",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:ace4b20b94cf47d0b68addac79fe68de:CAM_FRONT_RIGHT:2",
+      "class": "car",
+      "score": 0.3554,
+      "bbox": [
+        806.7,
+        464.3,
+        75.5,
+        29.3
+      ],
+      "verdict": "model-wrong",
+      "judgedAt": "2026-11-27T01:17:06.231Z"
+    },
+    {
+      "index": 21,
+      "scene": "scene-0553",
+      "frameIndex": 4,
+      "frameId": "f5b8088835f247b8a5434a9f0daadc20",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:f5b8088835f247b8a5434a9f0daadc20:CAM_FRONT:5",
+      "class": "car",
+      "score": 0.3919,
+      "bbox": [
+        658.5,
+        474.8,
+        18.5,
+        16.7
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T01:17:09.059Z"
+    },
+    {
+      "index": 22,
+      "scene": "scene-1077",
+      "frameIndex": 12,
+      "frameId": "ca6000b81f2b4b598502b1e93e334a1d",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:ca6000b81f2b4b598502b1e93e334a1d:CAM_BACK_RIGHT:0",
+      "class": "car",
+      "score": 0.3707,
+      "bbox": [
+        93.3,
+        514.3,
+        121.8,
+        102.4
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T01:17:15.859Z"
+    },
+    {
+      "index": 23,
+      "scene": "scene-1100",
+      "frameIndex": 3,
+      "frameId": "61cfc5554a724824b0d34bddc147d890",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:61cfc5554a724824b0d34bddc147d890:CAM_FRONT:4",
+      "class": "car",
+      "score": 0.2527,
+      "bbox": [
+        183.3,
+        460.2,
+        39.5,
+        27.3
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:25.031Z"
+    },
+    {
+      "index": 24,
+      "scene": "scene-0553",
+      "frameIndex": 33,
+      "frameId": "32e2619879854a83953c08ec8557f3bb",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:32e2619879854a83953c08ec8557f3bb:CAM_FRONT_LEFT:2",
+      "class": "car",
+      "score": 0.3637,
+      "bbox": [
+        0,
+        467,
+        33,
+        40.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:26.965Z"
+    },
+    {
+      "index": 25,
+      "scene": "scene-0655",
+      "frameIndex": 19,
+      "frameId": "d7387fb5a21d40a990a5842cca61af1c",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:d7387fb5a21d40a990a5842cca61af1c:CAM_FRONT_RIGHT:6",
+      "class": "bicycle",
+      "score": 0.4741,
+      "bbox": [
+        993.3,
+        507.4,
+        119.6,
+        77
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:28.049Z"
+    },
+    {
+      "index": 26,
+      "scene": "scene-0103",
+      "frameIndex": 6,
+      "frameId": "f4f86af4da3b49e79497deda5c5f223a",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:f4f86af4da3b49e79497deda5c5f223a:CAM_FRONT_LEFT:7",
+      "class": "person",
+      "score": 0.3839,
+      "bbox": [
+        1080.2,
+        433.1,
+        27.8,
+        41.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:29.494Z"
+    },
+    {
+      "index": 27,
+      "scene": "scene-0655",
+      "frameIndex": 40,
+      "frameId": "9c56003504024697a5c8d1cb9355a335",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:9c56003504024697a5c8d1cb9355a335:CAM_BACK_RIGHT:4",
+      "class": "car",
+      "score": 0.7107,
+      "bbox": [
+        876.3,
+        461.9,
+        78.2,
+        47.4
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:30.507Z"
+    },
+    {
+      "index": 28,
+      "scene": "scene-0655",
+      "frameIndex": 37,
+      "frameId": "c5a8f6d7a0fe4858b318aeac2524098f",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:c5a8f6d7a0fe4858b318aeac2524098f:CAM_BACK_RIGHT:15",
+      "class": "car",
+      "score": 0.2734,
+      "bbox": [
+        172.5,
+        492.1,
+        46.6,
+        37.4
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:31.360Z"
+    },
+    {
+      "index": 29,
+      "scene": "scene-0103",
+      "frameIndex": 11,
+      "frameId": "b6b0d9f2f2e14a3aaa2c8aedeb1edb69",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:b6b0d9f2f2e14a3aaa2c8aedeb1edb69:CAM_FRONT:10",
+      "class": "car",
+      "score": 0.5423,
+      "bbox": [
+        773.2,
+        454.8,
+        32.5,
+        23.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:32.075Z"
+    },
+    {
+      "index": 30,
+      "scene": "scene-0103",
+      "frameIndex": 40,
+      "frameId": "281b92269fd648d4b52d06ac06ca6d65",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:281b92269fd648d4b52d06ac06ca6d65:CAM_BACK_RIGHT:5",
+      "class": "car",
+      "score": 0.3674,
+      "bbox": [
+        582.2,
+        409.7,
+        41.5,
+        29.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:32.985Z"
+    },
+    {
+      "index": 31,
+      "scene": "scene-0796",
+      "frameIndex": 35,
+      "frameId": "26e594c412e84bdda76e344933fe305a",
+      "camera": "CAM_BACK",
+      "predictionId": "pred:26e594c412e84bdda76e344933fe305a:CAM_BACK:2",
+      "class": "car",
+      "score": 0.5095,
+      "bbox": [
+        786.1,
+        488.5,
+        21.2,
+        17.7
+      ],
+      "verdict": "model-wrong",
+      "judgedAt": "2026-11-27T01:17:47.857Z"
+    },
+    {
+      "index": 32,
+      "scene": "scene-0061",
+      "frameIndex": 27,
+      "frameId": "4246e57f018745c9b2bc68feb3d71b58",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:4246e57f018745c9b2bc68feb3d71b58:CAM_FRONT_RIGHT:2",
+      "class": "car",
+      "score": 0.5831,
+      "bbox": [
+        960.2,
+        502.8,
+        97.2,
+        36.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:49.119Z"
+    },
+    {
+      "index": 33,
+      "scene": "scene-0757",
+      "frameIndex": 10,
+      "frameId": "8366b5125ac945f3b93153cfa39f1677",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:8366b5125ac945f3b93153cfa39f1677:CAM_FRONT:6",
+      "class": "car",
+      "score": 0.3926,
+      "bbox": [
+        681.8,
+        453.3,
+        17.9,
+        16.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:54.499Z"
+    },
+    {
+      "index": 34,
+      "scene": "scene-0103",
+      "frameIndex": 38,
+      "frameId": "87e772078a494d42bd34cd16172808bc",
+      "camera": "CAM_BACK_LEFT",
+      "predictionId": "pred:87e772078a494d42bd34cd16172808bc:CAM_BACK_LEFT:3",
+      "class": "car",
+      "score": 0.6087,
+      "bbox": [
+        1121.1,
+        494.9,
+        277.6,
+        79.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:17:55.531Z"
+    },
+    {
+      "index": 35,
+      "scene": "scene-1077",
+      "frameIndex": 34,
+      "frameId": "1923316323b44b86b3389178fb026db6",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:1923316323b44b86b3389178fb026db6:CAM_FRONT:3",
+      "class": "car",
+      "score": 0.2778,
+      "bbox": [
+        969.8,
+        499.2,
+        18.7,
+        20.7
+      ],
+      "verdict": "model-wrong",
+      "judgedAt": "2026-11-27T01:18:03.585Z"
+    },
+    {
+      "index": 36,
+      "scene": "scene-0103",
+      "frameIndex": 26,
+      "frameId": "61d9340c5ad8418dafe7a4af1b96e6b9",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:61d9340c5ad8418dafe7a4af1b96e6b9:CAM_FRONT:20",
+      "class": "car",
+      "score": 0.3568,
+      "bbox": [
+        754,
+        481.5,
+        20.9,
+        18.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:04.441Z"
+    },
+    {
+      "index": 37,
+      "scene": "scene-0061",
+      "frameIndex": 38,
+      "frameId": "29e056fc277543c9bc42310b122c640e",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:29e056fc277543c9bc42310b122c640e:CAM_FRONT_LEFT:5",
+      "class": "person",
+      "score": 0.6755,
+      "bbox": [
+        227.7,
+        258.8,
+        43.2,
+        78.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:05.573Z"
+    },
+    {
+      "index": 38,
+      "scene": "scene-0655",
+      "frameIndex": 39,
+      "frameId": "728e3e32df3c413389cb7e233de96ac4",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:728e3e32df3c413389cb7e233de96ac4:CAM_BACK_RIGHT:5",
+      "class": "car",
+      "score": 0.4903,
+      "bbox": [
+        760.6,
+        475.8,
+        77.7,
+        47.2
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:06.521Z"
+    },
+    {
+      "index": 39,
+      "scene": "scene-1094",
+      "frameIndex": 26,
+      "frameId": "8d7dcd1533704f5882a5afcb65509ed5",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:8d7dcd1533704f5882a5afcb65509ed5:CAM_FRONT_RIGHT:0",
+      "class": "person",
+      "score": 0.5804,
+      "bbox": [
+        1084.4,
+        436,
+        26.7,
+        73.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:07.552Z"
+    },
+    {
+      "index": 40,
+      "scene": "scene-1094",
+      "frameIndex": 18,
+      "frameId": "056becbc0d5a46da8d59eebddedb47bb",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:056becbc0d5a46da8d59eebddedb47bb:CAM_BACK_RIGHT:10",
+      "class": "person",
+      "score": 0.485,
+      "bbox": [
+        654.4,
+        440.7,
+        26,
+        41.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:08.565Z"
+    },
+    {
+      "index": 41,
+      "scene": "scene-1100",
+      "frameIndex": 29,
+      "frameId": "93f4f8ac1145418cadcf14dfd2a9cf78",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:93f4f8ac1145418cadcf14dfd2a9cf78:CAM_FRONT_LEFT:0",
+      "class": "car",
+      "score": 0.6183,
+      "bbox": [
+        1210.6,
+        456.1,
+        63.3,
+        36.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:09.495Z"
+    },
+    {
+      "index": 42,
+      "scene": "scene-0655",
+      "frameIndex": 40,
+      "frameId": "9c56003504024697a5c8d1cb9355a335",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:9c56003504024697a5c8d1cb9355a335:CAM_BACK_RIGHT:9",
+      "class": "car",
+      "score": 0.3249,
+      "bbox": [
+        900.8,
+        463,
+        53.9,
+        46.5
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:10.477Z"
+    },
+    {
+      "index": 43,
+      "scene": "scene-0103",
+      "frameIndex": 33,
+      "frameId": "ce94ef7a0522468e81c0e2b3a2f1e12d",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:ce94ef7a0522468e81c0e2b3a2f1e12d:CAM_FRONT:15",
+      "class": "car",
+      "score": 0.4622,
+      "bbox": [
+        934.5,
+        478.3,
+        26.5,
+        36.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:11.402Z"
+    },
+    {
+      "index": 44,
+      "scene": "scene-0103",
+      "frameIndex": 40,
+      "frameId": "281b92269fd648d4b52d06ac06ca6d65",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:281b92269fd648d4b52d06ac06ca6d65:CAM_BACK_RIGHT:11",
+      "class": "car",
+      "score": 0.2694,
+      "bbox": [
+        1477.8,
+        412.7,
+        51.1,
+        59.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:12.794Z"
+    },
+    {
+      "index": 45,
+      "scene": "scene-0103",
+      "frameIndex": 17,
+      "frameId": "0a0d6b8c2e884134a3b48df43d54c36a",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:0a0d6b8c2e884134a3b48df43d54c36a:CAM_FRONT:13",
+      "class": "car",
+      "score": 0.3282,
+      "bbox": [
+        716.9,
+        457.4,
+        33.8,
+        35.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:14.812Z"
+    },
+    {
+      "index": 46,
+      "scene": "scene-0655",
+      "frameIndex": 39,
+      "frameId": "728e3e32df3c413389cb7e233de96ac4",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:728e3e32df3c413389cb7e233de96ac4:CAM_BACK_RIGHT:6",
+      "class": "car",
+      "score": 0.4029,
+      "bbox": [
+        784.6,
+        476.5,
+        53.9,
+        46.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:15.626Z"
+    },
+    {
+      "index": 47,
+      "scene": "scene-0061",
+      "frameIndex": 32,
+      "frameId": "5fda58ee3ae44ab9b4bbac7a2de66c27",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:5fda58ee3ae44ab9b4bbac7a2de66c27:CAM_FRONT_RIGHT:2",
+      "class": "car",
+      "score": 0.2968,
+      "bbox": [
+        819.2,
+        486.9,
+        63,
+        33.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:16.603Z"
+    },
+    {
+      "index": 48,
+      "scene": "scene-0103",
+      "frameIndex": 16,
+      "frameId": "b22fa0b3c34f47b6a360b60f35d5d567",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:b22fa0b3c34f47b6a360b60f35d5d567:CAM_FRONT:8",
+      "class": "car",
+      "score": 0.4212,
+      "bbox": [
+        699.4,
+        458.2,
+        20.9,
+        37.5
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:18.414Z"
+    },
+    {
+      "index": 49,
+      "scene": "scene-0796",
+      "frameIndex": 36,
+      "frameId": "78e778e7e6c84dc59c0436a4d6ff5032",
+      "camera": "CAM_BACK",
+      "predictionId": "pred:78e778e7e6c84dc59c0436a4d6ff5032:CAM_BACK:2",
+      "class": "car",
+      "score": 0.5622,
+      "bbox": [
+        786,
+        489.9,
+        21.2,
+        17.2
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T01:18:24.286Z"
+    },
+    {
+      "index": 50,
+      "scene": "scene-0796",
+      "frameIndex": 33,
+      "frameId": "b422bd971acf483592e367c2c5057a60",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:b422bd971acf483592e367c2c5057a60:CAM_FRONT_RIGHT:0",
+      "class": "car",
+      "score": 0.7735,
+      "bbox": [
+        1097.6,
+        704.6,
+        502.1,
+        192.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:25.634Z"
+    },
+    {
+      "index": 51,
+      "scene": "scene-0103",
+      "frameIndex": 33,
+      "frameId": "ce94ef7a0522468e81c0e2b3a2f1e12d",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:ce94ef7a0522468e81c0e2b3a2f1e12d:CAM_FRONT:17",
+      "class": "car",
+      "score": 0.4051,
+      "bbox": [
+        925.4,
+        479.2,
+        29.2,
+        34.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:18:27.893Z"
+    },
+    {
+      "index": 52,
+      "scene": "scene-0757",
+      "frameIndex": 34,
+      "frameId": "73ccc9c10a3547849b8ff130d50bac98",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:73ccc9c10a3547849b8ff130d50bac98:CAM_FRONT_LEFT:1",
+      "class": "bus",
+      "score": 0.4826,
+      "bbox": [
+        803.1,
+        1.6,
+        687.4,
+        795.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:51:54.587Z"
+    },
+    {
+      "index": 53,
+      "scene": "scene-0757",
+      "frameIndex": 35,
+      "frameId": "e3bcde4a06124931a097ef2a211aaaef",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:e3bcde4a06124931a097ef2a211aaaef:CAM_FRONT_LEFT:1",
+      "class": "truck",
+      "score": 0.4418,
+      "bbox": [
+        434.6,
+        32.8,
+        1123.6,
+        859.3
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:52:26.217Z"
+    },
+    {
+      "index": 54,
+      "scene": "scene-0916",
+      "frameIndex": 12,
+      "frameId": "858a1ece22cf45d9bc71e42336604b78",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:858a1ece22cf45d9bc71e42336604b78:CAM_FRONT_RIGHT:16",
+      "class": "car",
+      "score": 0.2549,
+      "bbox": [
+        1343.4,
+        385.1,
+        31.3,
+        23.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:52:32.973Z"
+    },
+    {
+      "index": 55,
+      "scene": "scene-0757",
+      "frameIndex": 41,
+      "frameId": "8fe9664cec514a58b1184c4fcefda6b5",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:8fe9664cec514a58b1184c4fcefda6b5:CAM_FRONT:5",
+      "class": "car",
+      "score": 0.4879,
+      "bbox": [
+        503.2,
+        440.4,
+        60.9,
+        51.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:52:37.612Z"
+    },
+    {
+      "index": 56,
+      "scene": "scene-0103",
+      "frameIndex": 29,
+      "frameId": "4cf5d6c3f6ab42aab23f67b5a9782d1a",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:4cf5d6c3f6ab42aab23f67b5a9782d1a:CAM_BACK_RIGHT:4",
+      "class": "person",
+      "score": 0.4371,
+      "bbox": [
+        243.1,
+        412.2,
+        16,
+        40.1
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T00:52:51.536Z"
+    },
+    {
+      "index": 57,
+      "scene": "scene-0103",
+      "frameIndex": 13,
+      "frameId": "0d0700a2284e477db876c3ee1d864668",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:0d0700a2284e477db876c3ee1d864668:CAM_FRONT_RIGHT:3",
+      "class": "car",
+      "score": 0.2872,
+      "bbox": [
+        1069.3,
+        434.2,
+        68.8,
+        53.2
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:52:56.172Z"
+    },
+    {
+      "index": 58,
+      "scene": "scene-0103",
+      "frameIndex": 16,
+      "frameId": "b22fa0b3c34f47b6a360b60f35d5d567",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:b22fa0b3c34f47b6a360b60f35d5d567:CAM_FRONT:22",
+      "class": "car",
+      "score": 0.2585,
+      "bbox": [
+        766.1,
+        453.6,
+        24.4,
+        21.2
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:52:58.366Z"
+    },
+    {
+      "index": 59,
+      "scene": "scene-0103",
+      "frameIndex": 36,
+      "frameId": "a771effa2a2648d78096c3e92b95b129",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:a771effa2a2648d78096c3e92b95b129:CAM_BACK_RIGHT:13",
+      "class": "car",
+      "score": 0.2986,
+      "bbox": [
+        749.2,
+        425.7,
+        48.7,
+        31.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:53:00.596Z"
+    },
+    {
+      "index": 60,
+      "scene": "scene-0655",
+      "frameIndex": 17,
+      "frameId": "447c96d132e9494e8b03050e8dcae124",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:447c96d132e9494e8b03050e8dcae124:CAM_FRONT_RIGHT:3",
+      "class": "car",
+      "score": 0.5344,
+      "bbox": [
+        304,
+        481.3,
+        91.5,
+        43.4
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:53:01.656Z"
+    },
+    {
+      "index": 61,
+      "scene": "scene-0103",
+      "frameIndex": 2,
+      "frameId": "3950bd41f74548429c0f7700ff3d8269",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:3950bd41f74548429c0f7700ff3d8269:CAM_FRONT_LEFT:8",
+      "class": "bicycle",
+      "score": 0.3682,
+      "bbox": [
+        619.2,
+        526.8,
+        30.2,
+        45
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:53:06.260Z"
+    },
+    {
+      "index": 62,
+      "scene": "scene-0061",
+      "frameIndex": 14,
+      "frameId": "1e3d79dae62742a0ad64c91679863358",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:1e3d79dae62742a0ad64c91679863358:CAM_FRONT_RIGHT:11",
+      "class": "car",
+      "score": 0.3089,
+      "bbox": [
+        1330.7,
+        514.5,
+        92.1,
+        26.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:53:09.346Z"
+    },
+    {
+      "index": 63,
+      "scene": "scene-0103",
+      "frameIndex": 33,
+      "frameId": "ce94ef7a0522468e81c0e2b3a2f1e12d",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:ce94ef7a0522468e81c0e2b3a2f1e12d:CAM_FRONT:4",
+      "class": "car",
+      "score": 0.8425,
+      "bbox": [
+        731.2,
+        488.2,
+        45.8,
+        38.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:53:10.219Z"
+    },
+    {
+      "index": 64,
+      "scene": "scene-0757",
+      "frameIndex": 3,
+      "frameId": "4a61e56dd1ee4c159cc595b52aa2a254",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:4a61e56dd1ee4c159cc595b52aa2a254:CAM_FRONT:2",
+      "class": "car",
+      "score": 0.4316,
+      "bbox": [
+        869.2,
+        454.9,
+        25.3,
+        15.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:53:11.495Z"
+    },
+    {
+      "index": 65,
+      "scene": "scene-0061",
+      "frameIndex": 27,
+      "frameId": "4246e57f018745c9b2bc68feb3d71b58",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:4246e57f018745c9b2bc68feb3d71b58:CAM_BACK_RIGHT:5",
+      "class": "bus",
+      "score": 0.4935,
+      "bbox": [
+        509.1,
+        430.7,
+        163,
+        157.5
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:18.345Z"
+    },
+    {
+      "index": 66,
+      "scene": "scene-0103",
+      "frameIndex": 32,
+      "frameId": "6402fd1ffaf041d0b9162bd92a7ba0a2",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:6402fd1ffaf041d0b9162bd92a7ba0a2:CAM_FRONT_RIGHT:9",
+      "class": "car",
+      "score": 0.5141,
+      "bbox": [
+        1080.7,
+        406.9,
+        113.2,
+        56.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:19.856Z"
+    },
+    {
+      "index": 67,
+      "scene": "scene-0916",
+      "frameIndex": 34,
+      "frameId": "841dd6709e9b4d7c9d6bf888f1fe6d7e",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:841dd6709e9b4d7c9d6bf888f1fe6d7e:CAM_FRONT_RIGHT:6",
+      "class": "car",
+      "score": 0.2905,
+      "bbox": [
+        862.9,
+        452.4,
+        48.9,
+        23.3
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:21.747Z"
+    },
+    {
+      "index": 68,
+      "scene": "scene-0061",
+      "frameIndex": 33,
+      "frameId": "919e3c4cec934168a3152077a9adcbea",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:919e3c4cec934168a3152077a9adcbea:CAM_FRONT_RIGHT:6",
+      "class": "car",
+      "score": 0.2707,
+      "bbox": [
+        467.7,
+        470.5,
+        100.6,
+        29.8
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T00:56:26.155Z"
+    },
+    {
+      "index": 69,
+      "scene": "scene-0757",
+      "frameIndex": 30,
+      "frameId": "9ecb1b79dbe140ca860efc4adebe854b",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:9ecb1b79dbe140ca860efc4adebe854b:CAM_FRONT_LEFT:1",
+      "class": "bus",
+      "score": 0.5085,
+      "bbox": [
+        775.8,
+        28.4,
+        706.2,
+        841
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:27.954Z"
+    },
+    {
+      "index": 70,
+      "scene": "scene-1100",
+      "frameIndex": 1,
+      "frameId": "a480496a5988410fbe3d8ed6c84da996",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:a480496a5988410fbe3d8ed6c84da996:CAM_FRONT:3",
+      "class": "car",
+      "score": 0.4733,
+      "bbox": [
+        911.4,
+        599.9,
+        34.6,
+        45.3
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T00:56:31.413Z"
+    },
+    {
+      "index": 71,
+      "scene": "scene-0103",
+      "frameIndex": 28,
+      "frameId": "cc57c1ea80fe46a7abddfdb15654c872",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:cc57c1ea80fe46a7abddfdb15654c872:CAM_FRONT_RIGHT:13",
+      "class": "car",
+      "score": 0.388,
+      "bbox": [
+        1097.9,
+        392.1,
+        112.4,
+        66.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:32.785Z"
+    },
+    {
+      "index": 72,
+      "scene": "scene-0655",
+      "frameIndex": 38,
+      "frameId": "ed1eee39e3dd4c30a3d932e3ceaa92c2",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:ed1eee39e3dd4c30a3d932e3ceaa92c2:CAM_BACK_RIGHT:8",
+      "class": "car",
+      "score": 0.6058,
+      "bbox": [
+        660.8,
+        486.3,
+        60.7,
+        49.5
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:34.686Z"
+    },
+    {
+      "index": 73,
+      "scene": "scene-1077",
+      "frameIndex": 37,
+      "frameId": "c69f16f8568a4479ab2f200c802309d9",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:c69f16f8568a4479ab2f200c802309d9:CAM_FRONT:1",
+      "class": "car",
+      "score": 0.5429,
+      "bbox": [
+        997,
+        506.8,
+        38.7,
+        22.6
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:37.252Z"
+    },
+    {
+      "index": 74,
+      "scene": "scene-0103",
+      "frameIndex": 10,
+      "frameId": "a98fba72bde9433fb882032d18aedb2e",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:a98fba72bde9433fb882032d18aedb2e:CAM_FRONT:10",
+      "class": "car",
+      "score": 0.3616,
+      "bbox": [
+        1071.6,
+        472.2,
+        36.9,
+        26.4
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T00:56:39.884Z"
+    },
+    {
+      "index": 75,
+      "scene": "scene-0655",
+      "frameIndex": 19,
+      "frameId": "d7387fb5a21d40a990a5842cca61af1c",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:d7387fb5a21d40a990a5842cca61af1c:CAM_FRONT_RIGHT:7",
+      "class": "bicycle",
+      "score": 0.3416,
+      "bbox": [
+        991.8,
+        510.4,
+        82.4,
+        74.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:41.112Z"
+    },
+    {
+      "index": 76,
+      "scene": "scene-0655",
+      "frameIndex": 25,
+      "frameId": "7ff999a1242e4573a81dd3a6f0c158a2",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:7ff999a1242e4573a81dd3a6f0c158a2:CAM_FRONT_RIGHT:10",
+      "class": "car",
+      "score": 0.5604,
+      "bbox": [
+        1449.2,
+        462.2,
+        52.3,
+        62.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:42.593Z"
+    },
+    {
+      "index": 77,
+      "scene": "scene-0916",
+      "frameIndex": 14,
+      "frameId": "61a7bd24f88a46c2963280d8b13ac675",
+      "camera": "CAM_BACK",
+      "predictionId": "pred:61a7bd24f88a46c2963280d8b13ac675:CAM_BACK:5",
+      "class": "person",
+      "score": 0.4255,
+      "bbox": [
+        1101.8,
+        513.5,
+        19.1,
+        47.8
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T00:56:45.384Z"
+    },
+    {
+      "index": 78,
+      "scene": "scene-0103",
+      "frameIndex": 6,
+      "frameId": "f4f86af4da3b49e79497deda5c5f223a",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:f4f86af4da3b49e79497deda5c5f223a:CAM_FRONT:22",
+      "class": "car",
+      "score": 0.2912,
+      "bbox": [
+        865.8,
+        401.5,
+        20.6,
+        17.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:47.350Z"
+    },
+    {
+      "index": 79,
+      "scene": "scene-0103",
+      "frameIndex": 32,
+      "frameId": "6402fd1ffaf041d0b9162bd92a7ba0a2",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:6402fd1ffaf041d0b9162bd92a7ba0a2:CAM_FRONT:20",
+      "class": "car",
+      "score": 0.3144,
+      "bbox": [
+        800.4,
+        483.7,
+        23.1,
+        13.5
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T00:56:48.833Z"
+    },
+    {
+      "index": 80,
+      "scene": "scene-0757",
+      "frameIndex": 41,
+      "frameId": "8fe9664cec514a58b1184c4fcefda6b5",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:8fe9664cec514a58b1184c4fcefda6b5:CAM_FRONT_RIGHT:5",
+      "class": "car",
+      "score": 0.3434,
+      "bbox": [
+        1045.5,
+        437.8,
+        159.9,
+        114.5
+      ],
+      "verdict": "model-wrong",
+      "judgedAt": "2026-11-27T00:56:58.090Z"
+    },
+    {
+      "index": 81,
+      "scene": "scene-0796",
+      "frameIndex": 4,
+      "frameId": "a51146d2b181450292623ec03ade9f03",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:a51146d2b181450292623ec03ade9f03:CAM_FRONT_RIGHT:1",
+      "class": "car",
+      "score": 0.3209,
+      "bbox": [
+        86.8,
+        484.7,
+        64.8,
+        24.9
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T01:15:06.100Z"
+    },
+    {
+      "index": 82,
+      "scene": "scene-0757",
+      "frameIndex": 15,
+      "frameId": "348c8122f47349429a6cd694dcac86e6",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:348c8122f47349429a6cd694dcac86e6:CAM_FRONT:4",
+      "class": "car",
+      "score": 0.3938,
+      "bbox": [
+        570,
+        445.9,
+        38,
+        44.6
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T01:15:15.344Z"
+    },
+    {
+      "index": 83,
+      "scene": "scene-0757",
+      "frameIndex": 12,
+      "frameId": "0307afa1ec7e48ce90295acabf8cb6dd",
+      "camera": "CAM_BACK",
+      "predictionId": "pred:0307afa1ec7e48ce90295acabf8cb6dd:CAM_BACK:4",
+      "class": "car",
+      "score": 0.311,
+      "bbox": [
+        998,
+        492.7,
+        20.2,
+        16.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:21.141Z"
+    },
+    {
+      "index": 84,
+      "scene": "scene-1100",
+      "frameIndex": 10,
+      "frameId": "4e169e93acb346d59de1af7f2b4882e1",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:4e169e93acb346d59de1af7f2b4882e1:CAM_FRONT:2",
+      "class": "car",
+      "score": 0.3073,
+      "bbox": [
+        179.8,
+        459.5,
+        41.1,
+        30.2
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:22.644Z"
+    },
+    {
+      "index": 85,
+      "scene": "scene-0655",
+      "frameIndex": 18,
+      "frameId": "baaa60749cd04db7952fd8f4ef8ac837",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:baaa60749cd04db7952fd8f4ef8ac837:CAM_FRONT_RIGHT:7",
+      "class": "car",
+      "score": 0.3297,
+      "bbox": [
+        457.1,
+        476,
+        27.6,
+        36.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:24.052Z"
+    },
+    {
+      "index": 86,
+      "scene": "scene-0103",
+      "frameIndex": 28,
+      "frameId": "cc57c1ea80fe46a7abddfdb15654c872",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:cc57c1ea80fe46a7abddfdb15654c872:CAM_FRONT:9",
+      "class": "car",
+      "score": 0.6213,
+      "bbox": [
+        737.8,
+        488.9,
+        37.6,
+        24.1
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:25.698Z"
+    },
+    {
+      "index": 87,
+      "scene": "scene-0796",
+      "frameIndex": 15,
+      "frameId": "312cd4d3bef1476a9211d3dab50dd0b7",
+      "camera": "CAM_BACK_LEFT",
+      "predictionId": "pred:312cd4d3bef1476a9211d3dab50dd0b7:CAM_BACK_LEFT:4",
+      "class": "person",
+      "score": 0.5243,
+      "bbox": [
+        434.8,
+        403.4,
+        27.6,
+        55.3
+      ],
+      "verdict": "model-wrong",
+      "judgedAt": "2026-11-27T01:15:29.011Z"
+    },
+    {
+      "index": 88,
+      "scene": "scene-0757",
+      "frameIndex": 37,
+      "frameId": "1b90013f0287408f9371729424c93892",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:1b90013f0287408f9371729424c93892:CAM_FRONT:10",
+      "class": "bus",
+      "score": 0.2526,
+      "bbox": [
+        626.7,
+        426.9,
+        37.9,
+        38.3
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:31.097Z"
+    },
+    {
+      "index": 89,
+      "scene": "scene-0103",
+      "frameIndex": 13,
+      "frameId": "0d0700a2284e477db876c3ee1d864668",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:0d0700a2284e477db876c3ee1d864668:CAM_FRONT:9",
+      "class": "person",
+      "score": 0.5274,
+      "bbox": [
+        421.6,
+        455.6,
+        21.2,
+        34.3
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:35.437Z"
+    },
+    {
+      "index": 90,
+      "scene": "scene-0103",
+      "frameIndex": 1,
+      "frameId": "3e8750f331d7499e9b5123e9eb70f2e2",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:3e8750f331d7499e9b5123e9eb70f2e2:CAM_FRONT:0",
+      "class": "car",
+      "score": 0.911,
+      "bbox": [
+        849,
+        483.1,
+        73.8,
+        45.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:37.923Z"
+    },
+    {
+      "index": 91,
+      "scene": "scene-0655",
+      "frameIndex": 26,
+      "frameId": "0402e40724984f3b833496067d46c771",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:0402e40724984f3b833496067d46c771:CAM_BACK_RIGHT:3",
+      "class": "car",
+      "score": 0.7688,
+      "bbox": [
+        460.2,
+        487.5,
+        41.8,
+        26.4
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:38.839Z"
+    },
+    {
+      "index": 92,
+      "scene": "scene-0103",
+      "frameIndex": 12,
+      "frameId": "796b1988dd254f74bf2fb19ba9c5b8c6",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:796b1988dd254f74bf2fb19ba9c5b8c6:CAM_FRONT:12",
+      "class": "car",
+      "score": 0.3498,
+      "bbox": [
+        813.8,
+        439,
+        19.9,
+        16.5
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:40.293Z"
+    },
+    {
+      "index": 93,
+      "scene": "scene-0103",
+      "frameIndex": 29,
+      "frameId": "4cf5d6c3f6ab42aab23f67b5a9782d1a",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:4cf5d6c3f6ab42aab23f67b5a9782d1a:CAM_BACK_RIGHT:6",
+      "class": "car",
+      "score": 0.3763,
+      "bbox": [
+        0,
+        399.6,
+        42.3,
+        35.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:42.314Z"
+    },
+    {
+      "index": 94,
+      "scene": "scene-0103",
+      "frameIndex": 31,
+      "frameId": "38a28a3aaf2647f2a8c0e90e31267bf8",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:38a28a3aaf2647f2a8c0e90e31267bf8:CAM_FRONT:18",
+      "class": "car",
+      "score": 0.3278,
+      "bbox": [
+        782.8,
+        484.2,
+        20.1,
+        12.7
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:43.356Z"
+    },
+    {
+      "index": 95,
+      "scene": "scene-0916",
+      "frameIndex": 33,
+      "frameId": "8e352d4a6c6f40c8ad4f10a3d2c3f158",
+      "camera": "CAM_BACK_RIGHT",
+      "predictionId": "pred:8e352d4a6c6f40c8ad4f10a3d2c3f158:CAM_BACK_RIGHT:15",
+      "class": "car",
+      "score": 0.3023,
+      "bbox": [
+        1220.6,
+        476.8,
+        67.7,
+        21.6
+      ],
+      "verdict": "unclear",
+      "judgedAt": "2026-11-27T01:15:45.535Z"
+    },
+    {
+      "index": 96,
+      "scene": "scene-0103",
+      "frameIndex": 29,
+      "frameId": "4cf5d6c3f6ab42aab23f67b5a9782d1a",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:4cf5d6c3f6ab42aab23f67b5a9782d1a:CAM_FRONT_RIGHT:17",
+      "class": "person",
+      "score": 0.3568,
+      "bbox": [
+        1569,
+        398.7,
+        18.1,
+        41.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:15:51.552Z"
+    },
+    {
+      "index": 97,
+      "scene": "scene-0061",
+      "frameIndex": 11,
+      "frameId": "023c4df2d451409881d8e6ea82f14704",
+      "camera": "CAM_FRONT_RIGHT",
+      "predictionId": "pred:023c4df2d451409881d8e6ea82f14704:CAM_FRONT_RIGHT:2",
+      "class": "car",
+      "score": 0.6064,
+      "bbox": [
+        974,
+        483.2,
+        61.1,
+        37.9
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:04.514Z"
+    },
+    {
+      "index": 98,
+      "scene": "scene-0103",
+      "frameIndex": 22,
+      "frameId": "d0ecf474e0e64950aa265cd44b9c9d75",
+      "camera": "CAM_FRONT",
+      "predictionId": "pred:d0ecf474e0e64950aa265cd44b9c9d75:CAM_FRONT:4",
+      "class": "person",
+      "score": 0.512,
+      "bbox": [
+        135.3,
+        484.7,
+        39.5,
+        51.8
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:06.670Z"
+    },
+    {
+      "index": 99,
+      "scene": "scene-0103",
+      "frameIndex": 34,
+      "frameId": "9fcdc52b791045e99c623c5fc643331f",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:9fcdc52b791045e99c623c5fc643331f:CAM_FRONT_LEFT:10",
+      "class": "person",
+      "score": 0.3297,
+      "bbox": [
+        1449.3,
+        484.1,
+        28.2,
+        59.4
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:07.973Z"
+    },
+    {
+      "index": 100,
+      "scene": "scene-1100",
+      "frameIndex": 14,
+      "frameId": "050b2d9c4bb647b7ab4ee94bdb538e1d",
+      "camera": "CAM_FRONT_LEFT",
+      "predictionId": "pred:050b2d9c4bb647b7ab4ee94bdb538e1d:CAM_FRONT_LEFT:2",
+      "class": "car",
+      "score": 0.3962,
+      "bbox": [
+        1488.3,
+        454.6,
+        42.5,
+        29.3
+      ],
+      "verdict": "real-object",
+      "judgedAt": "2026-11-27T01:16:09.292Z"
+    }
+  ]
+}

@@ -29,7 +29,11 @@ describe('review store actions', () => {
 
   it('starts empty in both scopes', () => {
     const store = makeStore();
-    expect(store.getState().reviews).toEqual({ nuscenes: {}, 'nuscenes-practice': {} });
+    expect(store.getState().reviews).toEqual({
+      nuscenes: {},
+      'nuscenes-practice': {},
+      'nuscenes-false-alarms': {},
+    });
     expect(store.getState().storageFailed).toBe(false);
   });
 

@@ -42,6 +42,26 @@ describe('sanitizeReviews', () => {
     expect(Object.keys(result['nuscenes-practice'])).toEqual(['f1/b']);
   });
 
+  it('(F7.5) keeps verdicts on model boxes in their own scope, keyed by the prediction id', () => {
+    const onModelBox = { ...VALID, objectId: 'pred:f1:CAM_FRONT:3', verdict: 'approved' };
+    const result = sanitizeReviews({
+      nuscenes: { 'f1/a': VALID },
+      'nuscenes-false-alarms': { anything: onModelBox },
+    });
+    expect(Object.keys(result['nuscenes-false-alarms'])).toEqual(['f1/pred:f1:CAM_FRONT:3']);
+    expect(result['nuscenes-false-alarms']['f1/pred:f1:CAM_FRONT:3'].verdict).toBe('approved');
+    // …and the label scopes are untouched by it.
+    expect(Object.keys(result.nuscenes)).toEqual(['f1/a']);
+    expect(result['nuscenes-practice']).toEqual({});
+  });
+
+  it('(F7.5) data saved before the third scope existed loads with that scope empty', () => {
+    const result = sanitizeReviews({ nuscenes: { 'f1/a': VALID }, 'nuscenes-practice': {} });
+    expect(result.nuscenes['f1/a']).toEqual(VALID);
+    expect(result['nuscenes-false-alarms']).toEqual({});
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it('warns and returns empty scopes for a non-object root', () => {
     for (const bad of ['oops', 42, [VALID], true]) {
       expect(sanitizeReviews(bad)).toEqual(createEmptyReviews());

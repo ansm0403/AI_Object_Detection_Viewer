@@ -1,0 +1,76 @@
+PASS  review mode: no IoU control
+PASS  evaluate mode: the IoU control offers 0.3 and 0.5
+PASS  …and 0.3 is chosen by default
+PASS  default: scene-0916 reads Precision 77% / Recall 68% (as before)  — 77% / 68%
+PASS  default: frame 1 badge "23 missed" (as before)  — Frame 1: 23 missed
+PASS  default: all scenes Precision 66% · Recall 56%, 6,726 of 12,018  — ALL SCENES 10 scenes · 2,424 photos Precision 66%·Recall 56%6,726 of 12,018 labels found scene-0061 night 46% 759/1,644 scene-0103 night 72% 1,200/1,670 scene-0
+PASS  default: day 64% 5,711/8,916 · night 33% 1,015/3,102  — ght 3 scenes · 1 drive 33% 1,015/3,102 By drive, by distance, false alarms → open the report What was observed on this data under these rules — not a general pr
+PASS  default: Reset is disabled (everything is at rest)
+PASS  the panel has the conditions line: model, "no fine-tuning", "input 1280", score, IoU  — yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3
+PASS  its tooltip says where "no fine-tuning" comes from  — Weights yolov8n.pt as released (trained on COCO); not trained on nuScenes. Photos were resized so their longer side is 1280 px before the model saw them.
+PASS  0.5 chosen: scene-0916 reads Precision 57% / Recall 54%  — 57% / 54%
+PASS  0.5: frame 1 badge "28 missed"  — Frame 1: 28 missed
+PASS  0.5: frame 1 row 28 missed · 11 false alarms · 16 found  — EVALUATION 6 cameras · 246 photos No result selected Select a row, or a box in the photo or the 3D view, to see why it was scored that way. yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.5 This scene scene-0916 PRECISION 57% 1091 of 1912 model boxes matched a label RECALL 54% 1091 of 2012 labels in 246 photos were found Frame 1 28 missed 11 false alarms 16 found 7 not scored ALL SC
+PASS  0.5: the conditions line says IoU ≥ 0.5  — yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.5
+PASS  0.5: the headline tooltip says IoU ≥ 0.5  — × 6 cameras), each scored on its own · score ≥ 0.25 · IoU ≥ 0.5 · one scene of one drive — see "All scenes" in the panel
+PASS  0.5: all scenes Precision 51% · Recall 45% (5,462 of 12,018) — the F7 probe  — ALL SCENES 10 scenes · 2,424 photos Precision 51%·Recall 45%5,462 of 12,018 labels found scene-0061 night 32% 531/1,644 scene-0103 night 58% 972/1,670 scene-055
+PASS  0.5: day 52% 4,659/8,916 · night 26% 803/3,102 — the F7 probe  — Night 3 scenes · 1 drive 26% 803/3,102 By drive, by distance, false alarms → open the report What was observed on this data under these rules — not a general pr
+PASS  0.5: the notes say "IoU ≥ 0.5" and why 0.5 is strict here
+PASS  0.5: Reset is enabled
+PASS  the 3D canvas was not re-created by the IoU change
+PASS  0.5: no explanation on screen still says "IoU 0.3"  — EVALUATION 6 cameras · 246 photos Missed person · 19 m · visible 40–60% closest model box: person 0.84 · IoU 0.84 — already matched to another label yolov8n · no fine-tuning · input 1280 · score ≥ 0.2
+PASS  Explore with IoU 0.5 chosen: "model missed ≥ 15" still matches 135 of 404 frames  — AI Detection Viewer COCO nuScenes MEASURED Explore Review Evaluate Frame 1/41 · 40 detections 135 of 404 frames match · 7 of 10 scenes
+PASS  …and "person within 20 m ≥ 5" matches 177 frames in 7 scenes  — AI Detection Viewer COCO nuScenes MEASURED Explore Review Evaluate Frame 1/41 · 40 detections 177 of 404 frames match · 7 of 10 scenes
+PASS  back in evaluate mode: 0.5 is still chosen
+PASS  sample check with IoU 0.5 chosen: still random 100 of 1,452, same first box  — scene-0757 · frame 31 · CAM_FRONT
+PASS  sample check: the screen is scored at the fixed rules (scene-0757 at 0.3: P 57% / R 66%)  — 57% / 66%
+PASS  after the sample check: 0.5 is still chosen
+PASS  Reset: back to 0.3
+PASS  Reset: all scenes are back to Precision 66% · Recall 56%  — ALL SCENES 10 scenes · 2,424 photos Precision 66%·Recall 56%6,726 of 12,018 labels found scene-0061 night 46% 759/1,644 
+PASS  COCO: no IoU control, no conditions line
+PASS  after a dataset switch: 0.3 again
+PASS  the 3D canvas survived everything except the dataset switch (expected to be a new dataset)
+PASS  IoU 0.3, 1536×700: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":580,"iouBlock":287,"entry":93,"cut":[]}
+PASS  IoU 0.3, 1536×700: no text in the filter bar is cut (class chips have 580px; the IoU control takes 287px, the entry button 93px)
+PASS  IoU 0.3, 1536×700: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3"}
+PASS  IoU 0.3, 1536×700: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.3, 1536×700: the top bar is one line (44px) and there is no page scroll
+PASS  IoU 0.3, 1440×900: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":559,"iouBlock":287,"entry":93,"cut":[]}
+PASS  IoU 0.3, 1440×900: no text in the filter bar is cut (class chips have 559px; the IoU control takes 287px, the entry button 93px)
+PASS  IoU 0.3, 1440×900: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3"}
+PASS  IoU 0.3, 1440×900: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.3, 1440×900: the top bar is one line (44px) and there is no page scroll
+PASS  IoU 0.3, 1280×720: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":494,"iouBlock":193,"entry":93,"cut":[]}
+PASS  IoU 0.3, 1280×720: no text in the filter bar is cut (class chips have 494px; the IoU control takes 193px, the entry button 93px)
+PASS  IoU 0.3, 1280×720: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3"}
+PASS  IoU 0.3, 1280×720: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.3, 1280×720: the top bar is one line (44px) and there is no page scroll
+PASS  IoU 0.3, 1024×768: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":368,"iouBlock":97,"entry":58,"cut":[]}
+PASS  IoU 0.3, 1024×768: no text in the filter bar is cut (class chips have 368px; the IoU control takes 97px, the entry button 58px)
+PASS  IoU 0.3, 1024×768: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.3"}
+PASS  IoU 0.3, 1024×768: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.3, 1024×768: the top bar is one line (44px) and there is no page scroll
+PASS  IoU 0.5, 1536×700: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":580,"iouBlock":286,"entry":93,"cut":[]}
+PASS  IoU 0.5, 1536×700: no text in the filter bar is cut (class chips have 580px; the IoU control takes 286px, the entry button 93px)
+PASS  IoU 0.5, 1536×700: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.5"}
+PASS  IoU 0.5, 1536×700: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.5, 1536×700: the top bar is one line (44px) and there is no page scroll
+PASS  IoU 0.5, 1440×900: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":561,"iouBlock":286,"entry":93,"cut":[]}
+PASS  IoU 0.5, 1440×900: no text in the filter bar is cut (class chips have 561px; the IoU control takes 286px, the entry button 93px)
+PASS  IoU 0.5, 1440×900: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.5"}
+PASS  IoU 0.5, 1440×900: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.5, 1440×900: the top bar is one line (44px) and there is no page scroll
+PASS  IoU 0.5, 1280×720: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":494,"iouBlock":193,"entry":93,"cut":[]}
+PASS  IoU 0.5, 1280×720: no text in the filter bar is cut (class chips have 494px; the IoU control takes 193px, the entry button 93px)
+PASS  IoU 0.5, 1280×720: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.5"}
+PASS  IoU 0.5, 1280×720: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.5, 1280×720: the top bar is one line (44px) and there is no page scroll
+PASS  IoU 0.5, 1024×768: the filter bar is one 40px line; the IoU control is inside it and overlaps nothing  — {"height":40,"groupInside":true,"overlapChips":false,"overlapRight":false,"rightInside":true,"chipsWidth":368,"iouBlock":97,"entry":58,"cut":[]}
+PASS  IoU 0.5, 1024×768: no text in the filter bar is cut (class chips have 368px; the IoU control takes 97px, the entry button 58px)
+PASS  IoU 0.5, 1024×768: the conditions line is inside the panel and not cut (2 lines)  — {"inside":true,"cut":false,"lines":2,"text":"yolov8n · no fine-tuning · input 1280 · score ≥ 0.25 · IoU ≥ 0.5"}
+PASS  IoU 0.5, 1024×768: Precision and Recall of the scene are still visible without scrolling the panel  — [true,true]
+PASS  IoU 0.5, 1024×768: the top bar is one line (44px) and there is no page scroll
+PASS  no phrase of the conditions line is cut at 1024px
+PASS  no console errors
+
+c: 74 / 74 passed

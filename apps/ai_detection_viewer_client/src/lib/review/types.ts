@@ -73,14 +73,30 @@ export type ReviewMap = Record<string, ReviewRecord>;
  * Which data the records belong to. Practice-mode verdicts (boxes that were
  * deliberately modified) must never mix with verdicts on the real annotations,
  * so each scope has its own map.
+ *
+ * (F7.5) `nuscenes-false-alarms` holds verdicts on MODEL boxes, not on labels:
+ * the sample check of the false alarms that have no label nearby
+ * (`lib/sampling`). There the record's `objectId` is a prediction id and the
+ * three verdicts read as a review of the model's box:
+ *  - `approved`: the box is right — a real object is there, the dataset has no
+ *                label for it;
+ *  - `rejected`: the box is wrong — the model reported something that is not there;
+ *  - `unsure`:   the photo cannot settle it.
+ * Reasons and notes are not used in that scope. Nothing that reads the two
+ * label scopes (progress, queue, `review@2` export) ever reads this one.
  */
-export type ReviewScope = 'nuscenes' | 'nuscenes-practice';
+export type ReviewScope = 'nuscenes' | 'nuscenes-practice' | 'nuscenes-false-alarms';
 
-export const REVIEW_SCOPES: readonly ReviewScope[] = ['nuscenes', 'nuscenes-practice'];
+export const REVIEW_SCOPES: readonly ReviewScope[] = [
+  'nuscenes',
+  'nuscenes-practice',
+  'nuscenes-false-alarms',
+];
 
 export type ReviewsByScope = Record<ReviewScope, ReviewMap>;
 
 export const createEmptyReviews = (): ReviewsByScope => ({
   nuscenes: {},
   'nuscenes-practice': {},
+  'nuscenes-false-alarms': {},
 });

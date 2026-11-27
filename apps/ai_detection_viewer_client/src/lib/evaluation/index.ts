@@ -29,10 +29,35 @@ export {
   isRackMemberClass,
   toEvaluatedClass,
 } from './classes';
-export { isPredictionId, parsePredictions, predictionId } from './parse';
+export {
+  cameraOfPredictionId,
+  frameOfPredictionId,
+  isPredictionId,
+  parsePredictions,
+  predictionId,
+} from './parse';
+export {
+  isUnlabelledFalseAlarm,
+  listUnlabelledFalseAlarms,
+  type UnlabelledFalseAlarm,
+  type UnlabelledSceneInput,
+} from './unlabelled';
+export { summarizeDrives, type DriveScore } from './drives';
+export {
+  DEFAULT_MIN_BAND_LABELS,
+  compareByDistance,
+  distanceGap,
+  type BandCount,
+  type DistanceComparison,
+  type DistanceGap,
+  type DistanceRow,
+} from './distance-compare';
+export { describeModelConditions, describeWeights, type WeightsOrigin } from './model-info';
+export { BENCHMARK_IOU, IOU_CHOICES, describeIouChoice, isIouChoice } from './iou-choices';
 export {
   DEFAULT_MIN_SCORE,
   IOU_THRESHOLD,
+  NEAREST_MIN_IOU,
   UNSCORED_VISIBILITY,
   countResults,
   evaluateFrame,
@@ -41,6 +66,7 @@ export {
 } from './match';
 export { DISTANCE_BIN_METRES, precisionOf, ratio, recallOf, summarize } from './metrics';
 export {
+  combineScores,
   evaluateScenes,
   type GroupScore,
   type SceneInput,

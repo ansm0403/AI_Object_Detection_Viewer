@@ -45,6 +45,8 @@ export type PredictionModelInfo = {
   /** Predictions below this score were not written to the file. */
   minScore?: number;
   library?: string;
+  /** (F7.5) The weights file the script loaded, e.g. "yolov8n.pt" (see `describeWeights`). */
+  weights?: string;
 };
 
 export type PredictionSet = {
