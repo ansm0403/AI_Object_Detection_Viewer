@@ -64,6 +64,22 @@ describe('resolveEditKey', () => {
   });
 
   it('is not a review key map: verdict keys mean nothing here', () => {
-    for (const key of ['a', 'r', 'u', 'c', 'j', 'k', 'n', '1', 'e']) expect(press(key)).toBeNull();
+    for (const key of ['a', 'r', 'u', 'c', 'j', 'k', '1', 'e']) expect(press(key)).toBeNull();
+  });
+
+  it('N / P go to the next / previous rejected box, once per press', () => {
+    expect(press('n')).toEqual({ type: 'step-rejected', direction: 1 });
+    expect(press('P')).toEqual({ type: 'step-rejected', direction: -1 });
+    // a held key does not run through the boxes
+    expect(press('n', { repeat: true })).toBeNull();
+    expect(press('p', { repeat: true })).toBeNull();
+    // not while typing, not with a modifier (Ctrl+N / Ctrl+P are the browser's)
+    expect(press('n', { typing: true })).toBeNull();
+    expect(press('n', { ctrlKey: true })).toBeNull();
+    expect(press('p', { ctrlKey: true })).toBeNull();
+    expect(press('N', { shiftKey: true })).toBeNull();
+    // Korean layout: the physical key decides
+    expect(press('ㅜ', { code: 'KeyN' })).toEqual({ type: 'step-rejected', direction: 1 });
+    expect(press('ㅔ', { code: 'KeyP' })).toEqual({ type: 'step-rejected', direction: -1 });
   });
 });

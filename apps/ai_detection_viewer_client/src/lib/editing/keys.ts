@@ -16,6 +16,8 @@ export type EditKeyAction =
   | { type: 'toggle-view' }
   | { type: 'undo' }
   | { type: 'redo' }
+  /** Go to the next (1) / previous (-1) REJECTED box, in whatever frame or scene it is. */
+  | { type: 'step-rejected'; direction: 1 | -1 }
   /** Move the box by this much AS THE TOP VIEW SHOWS IT (metres; x right, y down). */
   | { type: 'nudge'; delta: BevPoint };
 
@@ -62,6 +64,8 @@ const ARROWS: Record<string, readonly [number, number]> = {
  *  - Arrows move the box by 5 cm, with Shift by 50 cm. A HELD arrow repeats
  *    (the caller merges a run of presses into one undo step); the other keys
  *    act once per press.
+ *  - N / P go to the next / previous rejected box (once per press: a held
+ *    key must not run through boxes nobody looked at).
  *  - Alt combinations are left to the browser.
  */
 export function resolveEditKey(event: EditKeyEvent): EditKeyAction | null {
@@ -84,5 +88,7 @@ export function resolveEditKey(event: EditKeyEvent): EditKeyAction | null {
   if (event.repeat) return null;
   if (event.key === 'Escape') return { type: 'done' };
   if (letter === 'v' && !event.shiftKey) return { type: 'toggle-view' };
+  if (letter === 'n' && !event.shiftKey) return { type: 'step-rejected', direction: 1 };
+  if (letter === 'p' && !event.shiftKey) return { type: 'step-rejected', direction: -1 };
   return null;
 }

@@ -1020,6 +1020,13 @@ after the edit. 0 = the same as the real label. Shown only after "Reveal answers
 edited these numbers would say which way to drag it. On the REAL data there is nothing to measure an
 edit against — the label is the thing being questioned.
 
+**Second pass over the rejected boxes (반려 박스 다시 돌기)** *(F8)*
+Reviewing and editing are two passes: first every box gets a verdict (F4), later the reviewer comes
+back to the rejected ones and edits them. In the editor `N` / `P` go to the next / previous rejected
+box — in scene order, then frame order, then the frame's own box order, wrapping around — and the
+editor follows into another frame or scene. A box the filters hide is not part of the walk; a box
+marked "unsure" is not either.
+
 **SVG vs Canvas 2D (두 가지 그리기 방법)** *(F8)*
 SVG draws shapes as elements of the page (each one can be styled and clicked): right for a few
 hundred boxes and the handles. Canvas 2D paints pixels directly: right for thousands of LiDAR points.

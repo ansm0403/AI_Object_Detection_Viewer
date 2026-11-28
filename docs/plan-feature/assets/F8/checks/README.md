@@ -12,6 +12,7 @@
 | `c.js` | 단계 C(이동, 변, 모서리, 회전, 숫자 입력, 끄는 동안 3D 화면과 사진이 따라오는지, 저장, Undo / Redo / Revert, 평가와 검색이 그대로인지, 점이 늦거나 없을 때) | 77 |
 | `d.js` | 단계 D("수정됨" 표시가 생기고 사라지는 곳, Evaluate / Explore에는 없는지, 화살표 5cm / Shift 50cm, 이어 누른 화살표가 실행 취소 한 단계인지, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, 한글 입력 상태, 숫자 칸 안에서는 키가 박스로 가지 않는지, 맨 위 줄이 창 폭 18가지에서 한 줄인지, 저장이 거부될 때) | 85 |
 | `e.js` | 단계 E(내려받은 `review@3` 파일: 줄, 판정 없는 수정, 화면의 말과 같은 숫자인지, 원본이 nuScenes 파일의 주석과 같은지, CSV의 열, Reset reviews가 수정을 남기는지. 연습 모드: 글자가 "practice label"인지, 답을 보기 전에는 가까움 표가 없는지, 표의 숫자가 데이터에서 계산한 값과 같은지, 표가 좁은 패널에 들어가는지, 맨 위 줄이 창 폭 19가지에서 한 줄인지) | 68 |
+| `f.js` | 단계 F(반려한 박스를 N / P와 ‹ ›로 넘기기: 장면 → 프레임 → 박스 순서, 다른 장면으로 넘어가도 편집 화면이 따라오는지, 한 바퀴 돌기, 넘긴 직후의 화살표, 누르고 있기, 끄는 중, 숫자 칸 안, 필터로 숨긴 박스, 반려가 하나뿐일 때, 연습 모드, 편집 줄이 다섯 창 크기에서 한 줄인지) | 52 |
 | `perf-c2.js` | 끄는 동안의 프레임 시간(통과/실패가 아니라 측정). 화면이 그려질 때마다 포인터를 한 번 움직인다 | |
 
 ## 돌리는 방법
@@ -34,6 +35,7 @@
    node docs/plan-feature/assets/F8/checks/c.js "$(pwd)" /tmp/f8-checks
    node docs/plan-feature/assets/F8/checks/d.js "$(pwd)" /tmp/f8-checks
    node docs/plan-feature/assets/F8/checks/e.js "$(pwd)" /tmp/f8-checks
+   node docs/plan-feature/assets/F8/checks/f.js "$(pwd)" /tmp/f8-checks
    ```
 
    마지막 줄이 `c: 77 / 77 passed` 모양이면 통과다.

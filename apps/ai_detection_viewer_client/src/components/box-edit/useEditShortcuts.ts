@@ -12,12 +12,14 @@ type Handlers = {
   onRedo?: () => void;
   /** Move the box by a step as the top view shows it (metres). */
   onNudge: (delta: BevPoint) => void;
+  /** Go to the next (1) / previous (-1) rejected box. */
+  onStepRejected?: (direction: 1 | -1) => void;
 };
 
 /**
  * (F8) Keys of the top-view editor, active only while it is open: `Esc` closes
  * it, `V` switches the view, the arrows move the box, Ctrl+Z / Ctrl+Shift+Z /
- * Ctrl+Y undo and redo.
+ * Ctrl+Y undo and redo, `N` / `P` go to the next / previous rejected box.
  *
  * Separate from the review shortcuts on purpose: while a box is being edited
  * the verdict keys are switched off by the page (a stray "A" must not approve
@@ -66,6 +68,9 @@ export function useEditShortcuts(handlers: Handlers, enabled: boolean) {
           break;
         case 'nudge':
           h.onNudge(action.delta);
+          break;
+        case 'step-rejected':
+          h.onStepRejected?.(action.direction);
           break;
       }
     };

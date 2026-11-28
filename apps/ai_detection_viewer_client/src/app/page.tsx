@@ -106,6 +106,7 @@ import {
   ExportMenu,
   PracticeScoreCard,
   usePracticeCloseness,
+  useRejectedWalk,
   QueueBar,
   ReviewControls,
   ReviewProgress,
@@ -920,6 +921,18 @@ export default function Index() {
   // file covers every scene whose boxes are in memory — normally all of them a
   // moment after the page opens — and lists which. A practice export covers the
   // practice scene on screen: that is the only data its records are about.
+  // Every scene whose boxes are in memory, in catalog order, as the DATA has
+  // them (no edits laid over). The scene on screen is taken from the screen,
+  // so on the practice set it is the practice set's frames.
+  const loadedScenes = useMemo(
+    () =>
+      (scenes.catalog?.scenes ?? []).flatMap((info) => {
+        const onScreen = sceneOnScreen?.info.name === info.name ? sceneFrames : null;
+        const frames = onScreen ?? sceneLibrary.get(info.name)?.frames;
+        return frames ? [{ name: info.name, frames }] : [];
+      }),
+    [scenes.catalog, sceneLibrary, sceneOnScreen, sceneFrames],
+  );
   const handleExport = useCallback(
     (type: ReviewExportFileType) => {
       if (!sceneFrames || !sceneOnScreen) return;
@@ -928,10 +941,7 @@ export default function Index() {
       // file says what each edited box was changed FROM.
       const exportScenes = plantedErrors
         ? [{ name: sceneOnScreen.info.name, frames: sceneFrames }]
-        : (scenes.catalog?.scenes ?? []).flatMap((info) => {
-            const loaded = sceneLibrary.get(info.name);
-            return loaded ? [{ name: info.name, frames: loaded.frames }] : [];
-          });
+        : loadedScenes;
       const data = buildSceneReviewExport(exportScenes, reviews, {
         scope: reviewScope,
         exportedAt: now.toISOString(),
@@ -944,16 +954,7 @@ export default function Index() {
         downloadTextFile(filename, UTF8_BOM + reviewExportToCsv(data), 'text/csv');
       }
     },
-    [
-      sceneFrames,
-      sceneOnScreen,
-      plantedErrors,
-      scenes.catalog,
-      sceneLibrary,
-      reviews,
-      reviewScope,
-      storedEdits.edits,
-    ],
+    [sceneFrames, sceneOnScreen, plantedErrors, loadedScenes, reviews, reviewScope, storedEdits.edits],
   );
   // (F7) What the export menu acts on: every record of the scope, whatever
   // scene it belongs to. And a caveat when the file cannot hold all of them.
@@ -1255,6 +1256,18 @@ export default function Index() {
     setCamera,
     stopPlayback,
   });
+  // (F8) The second pass: from one rejected box to the next, in whatever frame
+  // or scene it is. The editor stays open and follows the selection.
+  const rejectedWalk = useRejectedWalk({
+    on: editor.editing,
+    scenes: loadedScenes,
+    reviews,
+    visibleIdsOf: visibleIds3DOf,
+    frameId: currentFrameId,
+    objectId: selectedObjectId,
+    blocked: editor.dragging,
+    open: handleOpenHit,
+  });
   useEditShortcuts(
     {
       onDone: editor.exit,
@@ -1262,6 +1275,8 @@ export default function Index() {
       onUndo: editor.undo,
       onRedo: editor.redo,
       onNudge: editor.nudge,
+      onStepRejected: (direction) =>
+        (direction === 1 ? rejectedWalk.onNext : rejectedWalk.onPrev)?.(),
     },
     editor.editing,
   );
@@ -1851,6 +1866,7 @@ export default function Index() {
             onDone={editor.exit}
             notSaved={storedEdits.storageFailed}
             practice={plantedErrors !== null}
+            rejected={rejectedWalk}
           />
         ) : sampleCheckOn ? (
           // (F7.5) The sample is fixed: no score slider, no class chips.

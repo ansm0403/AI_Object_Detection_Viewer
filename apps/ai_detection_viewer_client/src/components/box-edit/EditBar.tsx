@@ -8,7 +8,7 @@ import { labelNameOf } from './labels';
 import type { EditView } from './useBoxEditor';
 
 /** Keys shown on the buttons. The handling is in `useEditShortcuts`. */
-export const EDIT_KEYS = { done: 'Esc', view: 'V', undo: 'Ctrl Z' } as const;
+export const EDIT_KEYS = { done: 'Esc', view: 'V', undo: 'Ctrl Z', next: 'N', prev: 'P' } as const;
 
 type Props = {
   /** The box being edited; `null` when none is selected. */
@@ -26,6 +26,13 @@ type Props = {
   notSaved?: boolean;
   /** The boxes are the practice set's (deliberately modified), not the dataset's. */
   practice?: boolean;
+  /**
+   * The walk through the rejected boxes (all scenes): how many there are,
+   * where the box on screen is among them (`null` = it is not one of them),
+   * and the way to the next / previous one. Nothing is shown when no box is
+   * rejected.
+   */
+  rejected?: { count: number; index: number | null; onNext?: () => void; onPrev?: () => void };
 };
 
 /**
@@ -46,8 +53,15 @@ export function EditBar({
   onDone,
   notSaved = false,
   practice = false,
+  rejected,
 }: Props) {
   const labelName = labelNameOf(practice);
+  // The sentence is shown only where ALL of it fits next to everything else
+  // (measured: from 1400px; with the "Not saved" warning and the "Rejected"
+  // group in the bar it ran out of the bar at 1400–1440px, so then from 1536px).
+  const sentenceFrom = notSaved
+    ? { block: 'min-[1536px]:block', inline: 'min-[1536px]:inline' }
+    : { block: 'min-[1400px]:block', inline: 'min-[1400px]:inline' };
   return (
     <div className="flex items-center flex-wrap lg:flex-nowrap gap-x-3 gap-y-2 h-full bg-zinc-900/60 border-b border-zinc-800 px-4 py-1.5">
       <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-amber-300">
@@ -74,9 +88,12 @@ export function EditBar({
       {/* Only where the whole sentence fits (a cut-off sentence is worse than none). */}
       <span
         aria-hidden="true"
-        className="hidden min-[1400px]:block w-px h-5 bg-zinc-800 shrink-0"
+        className={`hidden ${sentenceFrom.block} w-px h-5 bg-zinc-800 shrink-0`}
       />
-      <span className="hidden min-[1400px]:inline shrink-0 text-[11px] text-zinc-500 whitespace-nowrap">
+      <span
+        data-part="edit-sentence"
+        className={`hidden ${sentenceFrom.inline} shrink-0 text-[11px] text-zinc-500 whitespace-nowrap`}
+      >
         Saved as an edit on top of the {labelName} — the label itself is not changed
       </span>
       {notSaved && (
@@ -89,6 +106,41 @@ export function EditBar({
         </span>
       )}
       <div className="flex items-center gap-1.5 ml-auto shrink-0">
+        {rejected && rejected.count > 0 && (
+          <>
+            <span
+              data-part="rejected-walk"
+              title="Rejected boxes of all scenes, in scene, frame and list order. Boxes hidden by the filters are not counted."
+              className="text-[11px] text-zinc-400 tabular-nums whitespace-nowrap"
+            >
+              <span className="text-rose-300">Rejected</span>{' '}
+              {rejected.index === null ? '–' : rejected.index + 1} / {rejected.count}
+            </span>
+            <BarButton
+              onClick={rejected.onPrev}
+              disabled={!rejected.onPrev}
+              title="Go to the previous rejected box (P)"
+              ariaLabel="Previous rejected box"
+            >
+              <span aria-hidden="true">‹</span>
+              <span className="hidden xl:inline-flex">
+                <Kbd>{EDIT_KEYS.prev}</Kbd>
+              </span>
+            </BarButton>
+            <BarButton
+              onClick={rejected.onNext}
+              disabled={!rejected.onNext}
+              title="Go to the next rejected box (N)"
+              ariaLabel="Next rejected box"
+            >
+              <span aria-hidden="true">›</span>
+              <span className="hidden xl:inline-flex">
+                <Kbd>{EDIT_KEYS.next}</Kbd>
+              </span>
+            </BarButton>
+            <span aria-hidden="true" className="w-px h-5 bg-zinc-800 mx-0.5" />
+          </>
+        )}
         <BarButton
           onClick={onToggleView}
           pressed={view === 'split'}

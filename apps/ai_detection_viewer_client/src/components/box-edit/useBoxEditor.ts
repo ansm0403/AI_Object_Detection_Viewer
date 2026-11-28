@@ -322,11 +322,18 @@ export function useBoxEditor({
     const g = gesture.current;
     gesture.current = null;
     if (!g) return;
+    // The editor moved on to another box while the pointer was down (a key
+    // went to the next rejected box): the numbers of THAT drag must not be
+    // written to the box that is on screen now.
+    if (!base || base.frameId !== g.frameId || base.objectId !== g.objectId) {
+      setDraft(null);
+      return;
+    }
     // The store write and the end of the draft happen in the same update, so
     // no frame is painted with the box back at its old place.
     commit(g.latest);
     setDraft(null);
-  }, [commit, setDraft]);
+  }, [base, commit, setDraft]);
 
   const cancelDrag = useCallback(() => {
     gesture.current = null;

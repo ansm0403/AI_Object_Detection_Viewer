@@ -53,6 +53,8 @@ export type {
   ReviewExportFileType,
   ReviewExportRow,
 } from './export';
+export { positionOf, rejectedBoxes, rejectedIndexAt, stepRejected } from './rejected';
+export type { BoxPosition, RejectedBox, SceneFrames } from './rejected';
 export { editCloseness } from './closeness';
 export type { EditCloseness } from './closeness';
 export { sanitizeReviews } from './persisted';
