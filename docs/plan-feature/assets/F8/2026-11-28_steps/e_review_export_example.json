@@ -1,0 +1,169 @@
+{
+  "format": "ai-detection-viewer/review@3",
+  "exportedAt": "2026-11-28T10:15:20.096Z",
+  "dataset": "nuscenes",
+  "scenes": [
+    "scene-0061",
+    "scene-0103",
+    "scene-0553",
+    "scene-0655",
+    "scene-0757",
+    "scene-0796",
+    "scene-0916",
+    "scene-1077",
+    "scene-1094",
+    "scene-1100"
+  ],
+  "practice": false,
+  "summary": {
+    "totalBoxes": 18538,
+    "reviewed": 2,
+    "approved": 1,
+    "rejected": 1,
+    "unsure": 0,
+    "edited": 2
+  },
+  "reviews": [
+    {
+      "scene": "scene-0061",
+      "frameIndex": 3,
+      "frameId": "356d81f38dd9473ba590f39e266f54e5",
+      "objectId": "6dd2cbf4c24b4caeb625035869bca7b5",
+      "annotationToken": "9acb7dfed3454f72b2874dda3bdacc48",
+      "class": "person",
+      "verdict": null,
+      "reasons": [],
+      "note": "",
+      "reviewedAt": null,
+      "edit": {
+        "original": {
+          "translation": [
+            373.256,
+            1130.419,
+            0.82
+          ],
+          "size": [
+            0.621,
+            0.669,
+            1.642
+          ],
+          "yaw": -0.368107,
+          "rotation": [
+            0.98311,
+            0,
+            0,
+            -0.183016
+          ]
+        },
+        "edited": {
+          "translation": [
+            373.422782,
+            1130.89039,
+            0.82
+          ],
+          "size": [
+            0.621,
+            0.669,
+            1.642
+          ],
+          "yaw": -0.368107,
+          "rotation": [
+            0.98311,
+            0,
+            0,
+            -0.183016
+          ]
+        },
+        "change": {
+          "movedMetres": 0.500024,
+          "liftMetres": 0,
+          "sizeDelta": [
+            0,
+            0,
+            0
+          ],
+          "turnedDegrees": 0
+        },
+        "editedAt": "2026-11-28T10:15:18.865Z"
+      }
+    },
+    {
+      "scene": "scene-0916",
+      "frameIndex": 9,
+      "frameId": "5b7cb170eee6468aa1fdbd3abcf63c5a",
+      "objectId": "720ca55c654a4ac8bfe9babd1c1072be",
+      "annotationToken": "063ef69d59954a25b46de90e0e3153c7",
+      "class": "car",
+      "verdict": "approved",
+      "reasons": [],
+      "note": "",
+      "reviewedAt": "2026-11-28T10:15:11.073Z",
+      "edit": null
+    },
+    {
+      "scene": "scene-0916",
+      "frameIndex": 9,
+      "frameId": "5b7cb170eee6468aa1fdbd3abcf63c5a",
+      "objectId": "52770232202d4ad1a98ed07d5b4c20b9",
+      "annotationToken": "d9bcf93a645740b19838b0ab4123f553",
+      "class": "car",
+      "verdict": "rejected",
+      "reasons": [
+        "wrong_position"
+      ],
+      "note": "",
+      "reviewedAt": "2026-11-28T10:15:10.277Z",
+      "edit": {
+        "original": {
+          "translation": [
+            697.116,
+            1799.168,
+            0.682
+          ],
+          "size": [
+            1.771,
+            4.268,
+            1.643
+          ],
+          "yaw": 0.763896,
+          "rotation": [
+            0.92794,
+            0,
+            0,
+            0.372729
+          ]
+        },
+        "edited": {
+          "translation": [
+            696.690171,
+            1799.434779,
+            0.882
+          ],
+          "size": [
+            1.771,
+            4.8,
+            1.643
+          ],
+          "yaw": 0.649668,
+          "rotation": [
+            0.947704,
+            0,
+            0,
+            0.319151
+          ]
+        },
+        "change": {
+          "movedMetres": 0.502495,
+          "liftMetres": 0.2,
+          "sizeDelta": [
+            0,
+            0.532,
+            0
+          ],
+          "turnedDegrees": -6.544786
+        },
+        "editedAt": "2026-11-28T10:15:07.864Z"
+      }
+    }
+  ]
+}

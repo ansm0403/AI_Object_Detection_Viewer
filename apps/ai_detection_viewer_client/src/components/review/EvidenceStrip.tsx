@@ -15,6 +15,11 @@ export type BoxEvidence = {
    * channel names). Empty = no camera sees it; it can only be checked in 3D.
    */
   seenBy: string[];
+  /**
+   * (F8) The box on screen is the reviewer's edit. The LiDAR count and the
+   * visibility are still the DATASET's records of ITS box — the strip says so.
+   */
+  edited?: boolean;
 };
 
 const VISIBILITY_LABELS: Record<NonNullable<BoxAnnotationInfo['visibility']>, string> = {
@@ -39,7 +44,7 @@ export function EvidenceStrip({ evidence }: { evidence: BoxEvidence | null }) {
   if (!evidence) {
     return <div className="h-4 text-[11px] leading-4 text-zinc-600">No box selected</div>;
   }
-  const { lidarPoints, visibility, seenBy } = evidence;
+  const { lidarPoints, visibility, seenBy, edited = false } = evidence;
   const inCamera = seenBy.length > 0;
   const weak = lidarPoints !== undefined && isWeakEvidence(lidarPoints);
 
@@ -47,7 +52,7 @@ export function EvidenceStrip({ evidence }: { evidence: BoxEvidence | null }) {
     <div className="flex items-center justify-between gap-x-3 h-4 text-[11px] leading-4 text-zinc-400 tabular-nums whitespace-nowrap">
       <span
         className="inline-flex items-center gap-1.5"
-        title="LiDAR points inside this box, as counted by nuScenes on the original sweep (the cloud drawn in the 3D view is thinned)"
+        title={`LiDAR points inside this box, as counted by nuScenes on the original sweep (the cloud drawn in the 3D view is thinned)${edited ? '. This box has been edited: the count is of the nuScenes label, not of the edited box.' : ''}`}
       >
         <span className="text-zinc-500">LiDAR</span>
         {lidarPoints === undefined ? (
@@ -59,6 +64,11 @@ export function EvidenceStrip({ evidence }: { evidence: BoxEvidence | null }) {
               {lidarPoints} pt{lidarPoints === 1 ? '' : 's'}
               {weak && ' · weak'}
             </span>
+            {edited && (
+              <span data-part="label-count" className="text-[10px] text-zinc-500">
+                in label
+              </span>
+            )}
           </>
         )}
       </span>

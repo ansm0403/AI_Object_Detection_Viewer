@@ -8,9 +8,13 @@ import { SECTION_TITLE_CLASS } from '@/components/workspace';
 type Props = {
   frame: Frame;
   selectedId: string | null;
+  // (F8) What the reviewer changed on this box, in words. Present only for an
+  // edited box; shown as the first row, because the 3D numbers below are then
+  // the EDIT's, not the dataset's.
+  editNote?: string;
 };
 
-export function SelectedObjectInfo({ frame, selectedId }: Props) {
+export function SelectedObjectInfo({ frame, selectedId, editNote }: Props) {
   // 2D and 3D are looked up INDEPENDENTLY by the shared id (Immutable Rule #1),
   // not 3D-gated-on-2D. On nuScenes a measured 3D box may have no 2D projection
   // (behind camera / off-screen, Edge_F#2 Case 1); selecting such a box in the
@@ -45,6 +49,13 @@ export function SelectedObjectInfo({ frame, selectedId }: Props) {
   return (
     <section className="px-3 py-3 space-y-2">
       <Heading>Selected</Heading>
+      {editNote && (
+        <Row label="Edited">
+          <span data-part="edit-note" className="text-amber-200 text-xs">
+            {editNote}
+          </span>
+        </Row>
+      )}
       <Row label="Class">
         <span
           className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"

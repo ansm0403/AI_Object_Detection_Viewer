@@ -1,0 +1,80 @@
+PASS  C · before any edit: nothing is stored under the edit key
+PASS  C · move: the box follows the pointer (42 px right, 28 px up, within 1.5 px)  — 42.0, -28.0
+PASS  C · WHILE dragging: exactly one box of the 3D scene has moved  — 1 differ
+PASS  C · WHILE dragging: it moved by what the top view shows (x +42 px, z −28 px in metres)  — 1.047 m, -0.698 m (expected 1.048, -0.698)
+PASS  C · WHILE dragging: the photo follows (its zoom region moved with the box)  — 700.0461115188336 312.0652417325474 899.9538884811664 506.2240622706561 -> 791.8253375810062 327.1728253233075 808.1746624189938 454.59824761068404
+PASS  C · WHILE dragging: the thumbnail marker of the box moved  — 62.5964% 51.6077% max(31.2484%, 5px) -> 61.5267% 51.6303% max(28.0616%, 5px)
+PASS  C · WHILE dragging: nothing is stored yet, and it is not an undo step yet
+PASS  C · WHILE dragging: the panel already says how far  — moved 1.26 m
+PASS  C · on release the edit is stored (frame id, object id, seven numbers, a time)  — {"frameId":"5b7cb170eee6468aa1fdbd3abcf63c5a","objectId":"52770232202d4ad1a98ed07d5b4c20b9","translation":[695.860154818
+PASS  C · move changes no number of the panel (length, width, height, heading, up/down)  — {"length":4.27,"width":1.77,"height":1.64,"heading":171.5,"lift":0}
+PASS  C · "moved" in the panel is the distance dragged  — moved 1.26 m (dragged 1.26 m)
+PASS  C · the dataset label is now drawn as a dashed outline
+PASS  C · Undo and Revert are enabled, Redo is not
+PASS  C · the stored reviews are byte for byte what they were
+PASS  C · the review verdict is unchanged ("The verdict stays Rejected · wrong size")
+PASS  C · front handle: the length grows by what was dragged (24 px)  — 4.27 -> 4.87 (expected +0.60)
+PASS  C · front handle: the back side stays where it is (within 1 px)  — 0.00, 0.00
+PASS  C · front handle: nothing else changes
+PASS  C · left handle: the width grows by what was dragged (24 px)  — 1.77 -> 2.37 (expected +0.60)
+PASS  C · left handle: the right side stays where it is (within 1 px)  — 0.00, 0.00
+PASS  C · left handle: nothing else changes
+PASS  C · corner handle: length AND width change  — 4.87×2.37 -> 5.26×1.96
+PASS  C · corner handle: the opposite corner stays where it is (within 1 px)
+PASS  C · a side dragged through the box stops at the smallest size (0.10 m)  — 0.1
+PASS  C · … and the other side still has not moved (stored numbers, within a millimetre)  — 0.0e+0, 0.0e+0
+PASS  C · a box 0.10 m wide is too small on screen for handles: they are not offered, and the view says to zoom in
+PASS  C · knob: swinging it 30° clockwise on screen turns the box 30° clockwise (heading −30°)  — 171.5 -> 141.5 (-30.0°)
+PASS  C · knob: the box turns about its centre (the centre stays within 1.5 px)
+PASS  C · knob: sizes unchanged
+PASS  C · the panel lists what changed, in words  — moved 1.48 m · length +0.99 m · width +0.19 m · turned −30.0°
+PASS  C · typing a length sets it and keeps the centre
+PASS  C · typing a height sets it and keeps the BOTTOM (the centre rises by half, Up/down stays 0.00)  — centre z +0.178
+PASS  C · typing Up/down 0.30 lifts the box by 0.30 m ("raised 0.30 m") and changes nothing else
+PASS  C · typing a heading of 90 turns the front to the car's left
+PASS  C · a decimal comma is read as a decimal point  — -0.15
+PASS  C · text that is not a number changes nothing
+PASS  C · Escape in a field puts the value back and keeps the editor open
+PASS  C · entering the number that is already shown is not a change (no rounding of the stored value)
+PASS  C · typing in a field does not trigger shortcuts (no verdict key, the editor stays in split view)
+PASS  C · after all edits exactly one box of the 3D scene differs from the dataset
+PASS  C · Undo walks back one change at a time to the dataset label (10 changes were made)  — 10 steps
+PASS  C · … and at the label there is NO stored edit (an edit equal to the label does not exist)
+PASS  C · … and the 3D scene is exactly the dataset again
+PASS  C · … and the dashed label outline is gone
+PASS  C · Redo walks forward again to the last change  — 10 steps
+PASS  C · a new change after an undo drops what was ahead (Redo is disabled)
+PASS  C · Revert to label removes the edit
+PASS  C · … and Revert is itself undoable (the edit is back)
+PASS  C · the stored reviews are still byte for byte what they were
+PASS  C · the 3D canvas was never re-created
+PASS  C · after Done the edited box stays where it was put (review mode)
+PASS  C · draw calls are what they were before editing (nothing was added to the 3D scene)  — 72 vs 72
+PASS  C · the review panel now offers "Edited · edit"
+PASS  C · Evaluate with an edited box: still Precision 77% / Recall 68% for scene-0916  — ate Frame 9/41 · 72 detections Report yolov8n Precision 77% Recall 68%
+PASS  C · Evaluate draws the DATASET box, not the edited one
+PASS  C · Explore with an edited box: "Crowded" still matches 177 of 404 frames in 7 of 10 scenes  — AI Detection Viewer COCO nuScenes MEASURED Explore Review Evaluate Frame 9/41 · 72 detections 177 of 404 frames match · 7 of 10 scenes
+PASS  C · back in Review the edited box is drawn again
+PASS  C · after a reload the edit is still stored and the box is drawn edited
+PASS  C · reopening the editor shows the edit against the dashed label, with nothing to undo yet
+PASS  C · no page errors
+PASS  C · while the sequence plays the box cannot be dragged and the view says why  — Pause playback to edit the box
+PASS  C · after pausing, back on frame 9, the editor is on the same box and unlocked
+      zoomed out as far as it goes: the box is 13×17 px on screen
+PASS  C · zoomed far out: the handles are not offered and the view says "Zoom in to resize or turn the box"
+PASS  C · zoomed far out (the box only a few pixels wide), dragging its middle still MOVES it — no size changed  — {"length":4.27,"width":1.77,"height":1.64,"heading":171.5,"lift":0} · moved 38.69 m
+PASS  C · the photo does not switch camera WHILE dragging  — CAM_FRONT_RIGHT -> CAM_FRONT_RIGHT
+PASS  C · on release, when the photo no longer shows the box, the camera that does is shown  — CAM_FRONT_RIGHT -> CAM_BACK
+PASS  C · a drag that is interrupted (pointercancel) changes nothing
+PASS  C · dragging the background and the wheel move the view, not the box
+PASS  C · no page errors (blocked / camera)
+PASS  C · while the points are still loading the box cannot be changed, and the view says so  — Loading the LiDAR points…
+PASS  C · … the name tag says "loading points…" and the panel "loading…"
+PASS  C · once the points have arrived the box can be changed
+PASS  C · when the points could not be fetched the view says "points unavailable" and the box can still be changed (the photos remain)
+PASS  C · no page errors (points)
+PASS  C · 1536×700: with every number changed, no value is cut and the "Changed" line is visible without scrolling  — Changed from the label: moved 0.69 m · lowered 0.25 m · length +1.13 m · width +0.33 m · height +0.36 m · turned +68.0°
+PASS  C · 1024×768: with every number changed, no value is cut and the "Changed" line is visible without scrolling  — Changed from the label: moved 0.61 m · lowered 0.25 m · length +1.13 m · width +0.33 m · height +0.36 m · turned +68.0°
+PASS  C · 1280×720: with every number changed, no value is cut and the "Changed" line is visible without scrolling  — Changed from the label: moved 0.67 m · lowered 0.25 m · length +1.13 m · width +0.33 m · height +0.36 m · turned +68.0°
+
+c: 77 / 77 passed

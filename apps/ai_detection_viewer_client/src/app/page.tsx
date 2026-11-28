@@ -36,6 +36,20 @@ import { Timeline, type TimelineBadge } from '@/components/timeline';
 import { AnalyticsPanel } from '@/components/analytics';
 import { PANEL_CLASS, WorkspaceShell } from '@/components/workspace';
 import {
+  BevEditor,
+  EDIT_BLOCK_MESSAGES,
+  EditBar,
+  EditPanel,
+  useBoxDraft,
+  useBoxEditor,
+  useDraftFrame,
+  useEditShortcuts,
+  useEditCountIn,
+  useEditedFrames,
+  useEditedSummary,
+  useStoredEdits,
+} from '@/components/box-edit';
+import {
   BoxColorLegend,
   EvaluationHeadline,
   EvaluationPanel,
@@ -92,6 +106,8 @@ import {
 import {
   ExportMenu,
   PracticeScoreCard,
+  usePracticeCloseness,
+  useRejectedWalk,
   QueueBar,
   ReviewControls,
   ReviewProgress,
@@ -240,7 +256,10 @@ export default function Index() {
     practice,
   );
   const sceneOnScreen = datasetId === 'nuscenes' ? scenes.onScreen : null;
-  const frames: Frame[] | null =
+  // (F8) `sceneFrames` are the frames as the DATA has them. `frames` (below,
+  // once the mode is known) are the same frames with the reviewer's box
+  // edits laid over — in review mode only.
+  const sceneFrames: Frame[] | null =
     datasetId === 'coco'
       ? coco.frames
       : scenes.status === 'ready'
@@ -256,6 +275,19 @@ export default function Index() {
   // and the selected object are shared by both modes (Rule #2: still one
   // `selectedObjectId`). nuScenes only; reset to 'review' on a dataset switch.
   const [mode, setMode] = useState<WorkMode>('review');
+  // (F8) The frames everything on screen is drawn from. In review mode the
+  // stored box edits are laid over the data's own boxes (the data itself is
+  // never changed). In evaluate and explore mode they are NOT: every number
+  // those modes report — and the sample check's population — is computed from
+  // the dataset's boxes, whatever was edited (those modes also read
+  // `sceneLibrary`, which is never overlaid). Practice edits are kept apart
+  // from edits of the real annotations, like the practice verdicts.
+  const storedEdits = useStoredEdits(plantedErrors ? 'nuscenes-practice' : 'nuscenes');
+  const frames = useEditedFrames(
+    sceneFrames,
+    storedEdits.edits,
+    datasetId === 'nuscenes' && mode === 'review',
+  );
   // The model's predictions for the scene on screen. They arrive with the scene
   // but are independent of it: if they fail, review still works (F5).
   const scenePredictions = sceneOnScreen?.predictions ?? null;
@@ -379,10 +411,17 @@ export default function Index() {
   // stored frame id is not in them for one render, until the effect above has
   // run. The first frame stands in for that render — returning "no frame" would
   // show the loading placeholder and tear the 3D canvas down.
-  const currentFrame = useMemo(() => {
+  const storedFrame = useMemo(() => {
     if (!frames) return null;
     return frames.find((f) => f.id === selectedFrameId) ?? frames[0] ?? null;
   }, [frames, selectedFrameId]);
+  // (F8) While a box is being dragged in the top view it is laid over this ONE
+  // frame, so the 3D view and the six photos follow the drag — they are drawn
+  // from `currentFrame` like always. `storedFrame` is the same frame without
+  // the drag: an element of `frames`, used where the frame's PLACE in the
+  // sequence matters (what to fetch ahead).
+  const boxDraft = useBoxDraft();
+  const currentFrame = useDraftFrame(storedFrame, boxDraft.draft);
   // The frame everything on screen is about. Use this — not the store's
   // `selectedFrameId` — wherever "the current frame" is meant.
   const currentFrameId = currentFrame?.id ?? null;
@@ -487,14 +526,14 @@ export default function Index() {
   // Fetch the coming frames' photos in the background (nuScenes only: the
   // frames that have several cameras).
   const preloadUrls = useMemo(() => {
-    if (!frames || !currentFrame?.cameras) return [];
-    return preloadOrder(frames, frames.indexOf(currentFrame), PRELOAD_FRAMES_AHEAD);
-  }, [frames, currentFrame]);
+    if (!frames || !storedFrame?.cameras) return [];
+    return preloadOrder(frames, frames.indexOf(storedFrame), PRELOAD_FRAMES_AHEAD);
+  }, [frames, storedFrame]);
   usePhotoPreload(preloadUrls, PHOTOS_KEPT);
   // (F7) The current frame's point cloud. nuScenes frames arrive without their
   // points (85 % of the data); they are fetched per frame, the same few frames
   // ahead as the photos. COCO frames carry their points and pass through.
-  const framePoints = useFramePoints(frames, currentFrame, PRELOAD_FRAMES_AHEAD, POINT_CLOUDS_KEPT);
+  const framePoints = useFramePoints(frames, storedFrame, PRELOAD_FRAMES_AHEAD, POINT_CLOUDS_KEPT);
   const framePointList = framePoints.points;
   // The frame as the 3D view draws it: the same boxes, with the fetched points.
   // Until they arrive the boxes are drawn without a cloud (and the name tag
@@ -883,19 +922,36 @@ export default function Index() {
   // file covers every scene whose boxes are in memory — normally all of them a
   // moment after the page opens — and lists which. A practice export covers the
   // practice scene on screen: that is the only data its records are about.
+  // Every scene whose boxes are in memory, in catalog order, as the DATA has
+  // them (no edits laid over). The scene on screen is taken from the screen,
+  // so on the practice set it is the practice set's frames.
+  const loadedScenes = useMemo(
+    () =>
+      (scenes.catalog?.scenes ?? []).flatMap((info) => {
+        const onScreen = sceneOnScreen?.info.name === info.name ? sceneFrames : null;
+        const frames = onScreen ?? sceneLibrary.get(info.name)?.frames;
+        return frames ? [{ name: info.name, frames }] : [];
+      }),
+    [scenes.catalog, sceneLibrary, sceneOnScreen, sceneFrames],
+  );
+  // What an export covers: every loaded scene — or, on the practice set, the
+  // practice scene on screen. (F8) The DATA's frames, never the ones with the
+  // edits laid over: the file says what each edited box was changed FROM.
+  const exportScenes = useMemo(
+    () =>
+      plantedErrors && sceneOnScreen && sceneFrames
+        ? [{ name: sceneOnScreen.info.name, frames: sceneFrames }]
+        : loadedScenes,
+    [plantedErrors, sceneOnScreen, sceneFrames, loadedScenes],
+  );
   const handleExport = useCallback(
     (type: ReviewExportFileType) => {
-      if (!frames || !sceneOnScreen) return;
+      if (!sceneFrames || !sceneOnScreen) return;
       const now = new Date();
-      const exportScenes = plantedErrors
-        ? [{ name: sceneOnScreen.info.name, frames }]
-        : (scenes.catalog?.scenes ?? []).flatMap((info) => {
-            const loaded = sceneLibrary.get(info.name);
-            return loaded ? [{ name: info.name, frames: loaded.frames }] : [];
-          });
       const data = buildSceneReviewExport(exportScenes, reviews, {
         scope: reviewScope,
         exportedAt: now.toISOString(),
+        edits: storedEdits.edits,
       });
       const filename = reviewExportFilename(reviewScope, now, type);
       if (type === 'json') {
@@ -904,11 +960,14 @@ export default function Index() {
         downloadTextFile(filename, UTF8_BOM + reviewExportToCsv(data), 'text/csv');
       }
     },
-    [frames, sceneOnScreen, plantedErrors, scenes.catalog, sceneLibrary, reviews, reviewScope],
+    [sceneFrames, sceneOnScreen, exportScenes, reviews, reviewScope, storedEdits.edits],
   );
   // (F7) What the export menu acts on: every record of the scope, whatever
   // scene it belongs to. And a caveat when the file cannot hold all of them.
   const reviewRecordCount = useMemo(() => Object.keys(reviews).length, [reviews]);
+  // (F8) The edits the file will hold: those of the scenes it covers. A stale
+  // record (its box is not in the data any more) is in no file and not counted.
+  const editRecordCount = useEditCountIn(exportScenes, storedEdits.edits);
   const catalogSceneCount = scenes.catalog?.scenes.length ?? 0;
   const exportNote = plantedErrors
     ? 'The file covers the practice set of the scene on screen only.'
@@ -1180,6 +1239,67 @@ export default function Index() {
   const handleOpenReport = useCallback(() => setReportOpen(true), []);
   const handleCloseReport = useCallback(() => setReportOpen(false), []);
 
+  // ---- (F8) Box editing ---------------------------------------------------
+  // The editor's state and everything it derives live in `useBoxEditor`; the
+  // page only says what is on screen and puts the pieces into the workspace
+  // slots. WHICH box is edited is not a state of its own: it is the selected
+  // object of the current frame (Rule #2).
+  const labelFrame = useMemo(
+    () => sceneFrames?.find((f) => f.id === currentFrameId) ?? null,
+    [sceneFrames, currentFrameId],
+  );
+  const editor = useBoxEditor({
+    available: reviewEnabled && mode === 'review',
+    scope: plantedErrors ? 'nuscenes-practice' : 'nuscenes',
+    edits: storedEdits.edits,
+    labelFrame,
+    shownFrame: currentFrame,
+    selectedId: selectedObjectId,
+    block: reviewBlock,
+    points: framePointList,
+    pointsLoading: framePoints.status === 'loading',
+    draft: boxDraft.draft,
+    setDraft: boxDraft.setDraft,
+    activeCamera,
+    setCamera,
+    stopPlayback,
+  });
+  // (F8) The second pass: from one rejected box to the next, in whatever frame
+  // or scene it is. From the review screen (the "N rejected" count in the top
+  // bar) and inside the editor, which stays open and follows the selection.
+  const rejectedWalk = useRejectedWalk({
+    on: reviewEnabled && mode === 'review',
+    scenes: loadedScenes,
+    reviews,
+    visibleIdsOf: visibleIds3DOf,
+    frameId: currentFrameId,
+    objectId: selectedObjectId,
+    blocked: editor.dragging,
+    open: handleOpenHit,
+  });
+  useEditShortcuts(
+    {
+      onDone: editor.exit,
+      onToggleView: editor.toggleView,
+      onUndo: editor.undo,
+      onRedo: editor.redo,
+      onNudge: editor.nudge,
+      onStepRejected: (direction) =>
+        (direction === 1 ? rejectedWalk.onNext : rejectedWalk.onPrev)?.(),
+    },
+    editor.editing,
+  );
+  // What the "edited" marks show (list rows, 3D name tag, top bar). Only where
+  // edits are drawn at all: review mode.
+  const edited = useEditedSummary(
+    sceneFrames,
+    labelFrame,
+    storedEdits.edits,
+    datasetId === 'nuscenes' && mode === 'review',
+  );
+  const editing = editor.editing;
+  const enterEditor = editor.enter;
+
   // (F4-C) Keyboard shortcuts. `resolveShortcut` (lib/review) decides what a key
   // means; this decides what the action does — always through the same handlers
   // the buttons use, so mouse and keyboard cannot drift apart.
@@ -1196,6 +1316,10 @@ export default function Index() {
         if (action.type === 'step') return stepSample(action.direction);
         if (action.type !== 'toggle-zoom' && action.type !== 'camera') return;
       }
+      // (F8) While a box is being edited only looking around works (the other
+      // cameras, the photo zoom). The keys that WRITE a review are off: a stray
+      // "A" must not approve the box that is being changed.
+      if (editing && action.type !== 'toggle-zoom' && action.type !== 'camera') return;
       // (F5) Evaluate mode only looks: moving through the list (J / K) and the
       // camera zoom (Z) work; the keys that WRITE a review do nothing, so a
       // stray "A" cannot approve a box whose verdict is not even on screen.
@@ -1250,9 +1374,14 @@ export default function Index() {
         case 'toggle-zoom':
           setCameraZoom((z) => !z);
           break;
+        case 'edit':
+          enterEditor();
+          break;
       }
     },
     [
+      editing,
+      enterEditor,
       sampleCheckOn,
       judgeSample,
       clearSample,
@@ -1409,6 +1538,15 @@ export default function Index() {
         : null,
     [plantedErrors, reviews, currentFrameId],
   );
+  // (F8) Practice mode: the edited boxes of this frame against the REAL label
+  // (the scene's own boxes are still in the library while its practice set is
+  // on screen). Shown by the practice card only after "Reveal answers".
+  const practiceCloseness = usePracticeCloseness(
+    plantedErrors,
+    labelFrame,
+    sceneOnScreen ? sceneLibrary.get(sceneOnScreen.info.name)?.frames : undefined,
+    storedEdits.edits,
+  );
 
   // (F3) Every state — loading, error, empty, loaded — renders inside the same
   // WorkspaceShell, so the panes sit in the same place before and after the
@@ -1491,11 +1629,20 @@ export default function Index() {
       ) : (
         reviewProgress && (
         <>
-          <ReviewProgress counts={reviewProgress.overall} notSaved={reviewStorageFailed} />
+          <ReviewProgress
+            counts={reviewProgress.overall}
+            notSaved={reviewStorageFailed || storedEdits.storageFailed}
+            edited={edited.inScene}
+            // The practice badge is wider than "Measured".
+            tight={plantedErrors !== null}
+            onNextRejected={rejectedWalk.onNext}
+            rejectedEverywhere={rejectedWalk.count}
+          />
           <ExportMenu
             // (F7) Export and reset act on EVERY scene's records, so the menu
             // counts those — not the scene on screen (Edge_F#7 Case 2).
             reviewedCount={reviewRecordCount}
+            editedCount={editRecordCount}
             scope="in all scenes"
             exportNote={exportNote}
             onExport={handleExport}
@@ -1607,7 +1754,11 @@ export default function Index() {
       ? 'LiDAR measured · boxes modified (practice)'
       : isMeasured
         ? 'LiDAR · measured 3D'
-        : '3D · estimated from 2D') + pointsNote;
+        : '3D · estimated from 2D') +
+    // (F8) With an edited box on screen the picture is no longer only the
+    // dataset's labels — the tag says so (Rule #6), as it does for practice.
+    (edited.inFrame.size > 0 ? ` · ${edited.inFrame.size} edited` : '') +
+    pointsNote;
   const label2D = isMeasured && activeCamera ? activeCamera : 'Image';
   const frameReviewCounts = reviewProgress?.byFrame.get(currentFrame.id);
   // (F4-D) Dataset facts about the selected box, for the strip above the
@@ -1621,6 +1772,8 @@ export default function Index() {
         visibility: selectedBox.annotation?.visibility,
         // (F6) Every camera whose photo shows the box, best view first.
         seenBy: camerasByBestView(currentFrame, selectedBox.id),
+        // (F8) The counts above are the dataset's, about ITS box.
+        edited: edited.inFrame.has(selectedBox.id),
       }
     : null;
   // (F6) The thumbnail row: each camera's photo, and where the selected box is
@@ -1711,7 +1864,22 @@ export default function Index() {
       cameraAspect={cameraAspect}
       topBar={header}
       filterBar={
-        sampleCheckOn ? (
+        editing ? (
+          // (F8) One box is being edited: no class chips, no distance slider.
+          <EditBar
+            box={editor.target}
+            frameIndex={frameIndex}
+            view={editor.view}
+            onToggleView={editor.toggleView}
+            onUndo={editor.undo}
+            onRedo={editor.redo}
+            onRevert={editor.revert}
+            onDone={editor.exit}
+            notSaved={storedEdits.storageFailed}
+            practice={plantedErrors !== null}
+            rejected={rejectedWalk}
+          />
+        ) : sampleCheckOn ? (
           // (F7.5) The sample is fixed: no score slider, no class chips.
           <SampleBar
             population={sampleCheck.population}
@@ -1781,7 +1949,13 @@ export default function Index() {
         )
       }
       list={
-        sampleCheckOn ? (
+        editing ? (
+          // (F8) The top-view editor lies over this cell in both of its views,
+          // so the list is not drawn at all while it is open. Drawn but hidden,
+          // its rows (one per box, up to 156) were rebuilt on every pointer move
+          // of a drag for nobody to see. An empty panel keeps the cell's place.
+          <div className={`h-full w-full ${PANEL_CLASS}`} />
+        ) : sampleCheckOn ? (
           // (F7.5) The sample check lists the SAMPLED model boxes, across scenes.
           <SampleList
             sample={sampleCheck.sample}
@@ -1841,6 +2015,7 @@ export default function Index() {
           onSelect={setSelectedObject}
           visibleIds={visibleIds3D}
           verdicts={frameVerdicts}
+          editedIds={edited.inFrame}
           // (F4-C) The review queue order, plus the bar that changes it.
           boxes={orderedBoxes}
           orderKey={queueOrder}
@@ -1947,7 +2122,22 @@ export default function Index() {
         ) : undefined
       }
       details={
-        sampleCheckOn ? (
+        editing ? (
+          <EditPanel
+            target={editor.target}
+            projector={editor.projector}
+            frameIndex={frameIndex}
+            pointsStatus={framePoints.status}
+            record={
+              selectedObjectId ? getReview(reviews, currentFrame.id, selectedObjectId) : undefined
+            }
+            emptyMessage={EDIT_BLOCK_MESSAGES[reviewBlock ?? 'not-in-frame']}
+            locked={editor.locked}
+            onSetField={editor.setField}
+            notSaved={storedEdits.storageFailed}
+            practice={plantedErrors !== null}
+          />
+        ) : sampleCheckOn ? (
           <SamplePanel
             status={sampleCheck.availability.status}
             message={sampleCheck.message}
@@ -2047,6 +2237,10 @@ export default function Index() {
           counts={classCounts}
           visibleClasses={visibleClasses}
           onToggleClass={toggleClass}
+          // (F8) What the reviewer changed on the selected box, if anything.
+          editNote={
+            editor.target?.edited ? editor.target.changeText.join(' · ') || 'edited' : undefined
+          }
           // (F4) On reviewed datasets the details panel is the review panel:
           // verdict controls pinned above the scrolling details.
           {...(reviewEnabled && frameReviewCounts
@@ -2064,6 +2258,7 @@ export default function Index() {
                     frameScore={practiceScores.frame}
                     overallScore={practiceScores.overall}
                     plantedInFrame={practiceScores.plantedInFrame}
+                    closeness={practiceCloseness}
                     onSelect={setSelectedObject}
                   />
                 ) : undefined,
@@ -2080,6 +2275,13 @@ export default function Index() {
                     onToggleReason={handleToggleReason}
                     onNote={handleNote}
                     onClear={handleClearReview}
+                    // (F8) The way into the top-view editor, for any box whose
+                    // frame can be edited.
+                    edit={
+                      editor.target
+                        ? { edited: editor.target.edited, onEdit: editor.enter }
+                        : undefined
+                    }
                     queueDone={queue.length > 0 && queueRemaining === 0}
                     onNextFrame={nextReviewFrameId ? handleNextReviewFrame : undefined}
                     hiddenUnreviewed={
@@ -2096,8 +2298,32 @@ export default function Index() {
       }
       // (F7.5) The evaluation report, over the list and the 3D view (both stay
       // mounted underneath — the canvas is not re-created).
+      // (F8) The top-view editor uses the same slot. Focus view: over the list
+      // and the 3D view. Split view: over the list only, with the list and the
+      // 3D column made equally wide — the 3D view is the same grid item in the
+      // same place in both, so its canvas is only resized.
+      overlayLabel={editing ? 'Top view' : undefined}
+      overlaySpan={editing && editor.view === 'split' ? 'list' : 'list+main'}
+      evenColumns={editing && editor.view === 'split'}
+      listEmpty={editing}
       overlay={
-        reportOn && scenesEvaluation && reportTables ? (
+        editing && editor.projector ? (
+          <BevEditor
+            frame={currentFrame}
+            points={framePointList}
+            pointsStatus={framePoints.status}
+            projector={editor.projector}
+            target={editor.target}
+            emptyMessage={EDIT_BLOCK_MESSAGES[reviewBlock ?? 'not-in-frame']}
+            growFrom={editor.growFrom}
+            locked={editor.locked}
+            practice={plantedErrors !== null}
+            onDragStart={editor.beginDrag}
+            onDrag={editor.dragTo}
+            onDragEnd={editor.endDrag}
+            onDragCancel={editor.cancelDrag}
+          />
+        ) : reportOn && scenesEvaluation && reportTables ? (
           <EvaluationReport
             scenes={scenesEvaluation}
             scenesTotal={scenes.catalog?.scenes.length ?? 0}

@@ -108,6 +108,17 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── download.ts            # downloadTextFile (Blob + <a download>), UTF8_BOM
 │   │   │   ├── useReviewShortcuts.ts  # window keydown → resolveShortcut → page handler
 │   │   │   └── index.ts               # barrel
+│   │   ├── box-edit/       # ✅ F8 — the top-view box editor (see "Box Editing (F8)" below)
+│   │   │   ├── BevEditor.tsx          # top view: SVG boxes + handles, pan / zoom, pointer → onDrag (one per painted frame)
+│   │   │   ├── BevPoints.tsx          # the LiDAR points on one Canvas 2D; the ones inside the box in yellow
+│   │   │   ├── EditBar.tsx            # filter-bar slot while editing: view toggle, Undo / Redo / Revert, Done, the rejected walk
+│   │   │   ├── EditPanel.tsx          # details slot while editing: five number fields, the two point counts, "Changed from the label"
+│   │   │   ├── useBoxEditor.ts        # the editor's state: target, lock, drag → draft → store, undo history, the 400 ms guard
+│   │   │   ├── useBoxDraft.ts         # useBoxDraft, useDraftFrame — the box being dragged, laid over the current frame only
+│   │   │   ├── useStoredEdits.ts      # useStoredEdits (rehydrate + sync between tabs), useEditedFrames, useEditedSummary, useEditCountIn
+│   │   │   ├── useEditShortcuts.ts    # window keydown → resolveEditKey → handlers
+│   │   │   ├── labels.ts              # EDIT_BLOCK_MESSAGES, labelNameOf(practice)
+│   │   │   └── index.ts               # barrel
 │   │   ├── viewer-2d/      # ✅ Step 2, 5 — 2D image + SVG overlay, selection sync
 │   │   │   ├── Viewer2D.tsx    # props: frame, selectedId?, onSelect?, visibleIds?, label?, zoom?, onToggleZoom?, zoomShortcut? (F2-E: bbox label = class only on measured frames; F3: fills its cell, corner tag; F4: Full/Zoom + projected 3D box, see "Review (F4)"; F5: optional `overlay` (ready-made rectangles drawn INSTEAD of the frame's boxes; zoom follows `overlay.focus`) + `legend` — the viewer does not know what the rectangles mean)
 │   │   │   └── index.ts        # barrel
@@ -239,6 +250,10 @@ apps/ai_detection_viewer_client/
 │   │   │   ├── test-helpers.ts   # box / makeFrame / makePrediction builders
 │   │   │   ├── *.test.ts         # 207 tests after F6 and its follow-up fix (139 after F5): + per-photo / per-object evaluation, the bicycle-rack rule, predictions@1 and @2, six-camera numbers of the shipped sample. F5 breakdown was: iou 8, classes 5, parse 11, match 30, metrics 10, evaluate 6, outcomes 6, list 11, overlay 21, describe 9, box-colors 6, sample-data 16 (the SHIPPED files: 91 found / 83 missed / 13 false alarms / 26 not scored)
 │   │   │   └── index.ts          # barrel
+│   │   ├── editing/        # ✅ F8 — box editing, all pure: box.ts (seven numbers), bev.ts (top-view projection, footprint),
+│   │   │                   #   gestures.ts (dragBox, nudgeBox, setBoxField), diff.ts (boxChange, describeChange, boxDistance),
+│   │   │                   #   records.ts (BoxEdit, EditMap), overlay.ts (replaceBoxes, applyEdits, countEdited), history.ts,
+│   │   │                   #   keys.ts (resolveEditKey), persisted.ts (sanitizeEdits), view.ts (zoom / pan), points.ts — 127 tests
 │   │   ├── sampling/       # ✅ F7.5 — drawing and reporting a sample, all pure. See "Trustworthy Evaluation (F7.5)" below
 │   │   │   ├── order.ts          # SAMPLE_SEED, drawOrder(items, seed) (seeded Fisher–Yates), sampleOf(order, n) = the first n
 │   │   │   ├── estimate.ts       # estimateShare(count, judged, population) → share + 95 % Wilson interval with finite-population correction; null when nothing judged
@@ -281,6 +296,8 @@ apps/ai_detection_viewer_client/
 │       ├── viewer-store.ts        # UI state only (selection, filters). Never persisted
 │       ├── viewer-store.test.ts
 │       ├── review-store.ts        # ✅ F4 — review records, persisted to localStorage (zustand `persist`, skipHydration, safe storage wrapper)
+│       ├── edit-store.ts          # ✅ F8 — box edits, persisted under their own key (scopes nuscenes / nuscenes-practice)
+│       ├── edit-store.test.ts     # actions, scope isolation, never touches the review value, save / load / validate
 │       ├── review-store.test.ts   # 19 tests — actions, scope isolation, no-op = no notify, save/load/validate, storage full / blocked / recovered
 │       └── index.ts        # barrel
 ├── tests/
@@ -1760,6 +1777,136 @@ they drive — the downstream `ObjectList` / `AnalyticsPanel` follow below.
 On mobile (`< md`) all cells stack to full width. Both viewers share
 `aspect-[4/3]`, which is what stabilizes the Timeline position across
 frames — see "2D Viewer SVG Contract" below.
+
+## Box Editing (F8) — current
+
+F8 (2026-11-27 … 28) lets a reviewer change a measured 3D box. **The data is never changed**: an edit
+is a record of its own, laid over the frames in review mode only. Design:
+`docs/plan-feature/F8_bev_box_edit.md`; edge cases: `Edge_F#8.md`.
+
+### The model
+
+- **A box is seven numbers** in the dataset's own terms (`lib/editing/box.ts`, `BoxValues`): centre
+  in the GLOBAL frame `[x, y, z]`, size `[width, length, height]`, and `yaw` (rotation about the
+  global vertical axis). Every shipped box is a pure yaw, so nothing is lost. `boxValuesOf(bbox3D,
+  egoPose)` takes a rendered box back to these numbers; `lib/nuscenes/box-views.ts`
+  (`boxInFrame`, `boxInCamera`) builds the rendered box and its rectangle in a photo from them.
+  **The parser and the editor call the same two functions** — an edited box is drawn exactly as a
+  parsed one would be. `Frame.egoPose` and `CameraView.calibration` carry what that needs.
+- **An edit record** (`lib/editing/records.ts`, `BoxEdit`): `{frameId, objectId, translation, size,
+  yaw, editedAt}`, keyed `frameId/objectId` like a review. The dataset's values are NOT stored in
+  it; they are read from the data when needed. A box equal to its label has no record.
+- **Store:** `store/edit-store.ts` — `useEditStore`, persisted under
+  `ai-detection-viewer.box-edits`, scopes `nuscenes` and `nuscenes-practice` (practice edits are
+  never laid over the real boxes). Separate from the review store: neither touches the other's value.
+  Stored data is validated like a parsed file (`sanitizeEdits`).
+
+### Where edits are laid over the data
+
+```
+sceneFrames (data)
+  └─ useEditedFrames(sceneFrames, edits, on = nuScenes && review mode)  → frames
+       └─ storedFrame → useDraftFrame(storedFrame, draft)               → currentFrame (what is drawn)
+```
+
+- `frames` is what review mode draws. **Evaluate, Explore and the sample check never see an edit**:
+  `on` is false there, and they also read `sceneLibrary`, which is never overlaid. Every locked
+  number is therefore independent of edits.
+- **A drag is a draft** (`useBoxDraft`): not stored, applied to the current frame only, so the 3D
+  view and the six photos follow a pointer without a store write per move. On release the store is
+  written once and the draft ends in the same update.
+- Anything that must describe the DATA uses the un-overlaid frames: the export (`original`), the
+  practice comparison, `labelFrame` in the editor.
+
+### The editor
+
+- **A state of Review, not a mode.** The box being edited is `(current frame, selectedObjectId)`
+  (Rule #2) — `useBoxEditor` holds no id. `E` / "Edit box" enters, `Esc` / Done leaves; another
+  mode or dataset closes it.
+- **Layout:** `WorkspaceShell`'s overlay. Focus view = over the list and the 3D view (`overlaySpan
+  'list+main'`; the covered 3D cell is not painted but its canvas stays mounted); split view (`V`) =
+  over the list cell only, with the list and 3D columns equally wide (`evenColumns`). The list is
+  not drawn while editing (`listEmpty`: its cell is left out on the stacked layout).
+- **Top view (`BevEditor`):** the render frame's X / Z plane, the front of the car up. SVG for the
+  boxes and the ten handles (`data-handle`), one Canvas 2D for the LiDAR points (`BevPoints`); the
+  points inside the box are yellow and counted. Wheel = zoom, dragging the background = pan.
+- **What a gesture does is `lib/editing/gestures.ts`** (pure): `dragBox(start, handle, from, to)` —
+  always from the box as it was when the drag began; the opposite side / corner stays; sizes are
+  clamped to 0.1–50 m. The top view changes x, y, width, length and yaw only. `setBoxField` for the
+  five numbers (height keeps the bottom; "up / down" is the bottom against the label's bottom).
+  `nudgeBox` for the arrow keys.
+- **Undo** is a pure `History<T>` (`history.ts`, limit 100) per visit of a box: one drag, one
+  number, one run of arrow presses (`amendHistory`) = one step. It restarts when the stored box
+  changes from outside (another tab).
+- **Keys** are data: `resolveEditKey` (`keys.ts`) → `useEditShortcuts`. While the editor is open the
+  review keys that write are off. Keyboard changes are accepted only after the box has been the
+  target for `MIN_LOOK_MS` = 400 ms.
+- **Blocked** by the same conditions as a verdict (playing, nothing selected, not in the frame,
+  hidden by the filters) and while the points are still loading.
+
+### What shows an edit
+
+| Where | What |
+|---|---|
+| list row | a pencil mark (`ObjectList` `editedIds`) |
+| 3D name tag | `· N edited` (boxes of the frame) |
+| top bar | `N edited` (boxes of the scene; from 1440 px, 1536 px on the practice set; always in the tooltip) |
+| Selected | an "Edited" row with the change in words |
+| evidence strip | "in label" next to the LiDAR count (nuScenes counted ITS box) |
+| editor | the label as a dashed outline; "Changed from the label: …" |
+
+Wording: an edited box is "edited", the box it started from "the nuScenes label" ("practice label"
+on the practice set). Nothing calls an edit correct.
+
+### Export `review@3`
+
+`buildSceneReviewExport(scenes, reviews, {scope, exportedAt, edits})`. A row is a box with a verdict
+OR an edit; `edit: null | {original, edited, change: {movedMetres, liftMetres, sizeDelta,
+turnedDegrees}, editedAt}`; `verdict` / `reviewedAt` are null for a box that was only edited;
+`summary.edited`. Boxes are written as `ExportedBox` (global centre, width / length / height, yaw,
+quaternion `[w, x, y, z]`; six decimals). The CSV gains 15 columns; the original box is in the JSON
+only. **The scenes passed in must be the data's frames** (not overlaid). `review@2` is no longer
+written; `buildReviewExport` (`review@1`) is unchanged.
+
+### Practice: distance to the real label
+
+`lib/review/closeness.ts` — `editCloseness(realFrame, practiceFrame, edits, planted)`: per edited
+box, `boxDistance` (centre m, largest size difference m, heading °) of the practice box and of the
+edited box from the real label. Shown by `PracticeScoreCard` only after "Reveal answers".
+
+### The second pass over rejected boxes
+
+`lib/review/rejected.ts` — `rejectedBoxes(scenes, reviews, isVisible)` (scene → frame → box order,
+built from the records; filtered-out boxes excluded), `positionOf`, `stepRejected` (wraps),
+`rejectedIndexAt`. `useRejectedWalk` connects it to the screen; moving is the existing
+`handleOpenHit`. Entry points: the editor's "Rejected 2 / 4 ‹ ›" (`N` / `P`) and the "N rejected"
+count in the top bar (a button; the count is of the scene on screen, the walk is over all scenes).
+
+### Width budgets (measured, one line each)
+
+| Bar | State | Least room |
+|---|---|---|
+| top bar, review | 2 edited / widest texts / "Not saved" / both | 56 / 35 / 63 / 42 px (at 1280, 1280, 1024, 1024 px) |
+| top bar, practice | widest texts + "Not saved" | 47 px (1024 px) |
+| edit bar | walk group / + "Not saved" (widest "1000 / 1000") | 34 / 88 px (1400 / 1536 px) |
+
+<!-- KO (move to a localized file)
+## 박스 수정 (F8) — 현재
+
+F8(2026-11-27 ~ 28)로 검수자가 실측 3D 박스를 고칠 수 있다. **데이터는 바뀌지 않는다.** 수정은 별도 기록이고 검수
+모드에서만 프레임 위에 덮인다.
+
+- 박스는 nuScenes 표현의 숫자 일곱 개다(전역 좌표의 중심, 폭 / 길이 / 높이, yaw). 그 숫자에서 3D 화면의 박스와 사진
+  위의 사각형을 만드는 함수(`lib/nuscenes/box-views`)는 하나이고, 파서와 편집이 같이 쓴다.
+- 수정 기록은 `frameId/objectId`로 저장된다(`store/edit-store`, 키 `ai-detection-viewer.box-edits`, 범위 둘).
+  검수 기록과는 서로 건드리지 않는다.
+- 덮는 곳은 한 군데다: `useEditedFrames`(검수 모드일 때만). 평가, 탐색, 표본 검수는 수정을 보지 않으므로 잠긴 숫자는
+  수정과 무관하다. 끄는 동안의 박스는 저장하지 않는 초안이고 지금 프레임 하나에만 덮인다.
+- 편집 화면은 모드가 아니라 검수의 한 상태이고, 고치는 박스는 (지금 프레임, `selectedObjectId`)다(규칙 #2).
+- 끌기가 무엇을 하는지, 키가 무엇인지, 실행 취소, 내보내기 `review@3`, 연습 모드의 거리, 반려 박스의 순서는 모두
+  컴포넌트와 store 밖의 순수 함수이고 테스트가 있다(규칙 #3).
+- 화면의 말: 고친 박스는 "edited", 원본은 "nuScenes label"(연습 모드에서는 "practice label").
+-->
 
 ## Separation of Concerns
 

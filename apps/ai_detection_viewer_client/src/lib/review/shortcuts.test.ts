@@ -17,6 +17,15 @@ describe('resolveShortcut — key map', () => {
     expect(press('z')).toEqual({ type: 'toggle-zoom' });
   });
 
+  it('(F8) maps E to opening the top-view editor, once per press, also under a Korean layout', () => {
+    expect(press('e')).toEqual({ type: 'edit' });
+    expect(press('E')).toEqual({ type: 'edit' });
+    expect(press('e', { repeat: true })).toBeNull();
+    expect(press('ㄷ', { code: 'KeyE' })).toEqual({ type: 'edit' });
+    expect(press('e', { ctrlKey: true })).toBeNull();
+    expect(press('e', { target: { tagName: 'INPUT', type: 'text' } })).toBeNull();
+  });
+
   it('maps J / K to next / previous in the queue', () => {
     expect(press('j')).toEqual({ type: 'step', direction: 1 });
     expect(press('k')).toEqual({ type: 'step', direction: -1 });

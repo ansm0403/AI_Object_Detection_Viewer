@@ -1,0 +1,54 @@
+PASS  F · nothing rejected: the bar has no "Rejected" group, and N / P do nothing  — scene-0916 f9 527702 [null]
+PASS  F · … still on the same box, the editor open  — scene-0916 f9 527702 [null]
+PASS  F · (setup) four boxes rejected: scene-0061 frame 3, scene-0916 frame 9 (two) and frame 12  — 4 rejected · the person is row 6 (person F+ 13 m 4591a9), the car row 68
+PASS  F · in the editor on the scene-0061 box: "Rejected 1 / 4" (scene-0061 comes first in the catalog), both arrows enabled  — scene-0061 f3 48d58b [Rejected 1 / 4]
+PASS  F · N: the next one is in ANOTHER scene — scene-0916 frame 9, the person: "Rejected 2 / 4", the editor still open  — scene-0916 f9 4591a9 [Rejected 2 / 4]
+PASS  F · … the top view is on the new box (box on screen, handles offered, not locked) and the photo is one that sees it  — {"boxOnScreen":true,"handles":10,"locked":null,"cameraSees":true}
+PASS  F · … the 3D canvas was not re-created by the scene change
+PASS  F · N: the next one in the same frame — the car: "Rejected 3 / 4"  — scene-0916 f9 527702 [Rejected 3 / 4]
+PASS  F · N: the next frame that has one — frame 12: "Rejected 4 / 4" (the unsure box of that frame is not part of the walk)  — scene-0916 f12 6dafc1 [Rejected 4 / 4]
+PASS  F · N on the last one wraps around to the first (scene-0061 frame 3)  — scene-0061 f3 48d58b [Rejected 1 / 4]
+PASS  F · P on the first one wraps around to the last (scene-0916 frame 12)  — scene-0916 f12 6dafc1 [Rejected 4 / 4]
+PASS  F · P twice: back over the car to the person of frame 9  — scene-0916 f9 4591a9 [Rejected 2 / 4]
+PASS  F · the › and ‹ buttons do what N and P do  — scene-0916 f9 527702 [Rejected 3 / 4] → scene-0916 f9 4591a9 [Rejected 2 / 4]
+PASS  F · arrows pressed right after N (within 0.4 s) move neither the box that was left nor the one arrived at  — scene-0916 f9 527702 [Rejected 3 / 4]
+PASS  F · after that moment the arrow moves the box on screen (the car), and only it  — 527702
+PASS  F · holding N (6 key repeats) goes ONE box further, not six  — scene-0916 f12 6dafc1 [Rejected 4 / 4]
+PASS  F · back on the car: its edit is still there (Revert enabled), its undo steps are not (Undo disabled)  — {"undo":false,"revert":true}
+PASS  F · N / P typed into a number field do not leave the box  — scene-0916 f9 527702 [Rejected 3 / 4]
+PASS  F · N pressed WHILE dragging does not step; on release the drag is stored on the box that was dragged  — scene-0916 f9 527702 [Rejected 3 / 4] → scene-0916 f9 527702 [Rejected 3 / 4]
+PASS  F · on a box that is not rejected (frame 10): "Rejected – / 4"  — scene-0916 f10 293693 [Rejected – / 4]
+PASS  F · … N goes to the nearest one after it (frame 12)  — scene-0916 f12 6dafc1 [Rejected 4 / 4]
+PASS  F · … P goes to the nearest one before it (frame 9, the car — the last rejected box of that frame)  — scene-0916 f9 527702 [Rejected 3 / 4]
+PASS  F · the car approved instead: "Rejected – / 3" — the walk follows the verdicts as they are  — scene-0916 f9 527702 [Rejected – / 3]
+PASS  F · with only the class "car" shown, the rejected person is not counted and not visited (the walk has 2 boxes; P 2 times comes back to the car without stopping on the person)  — scene-0916 f9 527702 [Rejected 1 / 2] → scene-0916 f12 6dafc1 [Rejected 2 / 2] → scene-0916 f9 527702 [Rejected 1 / 2]
+PASS  F · the stored reviews were not changed by walking (4 rejected, 1 unsure)
+PASS  F · no page errors (walk)
+PASS  F · one rejected box, and the editor is on it: "Rejected 1 / 1", both arrows disabled  — scene-0916 f9 527702 [Rejected 1 / 1]
+PASS  F · … N does nothing then  — scene-0916 f9 527702 [Rejected 1 / 1]
+PASS  F · from another frame the one rejected box is reachable ("Rejected – / 1" → N → frame 9)  — scene-0916 f20 34daad [Rejected – / 1] → scene-0916 f9 527702 [Rejected 1 / 1]
+PASS  F · practice: the rejected box of the real annotations is NOT in the practice walk (no "Rejected" group)  — scene-0916 f9 720ca5 [null]
+PASS  F · practice: after rejecting a practice box: "Rejected 1 / 1"  — scene-0916 f9 720ca5 [Rejected 1 / 1]
+PASS  F · no page errors (one box / practice)
+PASS  F · 1024×768: the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 299px (widest 245px)
+PASS  F · 1024×768: no page errors
+PASS  F · 1280×720: the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 394px (widest 340px)
+PASS  F · 1280×720: no page errors
+PASS  F · 1400×800: the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 89px (widest 34px)
+PASS  F · 1400×800: no page errors
+PASS  F · 1440×900: the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 129px (widest 74px)
+PASS  F · 1440×900: no page errors
+PASS  F · 1536×700: the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 225px (widest 170px)
+PASS  F · 1536×700: no page errors
+PASS  F · 1024×768 + "Not saved": the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 217px (widest 162px)
+PASS  F · 1024×768 + "Not saved": no page errors
+PASS  F · 1280×720 + "Not saved": the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 312px (widest 257px)
+PASS  F · 1280×720 + "Not saved": no page errors
+PASS  F · 1400×800 + "Not saved": the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 432px (widest 377px)
+PASS  F · 1400×800 + "Not saved": no page errors
+PASS  F · 1440×900 + "Not saved": the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 472px (widest 417px)
+PASS  F · 1440×900 + "Not saved": no page errors
+PASS  F · 1536×700 + "Not saved": the edit bar with the "Rejected" group is one line, nothing overlapping — also with "Rejected 1000 / 1000", and in both views  — ok · room left 142px (widest 88px)
+PASS  F · 1536×700 + "Not saved": no page errors
+
+f: 52 / 52 passed

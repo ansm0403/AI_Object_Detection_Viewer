@@ -943,3 +943,92 @@ rule — so this tool's numbers cannot be put next to the benchmark's leaderboar
 The screen where a person judges the sampled model boxes one by one: real object with no label /
 model wrong / unclear. It reuses the keys and the storage of the label review (F4), but what is
 reviewed is the model's box, not the dataset's label.
+
+---
+
+## Box-Editing Terms (F8 — editing a 3D box in the top view)
+
+> Added with the F8 design doc (2026-11-27), before the feature is built. What was actually built is
+> in `post-mvp-checklist.md` → F8 once it lands.
+
+**Bird's-eye view / top view (BEV, 위에서 본 화면)** *(F8)*
+The scene looked at straight down from above, like a map. Height disappears; only "how far ahead"
+and "how far to the side" remain. A 3D box becomes a rotated rectangle, which is why editing is done
+here: position, length / width and direction are all 2D operations in this view. In this project the
+front of the car points up.
+
+**Yaw (요)** *(F8)*
+The rotation of a box as seen from above — the way a compass needle turns. The other two rotations
+are pitch (tipping forward / back) and roll (leaning sideways). nuScenes boxes have yaw ONLY: measured
+on all 18,538 shipped boxes, the box's vertical axis is off the world's vertical by at most 0.000001°.
+
+**Heading (방향)** *(F8)*
+Which way the front of the box points. The same thing yaw describes; the UI says "heading". In the
+top view the front edge of the box is drawn in sky blue, and in the camera image the front face is.
+
+**Footprint (바닥 사각형)** *(F8)*
+The rectangle a 3D box makes in the top view: its length and width, turned by its yaw.
+
+**Handle (손잡이)** *(F8)*
+A small mark on the footprint that is dragged to change it: squares on the four corners (length and
+width together) and on the four sides (one of them), and a round knob in front of the box (heading).
+Handles exist only in the top view, on the one box being edited — nothing is added to the 3D scene.
+
+**The seven numbers of a box (박스의 숫자 7개)** *(F8)*
+How nuScenes writes a box, and how an edit is stored: centre x, y, z in the global frame, size as
+width / length / height, and one yaw angle. The app's own `Detection3D` (render-frame centre and a
+quaternion) converts to these and back without loss (measured: 2.3e-13 m at most).
+
+**Edit / overlay record (덮어쓰는 기록)** *(F8)*
+What is saved when a box is edited: not a changed copy of the data, but a separate note "this box,
+in this frame, now has these seven numbers". The screen draws the original data with the edits laid
+over it. Deleting the note ("Revert to label") brings the dataset's box back exactly.
+
+**Label vs edited box (라벨 / 수정됨)** *(F8)*
+The label is the box nuScenes ships. An edited box is one reviewer's correction of it. The UI, the
+export and the README call it "edited" — never "correct" or "ground truth".
+
+**Gravity axis vs the car's vertical axis (전역 수직축 / 차의 수직축)** *(F8)*
+"Up" for the world (the direction of gravity) and "up" for the car are not the same on a slope: in the
+shipped data the car is tilted by up to 4.59°. nuScenes turns boxes about the WORLD's up, so an edit
+turns a box about that axis too; turning about the car's up would produce a box nuScenes cannot
+express with yaw alone.
+
+**Undo history (실행 취소 이력)** *(F8)*
+The list of states a box went through while it was being edited, so the last change can be taken
+back (Ctrl+Z) and put back again. One drag — press, move, release — is one step.
+
+**Nudge (조금씩 옮기기)** *(F8)*
+Moving a box by a small fixed step with a key instead of dragging it: one arrow press is 5 cm, with
+Shift 50 cm, in the direction the top view shows. For the last few centimetres a mouse is too coarse
+(at the usual zoom 5 cm is 2 pixels). A run of presses — a held key repeats about 30 times a second —
+counts as ONE step of the undo history, so one Ctrl+Z takes the whole run back.
+
+**Export `review@3` (내보내기 형식 3판)** *(F8)*
+The downloaded review file since F8. A row is a box that has a verdict OR an edit; every row carries
+`edit`: `null`, or the box as the dataset has it (`original`), as the reviewer left it (`edited`), the
+difference (`change`: moved, lift, size delta, turn) and when. A box that was edited but never judged
+has `verdict: null` — that is why the version number went up: a reader of `review@2` could assume
+every row had a verdict. Values are in nuScenes terms (global centre, width / length / height, yaw and
+the quaternion `[w, x, y, z]`), six decimals. The file never calls an edit "correct".
+
+**Distance to the real label (진짜 라벨과의 거리)** *(F8, practice mode)*
+On the practice set a few boxes were deliberately made wrong, and the app still knows the real ones.
+So an edit made there can be measured: how far is the box from the real label — centre (metres), size
+(the largest of the three differences, metres), heading (degrees) — as the practice set showed it, and
+after the edit. 0 = the same as the real label. Shown only after "Reveal answers": while a box is being
+edited these numbers would say which way to drag it. On the REAL data there is nothing to measure an
+edit against — the label is the thing being questioned.
+
+**Second pass over the rejected boxes (반려 박스 다시 돌기)** *(F8)*
+Reviewing and editing are two passes: first every box gets a verdict (F4), later the reviewer comes
+back to the rejected ones and edits them. In the editor `N` / `P` go to the next / previous rejected
+box — in scene order, then frame order, then the frame's own box order, wrapping around — and the
+editor follows into another frame or scene. A box the filters hide is not part of the walk; a box
+marked "unsure" is not either.
+
+**SVG vs Canvas 2D (두 가지 그리기 방법)** *(F8)*
+SVG draws shapes as elements of the page (each one can be styled and clicked): right for a few
+hundred boxes and the handles. Canvas 2D paints pixels directly: right for thousands of LiDAR points.
+Measured on the largest frame (156 boxes, 5,659 points): the points as 5,659 SVG circles tripled the
+work per mouse move; one Canvas draws them in under a millisecond.

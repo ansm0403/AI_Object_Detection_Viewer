@@ -32,6 +32,33 @@ type WorkspaceShellProps = {
    */
   overlay?: ReactNode;
   /**
+   * (F8) What the overlay is, for assistive technology and for tests
+   * (`section[aria-label=…]`). Default "Report" (the evaluation report).
+   */
+  overlayLabel?: string;
+  /**
+   * (F8) How far the overlay reaches on wide screens:
+   *  - `'list+main'` (default) — over the list AND the 3D view;
+   *  - `'list'` — over the list only, so the 3D view next to it stays visible.
+   */
+  overlaySpan?: 'list+main' | 'list';
+  /**
+   * (F8) Give the list column and the 3D column the same width on wide screens
+   * (instead of 240 / 272 px for the list). Used together with
+   * `overlaySpan="list"`: the overlay then gets half of the room and the 3D
+   * view the other half. Only the WIDTH of the 3D cell changes — it stays the
+   * same grid item in the same place, so its canvas is resized, not re-created.
+   */
+  evenColumns?: boolean;
+  /**
+   * (F8) The list cell holds nothing right now (the box editor lies over it
+   * and the list is not drawn). On the fixed layout the cell keeps its place;
+   * on a narrow window, where the cells are stacked, an empty cell 60% of the
+   * window tall would sit between the timeline and the panel with the
+   * numbers — there it is left out.
+   */
+  listEmpty?: boolean;
+  /**
    * Width / height of the camera cell. The shell sizes the cell; the viewer
    * inside only fills it. nuScenes photos are 16:9; COCO photos vary, so 4:3.
    */
@@ -68,8 +95,14 @@ export function WorkspaceShell({
   details,
   timeline,
   overlay,
+  overlayLabel = 'Report',
+  overlaySpan = 'list+main',
+  evenColumns = false,
+  listEmpty = false,
   cameraAspect,
 }: WorkspaceShellProps) {
+  // The overlay lies over the whole 3D cell (and not just over the list).
+  const covered = Boolean(overlay) && overlaySpan === 'list+main';
   return (
     <div className="flex flex-col min-h-screen lg:h-screen lg:min-h-[640px]">
       {/* Wide: fixed bar heights so the grid below never shifts. Narrow: the
@@ -81,15 +114,32 @@ export function WorkspaceShell({
         className={[
           'flex flex-col gap-2 p-2',
           'lg:flex-1 lg:min-h-0 lg:grid lg:gap-2',
-          'lg:grid-cols-[240px_minmax(0,1fr)_360px]',
-          'min-[1400px]:grid-cols-[272px_minmax(0,1fr)_400px]',
+          // (F8) Whole class names in both branches: Tailwind only generates
+          // classes it can read as complete strings in the source.
+          evenColumns
+            ? 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_360px] min-[1400px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_400px]'
+            : 'lg:grid-cols-[240px_minmax(0,1fr)_360px] min-[1400px]:grid-cols-[272px_minmax(0,1fr)_400px]',
           'lg:grid-rows-[minmax(0,1fr)_auto]',
         ].join(' ')}
       >
-        {/* Centre — the 3D view. Narrow: 4:3 box. Wide: fills the grid cell. */}
+        {/* Centre — the 3D view. Narrow: 4:3 box. Wide: fills the grid cell.
+            (F8) `isolate`: the name tag of a selected 3D box is an HTML element
+            that the 3D library gives a very large z-index. Without a stacking
+            context of its own it showed THROUGH whatever was laid over this
+            cell (the "car" tag floated on the top-view editor). Isolated, the
+            tag is ordered inside this cell only. */}
         <section
           aria-label="3D view"
-          className="order-1 aspect-[4/3] lg:aspect-auto lg:col-start-2 lg:row-start-1 min-h-0 min-w-0"
+          className={[
+            'isolate order-1 aspect-[4/3] lg:aspect-auto lg:col-start-2 lg:row-start-1 min-h-0 min-w-0',
+            // (F8) While something is laid over this whole cell (wide screens),
+            // the cell is not painted. It stays mounted and laid out — the
+            // canvas is NOT re-created and keeps its size — but the browser
+            // no longer has to composite a 3D picture nobody can see under
+            // the overlay (measured in software GL: 41-43 fps with the editor
+            // open over it, 60 with the cell hidden).
+            covered ? 'lg:invisible' : '',
+          ].join(' ')}
         >
           {main}
         </section>
@@ -125,7 +175,9 @@ export function WorkspaceShell({
         {/* Left column — object list. Narrow: capped height, scrolls inside. */}
         <section
           aria-label="Objects"
-          className="order-4 h-[60vh] lg:h-auto lg:col-start-1 lg:row-start-1 min-h-0"
+          className={`order-4 h-[60vh] lg:h-auto lg:col-start-1 lg:row-start-1 min-h-0 ${
+            listEmpty ? 'hidden lg:block' : ''
+          }`}
         >
           {list}
         </section>
@@ -141,8 +193,11 @@ export function WorkspaceShell({
             z-index than the two cells it shares, so it covers them. */}
         {overlay && (
           <section
-            aria-label="Report"
-            className="order-first relative z-20 min-h-0 min-w-0 lg:order-none lg:col-start-1 lg:col-span-2 lg:row-start-1"
+            aria-label={overlayLabel}
+            className={[
+              'order-first relative z-20 min-h-0 min-w-0 lg:order-none lg:col-start-1 lg:row-start-1',
+              overlaySpan === 'list' ? 'lg:col-span-1' : 'lg:col-span-2',
+            ].join(' ')}
           >
             {overlay}
           </section>

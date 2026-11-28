@@ -55,7 +55,7 @@ const camera = (page) => page.locator('[aria-label="Cameras"] button[aria-presse
   const file = path.join(OUT, 'review-export.json');
   await download.saveAs(file);
   const exported = JSON.parse(fs.readFileSync(file, 'utf8'));
-  check('F4 / F7: the label-review export is still review@2 with 2 rows naming their scene — no sample records in it', exported.format === 'ai-detection-viewer/review@2' && exported.reviews.length === 2 && exported.reviews.every((r) => r.scene === 'scene-0916' && !String(r.objectId).startsWith('pred:')), `${exported.format} ${exported.reviews.length}`);
+  check('F4 / F7: the label-review export (review@3 since F8) has 2 rows naming their scene — no sample records in it', exported.format === 'ai-detection-viewer/review@3' && exported.reviews.length === 2 && exported.reviews.every((r) => r.scene === 'scene-0916' && !String(r.objectId).startsWith('pred:')), `${exported.format} ${exported.reviews.length}`);
   await page.keyboard.press('n');
   await page.waitForTimeout(700);
   check('F4: N goes to the next frame with unreviewed boxes', /Frame 2\/41/.test(await header(page)), (await header(page)).slice(0, 120));

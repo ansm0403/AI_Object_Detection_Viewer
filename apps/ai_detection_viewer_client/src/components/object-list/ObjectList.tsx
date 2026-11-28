@@ -33,6 +33,9 @@ type ObjectListProps = {
   orderKey?: string;
   // (F4) A thin bar under the title row (the page passes the order control).
   toolbar?: ReactNode;
+  // (F8) Ids of the boxes of this frame that the reviewer has edited. Their
+  // rows carry a mark: the box drawn for them is NOT the dataset's label.
+  editedIds?: ReadonlySet<string>;
 };
 
 /**
@@ -52,6 +55,7 @@ export function ObjectList({
   boxes: orderedBoxes,
   orderKey,
   toolbar,
+  editedIds,
 }: ObjectListProps) {
   // Scroll the selected row into view when the selection changes from outside
   // the list (3D / camera click, J / K, auto-advance after a verdict) or when
@@ -124,6 +128,8 @@ export function ObjectList({
               <li
                 key={d.id}
                 ref={isSelected ? selectedRef : undefined}
+                // (F8) Lets the top-view editor find the row it grows out of.
+                data-selected={isSelected ? 'true' : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect?.(d.id);
@@ -151,6 +157,17 @@ export function ObjectList({
                 <span title={d.class} className="flex-1 min-w-0 text-sm text-zinc-100 truncate">
                   {classLabel(d.class)}
                 </span>
+                {editedIds?.has(d.id) && (
+                  <span
+                    role="img"
+                    data-edited="true"
+                    title="Edited — the box drawn for this row is the reviewer's edit, not the label it was made from"
+                    aria-label="Edited"
+                    className="shrink-0 text-[11px] leading-none text-amber-300"
+                  >
+                    ✎
+                  </span>
+                )}
                 {isMeasured &&
                   (cameraCount > 1 ? (
                     <CameraTag seenBy={seenBy} />

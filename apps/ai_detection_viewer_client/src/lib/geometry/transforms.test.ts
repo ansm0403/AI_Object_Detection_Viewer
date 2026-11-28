@@ -1,13 +1,17 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import {
+  egoQuatToGlobal,
   egoQuatToThree,
+  egoToGlobal,
   egoToThree,
   globalQuatToEgo,
   globalToEgo,
   nuSizeToLocal,
   quatNuToThree,
   sensorToGlobal,
+  threeQuatToEgo,
+  threeToEgo,
   type Pose,
   type QuatXYZW,
   type Vec3,
@@ -173,5 +177,47 @@ describe('sensorToGlobal (F2-B — LiDAR sensor → global)', () => {
     const pSensor: Vec3 = [2, 0, 0];
     const backToEgo = globalToEgo(sensorToGlobal(pSensor, calib, ego), ego);
     expectVecClose(backToEgo, [3, 0, 0]);
+  });
+});
+
+describe('the way back: three -> ego -> global (F8)', () => {
+  // A car that is not level: turned 40 degrees and tipped a few degrees, somewhere on the map.
+  const tilted = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.03, -0.05, 0.7, 'ZYX'));
+  const ego: Pose = {
+    translation: [411.3, 1180.6, 0],
+    rotation: [tilted.w, tilted.x, tilted.y, tilted.z],
+  };
+  // A box turned 100 degrees about the vertical axis (nuScenes order, w first).
+  const boxNu: [number, number, number, number] = [Math.cos(0.87), 0, 0, Math.sin(0.87)];
+
+  it('threeToEgo undoes egoToThree exactly (sign flips only)', () => {
+    const p: Vec3 = [12.5, -3.25, 0.75];
+    expect(threeToEgo(egoToThree(p))).toEqual(p);
+    expect(egoToThree(threeToEgo(p))).toEqual(p);
+  });
+
+  it('egoToGlobal undoes globalToEgo', () => {
+    const p: Vec3 = [430.1, 1170.9, 1.2];
+    expectVecClose(egoToGlobal(globalToEgo(p, ego), ego), p);
+  });
+
+  it('egoToGlobal puts the car origin at the car position', () => {
+    expectVecClose(egoToGlobal([0, 0, 0], ego), ego.translation);
+  });
+
+  it('threeQuatToEgo undoes egoQuatToThree', () => {
+    const qEgo = globalQuatToEgo(boxNu, ego.rotation);
+    const back = threeQuatToEgo(egoQuatToThree(qEgo));
+    const same = Math.abs(
+      new THREE.Quaternion(...back).dot(new THREE.Quaternion(...qEgo)),
+    );
+    expect(same).toBeCloseTo(1, 12);
+  });
+
+  it('egoQuatToGlobal undoes globalQuatToEgo and answers in nuScenes order (w first)', () => {
+    const back = egoQuatToGlobal(globalQuatToEgo(boxNu, ego.rotation), ego.rotation);
+    // The same rotation may come back as q or -q; compare up to sign.
+    const sign = Math.sign(back[0]) || 1;
+    back.forEach((value, i) => expect(value * sign).toBeCloseTo(boxNu[i], 12));
   });
 });

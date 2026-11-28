@@ -1952,6 +1952,146 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 - Edge refs: Edge_F#7.5 Case 1~4, "확인했고 바꿀 것이 없던 것", "F7.5가 만든 것이 아닌 것", "확인하지 못한 것".
 -->
 
+## F8 — Editing a 3D box in the top view ✅ Done (2026-11-27 … 28; F8-0, A … G)
+
+- **What it is:** the reviewer can now change a 3D box, not only judge it. Seen from above a 3D box
+  is a rotated rectangle, so position, length / width and heading are edited there by dragging;
+  height and the vertical position are numbers. **The dataset is never modified:** an edit is a
+  separate record laid over the label, shown as "edited" (never "correct"), and can be taken back.
+- **Design doc:** `docs/plan-feature/F8_bev_box_edit.md` (approved 2026-11-27: layout "A + B" —
+  focus view by default, `V` puts the 3D view next to it; entrance animation ④; candidates ㉰ and ㉮
+  in, ㉯ out; the three small extras in). Mock-ups, step captures, raw pass / fail output and the
+  check scripts: `docs/plan-feature/assets/F8/` (`compare.html`, `motion.html`, `steps.html`,
+  `checks/`).
+- **Steps:**
+  - **F8-0 — top bar** (found while measuring, not F8): in review mode the bar wrapped onto the
+    filter bar at 1024 px. The app name is hidden below 1280 px.
+  - **F8-A — logic and storage** (no visual change): `lib/editing` (the seven numbers of a box, the
+    top-view projection, what a drag does, what changed, the overlay, the undo history, validation
+    of stored values), `lib/nuscenes/box-views` (ONE function builds a box in the 3D view and in a
+    photo — the parser and the editor both call it; the parser's output is byte-identical before and
+    after, SHA-256 over 18,538 boxes and 22,081 rectangles), `store/edit-store`.
+  - **F8-B — the editor's frame:** enter with `E` or the "Edit box" button, leave with `Esc`; focus
+    view / split view; the top view (SVG for boxes and handles, one Canvas 2D for the points); the
+    edit bar; the panel; the entrance animation (0.32 s, none with reduced motion).
+  - **F8-C — changing a box:** drag to move, sides and corners to resize (the opposite side / corner
+    stays), the knob to turn, five number fields. While dragging, the 3D view and all six photos
+    follow; on release the edit is stored and is one undo step. Undo / Redo / Revert to label.
+  - **F8-D — "edited" marks and keys:** a pencil on the list row, "· N edited" on the 3D name tag,
+    "N edited" in the top bar, an "Edited" row in Selected, "in label" next to the LiDAR count;
+    arrows 5 cm (Shift 50 cm), `Ctrl+Z`, `Ctrl+Shift+Z` / `Ctrl+Y`.
+  - **F8-E — export and practice:** the export is `review@3` (a row = a box with a verdict OR an
+    edit; `edit: null | {original, edited, change, editedAt}`; `verdict` may be null;
+    `summary.edited`; 15 more CSV columns). In practice mode, after "Reveal answers", every edited
+    box is measured against the real label (centre / size / heading, as shown → as edited).
+  - **F8-F — the second pass:** in the editor "Rejected 2 / 4 ‹ ›", `N` / `P`: the next / previous
+    rejected box in scene → frame → box order, across scenes, the editor following. The "N
+    rejected" count in the top bar is a button that does the same from the review screen.
+  - **F8-G — edge review** (run before fixing: 63 / 68; three real problems plus one the script did
+    not catch — Edge_F#8 Cases 7–9), the final re-run and the documents.
+- **Done when (all met):**
+  - Scope ①–⑥ of the session brief: the top view with the nearby points ✓; move / length / width /
+    heading by dragging, height by number ✓; the label is never modified, an edit is an overlay
+    record, marked and revertible ✓; undo / redo ✓; the photos (six cameras) and the 3D view follow
+    while editing ✓; the export carries what changed, format version raised ✓.
+  - **Nothing that was locked changed.** Edited boxes take no part in evaluation, search or the
+    sample check: scene-0916 first ten frames 91 / 83 / 13 / 26 (front), 349 / 182 / 107 / 180 (60
+    photos), frame 6 colours 28 / 16 / 17; all 404 frames 6,726 / 5,292 / 3,514 / 5,278; IoU 0.5
+    5,462 / 6,556 / 5,231 / 5,278; "Crowded" 177 frames in 7 scenes; the sample population 1,452 and
+    its order. Checked with an edited box on screen (`checks/c.js`) and by the F7.5 scripts.
+  - Stored reviews (three scopes) are read as before and are byte-identical after edits; edits live
+    under their own key (`ai-detection-viewer.box-edits`, scopes `nuscenes` / `nuscenes-practice`).
+  - `docs/evaluation/` and the README's 83 / 5 / 12 untouched.
+  - The 3D canvas is never re-created (entering, leaving, switching the view, another scene). Floor
+    cost unchanged: 41 draw calls (1440×900) / 42 (1536×700) for the 40-box frame; handles exist only
+    for the box being edited, and in SVG, not in the 3D scene.
+  - Immutable Rules: #1 ids untouched (an edit is keyed by the same frame id + object id); #2 the
+    edited box is `(current frame, selectedObjectId)` — no second selection; #3 every calculation is
+    a pure function outside components and the store, tested; #5 the editor is a state of Review —
+    in focus view it covers the 3D view on purpose while a box is worked on, split view keeps both;
+    #6 the screen says "edited", never "correct", and "practice label" on the practice set.
+- **Tests / checks:**
+  - Unit tests **989 → 1,183** (`lib/editing` 127, `box-views`, transforms, `edit-store`, export
+    `review@3` 14, `closeness` 11, `rejected` 18, keys). `tsc --noEmit` 0 errors. CI lint 0 errors
+    (19 pre-existing warnings). Production build passes.
+  - Real app, production build, port 3100: step 0·B **142**, C **77**, D **85**, E **68**, F **52**
+    + **14**, edge **73** — 511 checks, all passing on the final build — and the F7.5 scripts
+    (**362**) on the same build. `checks/reg.js` of F7.5 had one expected string changed
+    (`review@2` → `review@3`).
+- **Measurements (production build, headless Chromium, 1536×700):**
+  - Dragging, one pointer move per painted frame, integrated GPU (Intel UHD), median of 3 × 3 s:
+    156-box frame 41–42 fps → **60 fps**, 72-box frame 59–60 fps. Software GL: 8–11 fps while
+    dragging (a CPU-rendered check environment, not a user's).
+  - Points: 5,659 SVG circles tripled the work per pointer move; one Canvas 2D draws them in under a
+    millisecond (measured before the design).
+  - The parser's values vs the file's: centre within 2.3e-13 m, size exact, rotation within
+    0.000006° (18,538 boxes); every shipped box is a pure yaw (tilt ≤ 0.000001°).
+  - Not measured: the user's own browser, the RTX 4060.
+- **Changes from the plan, and why:**
+  1. **Moving a box keeps its height above the map** (design: "along the car's floor plane"). With
+     the floor plane, a drag changed the up / down number and resizing followed a different rule.
+     Now the top view changes x, y, width, length and yaw only. Cost: on a slope a box moved far
+     must be put back on the ground by number (about 8 cm per metre on the steepest frame).
+  2. **"Up / down" is measured at the box's bottom** against the label's bottom, so that making a
+     box taller does not also "raise" it.
+  3. **Undo / Redo / Revert landed in step C**, not D — they are the same code as "store on release".
+  4. **The list is not drawn while editing** (it cost the drag its frame rate), **a fully covered 3D
+     cell is not painted** (also for the F7.5 report), **the 3D cell is `isolate`d** (its name tag
+     showed through), **no handles below 24 px**, **small boxes are zoomed in further**, **the
+     number fields are in two columns** — all found by the step scripts or captures.
+  5. **"N edited" in the top bar appears from 1440 px** (design: 1280 px), 1536 px on the practice
+     set: measured, the bar wrapped otherwise.
+  6. **Two top-bar problems that predate F8 were fixed** because F8 adds to that bar: "Not saved" at
+     1280–1320 px, and practice mode at 1280–1320 px (Edge_F#8 Cases 1–2).
+  7. **There is no "Revert" outside the editor** — outside it there is no undo to take a wrong click
+     back.
+  8. **A run of arrow presses (less than 0.8 s apart) is one undo step** — a held key repeats about
+     30 times a second.
+  9. **The export's `change` also has `liftMetres`**, and the CSV 15 new columns, not 13: the screen
+     says "raised 0.20 m", so the file must. **`review@2` is no longer written.**
+  10. **"Reset reviews" keeps the edits** and says so; a file can be downloaded with edits and no
+      verdicts.
+  11. **In practice mode the editor says "practice label"** — steps B and C had called a
+      deliberately wrong box "the nuScenes label" (Edge_F#8 Case 4).
+  12. **The practice table also lists edited boxes nothing was planted on** (how far the edit took
+      them from the real label). After an edit the answers are hidden again.
+  13. **The walk (step F) was designed while building** — the design had one line. Keys `N` / `P`,
+      order scene → frame → box, wrapping, filtered-out and "unsure" boxes excluded, the count in
+      the top bar as the entry from the review screen (approved 2026-11-28).
+  14. **A drag that ends on another box is dropped**, and the walk waits for a drag to end (Case 5).
+  15. **The undo steps start again when the stored box changes from outside** (two tabs, Case 7).
+  16. **`page.tsx` is 2,401 lines** (2,175 before F8). The editor's state and handlers are in hooks
+      (`useBoxEditor`, `useBoxDraft`, `useStoredEdits`, `useEditShortcuts`, `useRejectedWalk`,
+      `usePracticeCloseness`); what grew in the page is the wiring of slots and props.
+  - Not started (by decision): dragging boxes in the 3D view; creating / deleting boxes, changing a
+    class; editing predictions or 2D boxes; scoring-rule changes; candidate ㉯ (an Explore condition
+    "frames with rejected boxes"); bundles B and C of `F7_scene_exploration.md` §13.1.
+  - COCO mode: still on hold.
+- **Edge refs:** Edge_F#8 Cases 1–10 + "Found while building steps B and C" + "Checked, no change
+  needed" + "Found, not caused by F8" + "Could not be verified" + "Known limits".
+
+<!-- KO (move to a localized file)
+## F8 — 위에서 본 화면에서 3D 박스 수정 ✅ 완료 (2026-11-27 ~ 28; F8-0, A ~ G)
+- 무엇인가: 검수자가 3D 박스를 판정만 하는 것이 아니라 고칠 수 있다. 위에서 내려다보면 3D 박스는 회전된 사각형이므로
+  위치, 길이 / 폭, 방향은 거기서 끌어서 고치고 높이와 위아래 위치는 숫자로 넣는다. **데이터는 바뀌지 않는다.** 수정은
+  원본 위에 덮는 별도 기록이고, 화면에는 "edited"로 표시되며("정답"이라고 하지 않는다) 되돌릴 수 있다.
+- 설계 문서: `docs/plan-feature/F8_bev_box_edit.md`(2026-11-27 승인: 배치 "A + B", 등장 움직임 ④, 후보 ㉰와 ㉮ 넣음,
+  ㉯ 넣지 않음, 작은 것 셋 넣음). 시안, 단계별 캡처, 통과/실패 원문, 확인 스크립트: `docs/plan-feature/assets/F8/`.
+- 단계: 0(맨 위 줄, F8과 무관하게 찾은 문제) → A(계산과 저장소) → B(편집 화면의 틀) → C(조작과 따라오기, 실행 취소)
+  → D("수정됨" 표시와 키) → E(내보내기 `review@3`, 연습 모드의 가까움) → F(반려한 박스 차례로 넘기기 + 맨 위 줄의
+  개수 버튼) → G(엣지 검증: 고치기 전 63 / 68, 실제 문제 셋 + 스크립트가 못 잡은 하나. 마지막 다시 돌리기와 문서).
+- 끝났다고 보는 기준(모두 충족): 범위 ① ~ ⑥. **잠겨 있던 숫자는 하나도 바뀌지 않았다**(고친 박스는 평가, 검색, 표본
+  검수에 들어가지 않는다). 저장된 검수 기록(세 범위)은 그대로 읽히고 수정 뒤에도 바이트 단위로 같다. 3D 캔버스는
+  다시 만들어지지 않는다. 3D 바닥 비용 41 / 42번 그대로. 불변 규칙 #1, #2, #3, #5, #6.
+- 테스트 989 → 1,183개. 실제 앱 확인 511개 + F7.5의 362개, 모두 마지막 빌드에서 통과.
+- 측정: 끄는 동안 내장 GPU에서 박스 156개 프레임 41 ~ 42fps → 60fps. 사용자의 실제 브라우저와 RTX 4060은 재지 못했다.
+- 계획과 달라진 점과 이유: 위의 영어 본문 1 ~ 16번(이동은 높이를 그대로 두는 수평 이동, Up/down은 바닥 기준, 실행
+  취소가 C에 들어옴, 목록을 그리지 않음 등 성능과 표시의 수정, "N edited"는 1440px부터, F8 전부터 있던 맨 위 줄 문제
+  둘을 고침, 편집 화면 밖에는 Revert가 없음, 이어 누른 화살표는 한 단계, 내보내기에 `liftMetres`, Reset은 수정을 남김,
+  연습 모드의 "practice label", 넘기기는 만들면서 정함, 끄는 중의 넘기기를 막음, 탭 두 개의 실행 취소, `page.tsx` 2,401줄).
+- 엣지: Edge_F#8의 Case 1 ~ 10과 그 아래 절들.
+-->
+
 ## Roadmap — F3+ direction (agreed 2026-11-25) 🧭 Direction only, nothing planned yet
 
 > **Status:** direction agreed in discussion. **No feature below is planned or approved for
@@ -1969,7 +2109,10 @@ COCO의 "추정 3D"를 nuScenes "실측 3D"로 교체 — 단 COCO를 대체하�
 > is done** (2026-11-26, its own session, see the F6.5 entry above; no design doc). **F7 is done**
 > (2026-11-27, see the F7 entry above; design doc `F7_scene_exploration.md`). **F7.5 is done**
 > (2026-11-27, "evaluation you can trust" — see the F7.5 entry above; design doc
-> `F7.5_trustworthy_evaluation.md`). Next: F8 — its design doc is written at the start of the F8
+> `F7.5_trustworthy_evaluation.md`). **F8 is done** (2026-11-28, editing a 3D box in the top view —
+> see the F8 entry above; design doc `F8_bev_box_edit.md`). The roadmap F3–F8 is complete; what
+> comes next is decided by re-judging bundles B and C of `F7_scene_exploration.md` §13.1.
+> (Before F8 this line read: Next: F8 — its design doc is written at the start of the F8
 > session.
 > Each large feature runs in its own session — **start from `docs/plan-feature/HANDOFF.md`**.
 
@@ -2140,7 +2283,9 @@ one). Binary point clouds and Web Worker parsing were measured and NOT done: a p
 > **설계 문서:** 각 기능의 구현 전 설계는 `docs/plan-feature/F#_*.md`에 쓴다(목록:
 > `docs/plan-feature/README.md`). 기능 하나에 문서 하나이며, 그 기능을 시작하기 직전에 쓴다. F3 문서가
 > 있고 **F3은 구현 완료**(2026-11-25, 위 F3 항목 참고). 그 뒤 F4(2026-11-25), F5·F6·F6.5(2026-11-26),
-> **F7(2026-11-27), F7.5(2026-11-27, 평가 결과를 믿을 수 있게)까지 구현 완료**(각각 위의 항목 참고). 다음은 F8이며,
+> **F7(2026-11-27), F7.5(2026-11-27, 평가 결과를 믿을 수 있게), F8(2026-11-28, 위에서 본 화면에서 3D 박스 수정)까지
+> 구현 완료**(각각 위의 항목 참고). 로드맵 F3 ~ F8이 끝났다. 다음은 `F7_scene_exploration.md` 13.1의 묶음 나와
+> 묶음 다를 다시 판단해서 정한다. (F8 전에는 이렇게 적혀 있었다: 다음은 F8이며,
 > 설계 문서는 F8 세션을 시작할 때 쓴다.
 > 큰 기능 하나를 세션 하나에서 진행한다. **`docs/plan-feature/HANDOFF.md`부터 읽는다.**
 

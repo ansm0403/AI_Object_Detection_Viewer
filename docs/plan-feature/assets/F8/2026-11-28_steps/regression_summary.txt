@@ -1,0 +1,14 @@
+Re-run on the F8 step-F build (2026-11-28, production build, :3100, software GL)
+F8 f: 52 / 52 passed
+F8 e: 68 / 68 passed
+F8 d: 85 / 85 passed
+F8 b: 142 / 142 passed
+F8 c: 77 / 77 passed
+F7.5 reg: 30 / 30 passed
+F7.5 perf: 5 / 5 passed
+F7.5 c: 74 / 74 passed
+F7.5 d: 51 / 51 passed
+F7.5 b: 154 / 154 passed
+F7.5 edge: 48 / 48 passed
+
+(The step-E build, earlier the same day: F8 e 68 / 68, d 85 / 85, b 142 / 142, c 77 / 77, F7.5 362 / 362.)

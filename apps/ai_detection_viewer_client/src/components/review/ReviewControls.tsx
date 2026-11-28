@@ -37,6 +37,12 @@ type Props = {
    * to jump to — so the panel never claims "all done" while boxes remain.
    */
   hiddenUnreviewed: number;
+  /**
+   * (F8) The way into the top-view editor for the selected box. Absent on data
+   * whose boxes cannot be edited. `edited`: the box already carries an edit.
+   * The button is disabled by the same conditions that block a verdict.
+   */
+  edit?: { edited: boolean; onEdit: () => void };
 };
 
 /**
@@ -59,6 +65,7 @@ export function ReviewControls({
   queueDone,
   onNextFrame,
   hiddenUnreviewed,
+  edit,
 }: Props) {
   const verdict = record?.verdict;
   const disabled = blocked !== null;
@@ -156,17 +163,46 @@ export function ReviewControls({
       )}
 
       <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500 min-h-4">
-        {blocked ? (
-          <span>{REVIEW_BLOCK_MESSAGES[blocked]}</span>
-        ) : (
-          <span className={needsReason ? 'text-amber-300/90' : ''}>
-            {verdict
-              ? needsReason
-                ? 'Rejected · add a reason'
-                : VERDICT_LABELS[verdict]
-              : 'Not reviewed'}
-          </span>
-        )}
+        <span className="flex items-center gap-2 min-w-0">
+          {blocked ? (
+            <span>{REVIEW_BLOCK_MESSAGES[blocked]}</span>
+          ) : (
+            <span className={needsReason ? 'text-amber-300/90' : ''}>
+              {verdict
+                ? needsReason
+                  ? 'Rejected · add a reason'
+                  : VERDICT_LABELS[verdict]
+                : 'Not reviewed'}
+            </span>
+          )}
+          {/* (F8) Any box that can be judged can be edited — not only a rejected
+              one. An edit never changes the verdict. */}
+          {edit && !blocked && (
+            <button
+              type="button"
+              aria-keyshortcuts={SHORTCUT_KEYS.edit}
+              title={
+                edit.edited
+                  ? 'This box has been edited. Open it in the top view to change or revert the edit.'
+                  : 'Change this box in the top view: position, size, heading; height by number'
+              }
+              onClick={(e) => {
+                edit.onEdit();
+                blurAfterMouseClick(e);
+              }}
+              className={[
+                'shrink-0 inline-flex items-center gap-1 h-5 px-1.5 rounded border text-[11px] whitespace-nowrap transition-colors',
+                edit.edited
+                  ? 'border-amber-400/45 text-amber-200 hover:border-amber-300/70'
+                  : 'border-sky-400/45 text-sky-200 hover:border-sky-300/70 hover:bg-sky-500/10',
+              ].join(' ')}
+            >
+              <span aria-hidden="true">✎</span>
+              {edit.edited ? 'Edited · edit' : 'Edit box'}
+              <Kbd>{SHORTCUT_KEYS.edit}</Kbd>
+            </button>
+          )}
+        </span>
         <span className="flex items-center gap-2.5 shrink-0">
           <KeyHint keys={SHORTCUT_KEYS.previous}>prev</KeyHint>
           <KeyHint keys={SHORTCUT_KEYS.next}>next</KeyHint>
