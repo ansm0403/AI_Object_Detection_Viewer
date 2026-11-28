@@ -1,0 +1,70 @@
+PASS  G1 · two tabs: an edit made in tab A shows in tab B without a reload (list mark, "1 edited", 3D tag)  — {"rows":1,"count":"1 edited","tag":true,"notSaved":false}
+PASS  G1 · … tab B’s editor, open on the same box, follows a further change made in tab A  — moved 0.50 m → moved 1.00 m
+PASS  G1 · … a change in tab B then shows in tab A: both tabs show the same box  — A: moved 1.12 m | B: moved 1.12 m
+PASS  G1 · … tab A reverts: tab B shows the label again, no edit is stored  — nothing — the box is the nuScenes label
+PASS  G1 · … Ctrl+Z in tab B after that does not bring back a state tab A never saw as the latest (what it does is recorded here)  — Undo in B was enabled; after Ctrl+Z the stored edit is back
+PASS  G1 · no page errors in either tab
+PASS  G2 · stored edits are "not JSON": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · stored edits are "an empty string": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · stored edits are "JSON null": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · stored edits are "a number": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · stored edits are "state missing": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · stored edits are "edits is a string": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · stored edits are "a scope is an array": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · stored edits are "unknown future version": the app opens, nothing is marked edited, and a new edit works and is stored  — {"rows":0,"count":null,"tag":false,"notSaved":false} · errors: 
+PASS  G2 · … the stored reviews are untouched (the rejected car is still rejected)
+PASS  G2 · 13 stored records, 1 good and 12 bad (NaN, negative / zero / huge size, text for a number, a missing field, a key that does not match, a frame or box that is gone, not an object): only the good one is laid over — 1 mark, "1 edited"  — {"rows":1,"count":"1 edited","tag":true,"notSaved":false} · 
+PASS  G2 · … the export menu’s count of edits, with the bad records in storage (recorded: what it says)  — 1 reviewed box in all scenes · 6 boxes edited · saved in this browser
+PASS  G2 · a browser from before F8 (reviews in all three scopes, no edit key): the review value is byte for byte what it was, before and after the first edit
+PASS  G3 · every write throws: editing still works for the visit (the box moves, the marks appear) and both the editor and the top bar say "Not saved"  — moved 0.50 m · {"rows":1,"count":"1 edited","tag":true,"notSaved":true} · 
+PASS  G3 · every read AND write throws (storage blocked): editing still works for the visit (the box moves, the marks appear) and both the editor and the top bar say "Not saved"  — moved 0.50 m · {"rows":1,"count":"1 edited","tag":true,"notSaved":true} · 
+PASS  G4 · Korean layout: "ㄷ" (the E key) opens the editor, "ㅍ" (V) switches the view, and V while a syllable is being composed ("Process") switches it back  — true true false
+PASS  G4 · … Ctrl+"ㅋ" (Z) undoes the nudge
+PASS  G4 · … Korean text typed into a number field changes nothing
+PASS  G5 · numbers far outside what a box can be: every stored number stays finite and inside the limits (size 0.1 – 50 m, up/down ±20 m, heading within ±180°)  — length="9999"→50 · width="0"→0.1 · height="-3"→0.1 · heading="725"→5 · lift="999"→20 · lift="-999"→-20 · length="1e3"→50 · width="Infinity"→0.1 · height="NaN"→0.1 · length=""→50 · length="  "→50 · width="0.00001"→0.1 · heading="-0"→0 · height="1,5,5"→0.1
+PASS  G5 · … the 3D view, the photo and the top view survive a 50 m box 20 m in the air (no page error)
+PASS  G5 · … what the photo says when the box is that large (recorded)  — {"sees":0,"text":"CAM_FRONT_RIGHT FULL ZOOM Z car car car car car truck car car car car car car ca"}
+PASS  G5 · … Revert to label brings back exactly the label’s numbers
+FAIL  G5 · 110 key presses in 11 runs, then Ctrl+Z until nothing is left: back at the label in 11 steps  — 20 undo steps, 17813 ms for the presses
+FAIL  G6 · another frame while editing (the car has no box in frame 30): the editor stays, says so, offers no number fields; arrows and Ctrl+Z change nothing  — TOP VIEW · LIDAR POINTS ↑ front of the car ■ points inside the box Drag the box: move · squares: resize · knob: turn · wheel: zoom · backgro
+PASS  G6 · … back on frame 9 the editor is on the car again, with its edit
+PASS  G6 · another scene picked while editing: the editor stays open with no box ("no box selected"), nothing crashes, the 3D canvas is the same one  — EDIT BOX no box selected · frame 1 Saved as an edit on top o | TOP VIEW · LIDAR POINTS ↑ front of the car No box is selected. Click a box in the 3D view or in the photo to edit it. ■ 
+PASS  G6 · … keys there change nothing (the car’s edit in the other scene is as it was)
+PASS  G6 · … Esc closes the editor and the review screen of the new scene is there (list rows)
+PASS  G6 · Practice switched on while editing: the data becomes the practice set, the real edit is NOT shown on it, no crash (recorded: whether the editor stays open)  — editor open · EDIT BOX no box selected · frame 9 Saved as an edit on top of the practice label — the lab
+PASS  G6 · … Practice off again: the real edit is back
+PASS  G6 · Evaluate clicked while editing: the editor closes, E does nothing in Evaluate, and back in Review it is still closed
+PASS  G6 · COCO chosen while editing: the editor closes; on COCO there is no Edit button, no mark, and E does nothing  — {"editor":false,"editButton":false,"marks":0}
+PASS  G6 · … back on nuScenes the edit is still there
+PASS  G7 · E Esc E V V Esc E Esc E with no pause: the editor ends open on the car, no error
+PASS  G7 · Ctrl+Z ×12 and Ctrl+Y ×6 with nothing to undo: nothing stored, no error
+PASS  G7 · N and → alternating 9 times with no pause: the walk moved, and NOT ONE box was moved by the arrows (each came within 0.4 s of an arrival)  — Rejected 3 / 3 · stored edits: 0
+PASS  G8 · reload with the editor open: the editor is closed afterwards, the edit is kept
+PASS  G8 · 15 open / switch view / close cycles: the 3D scene holds as many geometries as before (nothing piles up), and with the editor closed the arrows and Ctrl+Z do nothing  — geometries 72 → 72
+FAIL  G9 · 390×800 (below the supported width: the page stacks and scrolls): the editor opens, all five number fields are there, nothing runs out of the window sideways  — {"editor":true,"size":"374×560","barHeight":62,"inputs":5,"bad":["\"Revert\" outside the window"],"x":125,"y":1371,"handles":10} · before opening: x 0, y 1184
+PASS  G9 · 390×800: a number can be typed and the "Changed from the label" line can be brought into view (by scrolling the panel if needed)  — {"visible":true,"onTop":true,"text":"Changed from the label: moved 0.50 m · raised 0.30 m"}
+PASS  G9 · 390×800: no page errors
+PASS  G9 · 768×900 (below the supported width: the page stacks and scrolls): the editor opens, all five number fields are there, nothing runs out of the window sideways  — {"editor":true,"size":"752×630","barHeight":37,"inputs":5,"bad":[],"x":0,"y":1873,"handles":10} · before opening: x 0, y 1583
+PASS  G9 · 768×900: a number can be typed and the "Changed from the label" line can be brought into view (by scrolling the panel if needed)  — {"visible":true,"onTop":true,"text":"Changed from the label: moved 0.50 m · raised 0.30 m"}
+PASS  G9 · 768×900: no page errors
+FAIL  G9 · 1024×600: the editor opens, all five number fields are there, nothing runs out of the window sideways, the page does not scroll  — {"editor":true,"size":"640×448","barHeight":40,"inputs":5,"bad":[],"x":0,"y":40,"handles":10} · before opening: x 0, y 40
+PASS  G9 · 1024×600: a number can be typed and the "Changed from the label" line can be brought into view (by scrolling the panel if needed)  — {"visible":true,"onTop":true,"text":"Changed from the label: moved 0.50 m · raised 0.30 m"}
+PASS  G9 · 1024×600: no page errors
+FAIL  G9 · 1280×560: the editor opens, all five number fields are there, nothing runs out of the window sideways, the page does not scroll  — {"editor":true,"size":"896×448","barHeight":40,"inputs":5,"bad":[],"x":0,"y":80,"handles":10} · before opening: x 0, y 80
+PASS  G9 · 1280×560: a number can be typed and the "Changed from the label" line can be brought into view (by scrolling the panel if needed)  — {"visible":true,"onTop":true,"text":"Changed from the label: moved 0.50 m · raised 0.30 m"}
+PASS  G9 · 1280×560: no page errors
+PASS  G9 · 2560×1300: the editor opens, all five number fields are there, nothing runs out of the window sideways, the page does not scroll  — {"editor":true,"size":"2136×1108","barHeight":40,"inputs":5,"bad":[],"x":0,"y":0,"handles":10} · before opening: x 0, y 0
+PASS  G9 · 2560×1300: a number can be typed and the "Changed from the label" line can be brought into view (by scrolling the panel if needed)  — {"visible":true,"onTop":true,"text":"Changed from the label: moved 0.50 m · raised 0.30 m"}
+PASS  G9 · 2560×1300: no page errors
+PASS  G10 · 1024 px, the longest class name of scene-0061 ("pushable_pullable"), the "Rejected" group AND "Not saved": the edit bar is one line, nothing overlapping  — ok · room left 136px · EDIT BOX pushable_pullable e90005 · frame 1 NOT SAVED Rejected 1 / 2 ‹ › 3D view V ↶ Ctrl Z ↷ Revert Done Esc
+PASS  G11 · one scene’s file cannot be loaded: editing and N in the other scenes work, the editor never lands on the missing scene, no page error  — scene-0916 7 / 10 ▾ · 
+PASS  G11 · … the export menu says the file covers 9 of 10 scenes  — 1 reviewed box in all scenes · 1 box edited · saved in this browser / The file covers the 9 of 10 scenes that are loaded; records of the others are left out.
+
+g: 63 / 68 passed, 5 FAILED

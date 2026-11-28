@@ -1,0 +1,16 @@
+PASS  F2 · nothing rejected: "0 rejected" is plain text, not a button  — {"scene":"scene-0916","frame":1,"id":null,"editor":false,"button":null,"title":null,"editorId":null,"buttonShown":false,"text":"0 rejected","focusOnButton":false,"verdictShown":false}
+PASS  F2 · four rejected (one in this scene, scene-0061): the count "1 rejected" is now a button, and its tooltip says "1 rejected in this scene, 4 in all scenes"  — {"button":"1 rejected","shown":true,"title":"1 rejected in this scene, 4 in all scenes. Click: go to the "}
+PASS  F2 · one click from the scene-0061 box: scene-0916 frame 9, the person — selected, on the REVIEW screen (no editor), its verdict in the panel  — scene-0916 f9 4591a9
+PASS  F2 · … the click did not leave the focus on the count (Space / Enter would jump again)
+PASS  F2 · … the 3D canvas was not re-created
+PASS  F2 · further clicks: the car (frame 9), frame 12, and around to scene-0061 again — the order of N in the editor  — scene-0916 f9 527702 → scene-0916 f12 6dafc1 → scene-0061 f3 48d58b
+PASS  F2 · from frame 10 with nothing selected: the click goes to the nearest rejected box after it (frame 12)  — scene-0916 f10 null → scene-0916 f12 6dafc1
+PASS  F2 · after the jump the review keys work on that box (3 adds "wrong position" to the frame-12 box)  — wrong_position
+PASS  F2 · in the editor a click on the count does what N does (around to scene-0061), the editor stays open  — scene-0061 48d58b
+PASS  F2 · with only "bicycle" shown (none of the rejected boxes): the count is still "1 rejected" but plain text — there is nothing the click could go to  — {"button":null,"text":"1 rejected"}
+PASS  F2 · in a scene with none of its own (scene-0103) the count reads "0 rejected" and is still a button ("0 rejected in this scene, 4 in all scenes"); a click goes to the next scene that has one  — {"button":"0 rejected","title":"0 rejected in this scene, 4 in all scenes. C"} → scene-0916 f9 4591a9
+PASS  F2 · no page errors
+PASS  F2 · top bar with the count as a button, 8 widths: one line, the button on the text line and as tall as its neighbour, shown from 1280 px  — room left (px) 1024:141(hidden) 1279:396(hidden) 1280:56 1300:76 1320:96 1400:176 1440:216 1536:312
+PASS  F2 · the room left is what step D measured with the count as plain text (one digit: "4 rejected" vs "1 rejected") — 56 px at 1280, 312 px at 1536  — 1024:141(hidden) 1279:396(hidden) 1280:56 1300:76 1320:96 1400:176 1440:216 1536:312
+
+f2: 14 / 14 passed
