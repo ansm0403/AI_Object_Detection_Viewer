@@ -45,6 +45,7 @@ import {
   useDraftFrame,
   useEditShortcuts,
   useEditedFrames,
+  useEditedSummary,
   useStoredEdits,
 } from '@/components/box-edit';
 import {
@@ -1240,7 +1241,24 @@ export default function Index() {
     setCamera,
     stopPlayback,
   });
-  useEditShortcuts({ onDone: editor.exit, onToggleView: editor.toggleView }, editor.editing);
+  useEditShortcuts(
+    {
+      onDone: editor.exit,
+      onToggleView: editor.toggleView,
+      onUndo: editor.undo,
+      onRedo: editor.redo,
+      onNudge: editor.nudge,
+    },
+    editor.editing,
+  );
+  // What the "edited" marks show (list rows, 3D name tag, top bar). Only where
+  // edits are drawn at all: review mode.
+  const edited = useEditedSummary(
+    sceneFrames,
+    labelFrame,
+    storedEdits.edits,
+    datasetId === 'nuscenes' && mode === 'review',
+  );
   const editing = editor.editing;
   const enterEditor = editor.enter;
 
@@ -1564,7 +1582,11 @@ export default function Index() {
       ) : (
         reviewProgress && (
         <>
-          <ReviewProgress counts={reviewProgress.overall} notSaved={reviewStorageFailed} />
+          <ReviewProgress
+            counts={reviewProgress.overall}
+            notSaved={reviewStorageFailed || storedEdits.storageFailed}
+            edited={edited.inScene}
+          />
           <ExportMenu
             // (F7) Export and reset act on EVERY scene's records, so the menu
             // counts those — not the scene on screen (Edge_F#7 Case 2).
@@ -1680,7 +1702,11 @@ export default function Index() {
       ? 'LiDAR measured · boxes modified (practice)'
       : isMeasured
         ? 'LiDAR · measured 3D'
-        : '3D · estimated from 2D') + pointsNote;
+        : '3D · estimated from 2D') +
+    // (F8) With an edited box on screen the picture is no longer only the
+    // dataset's labels — the tag says so (Rule #6), as it does for practice.
+    (edited.inFrame.size > 0 ? ` · ${edited.inFrame.size} edited` : '') +
+    pointsNote;
   const label2D = isMeasured && activeCamera ? activeCamera : 'Image';
   const frameReviewCounts = reviewProgress?.byFrame.get(currentFrame.id);
   // (F4-D) Dataset facts about the selected box, for the strip above the
@@ -1694,6 +1720,8 @@ export default function Index() {
         visibility: selectedBox.annotation?.visibility,
         // (F6) Every camera whose photo shows the box, best view first.
         seenBy: camerasByBestView(currentFrame, selectedBox.id),
+        // (F8) The counts above are the dataset's, about ITS box.
+        edited: edited.inFrame.has(selectedBox.id),
       }
     : null;
   // (F6) The thumbnail row: each camera's photo, and where the selected box is
@@ -1933,6 +1961,7 @@ export default function Index() {
           onSelect={setSelectedObject}
           visibleIds={visibleIds3D}
           verdicts={frameVerdicts}
+          editedIds={edited.inFrame}
           // (F4-C) The review queue order, plus the bar that changes it.
           boxes={orderedBoxes}
           orderKey={queueOrder}
@@ -2153,6 +2182,10 @@ export default function Index() {
           counts={classCounts}
           visibleClasses={visibleClasses}
           onToggleClass={toggleClass}
+          // (F8) What the reviewer changed on the selected box, if anything.
+          editNote={
+            editor.target?.edited ? editor.target.changeText.join(' · ') || 'edited' : undefined
+          }
           // (F4) On reviewed datasets the details panel is the review panel:
           // verdict controls pinned above the scrolling details.
           {...(reviewEnabled && frameReviewCounts

@@ -43,6 +43,17 @@ export function pushHistory<T>(
   };
 }
 
+/**
+ * Change the current state WITHOUT making a new step: the change belongs to
+ * the step that is already there. Used for a run of arrow-key presses — a
+ * held key is one movement, and one Undo should take all of it back. What
+ * was ahead is dropped, as for any change.
+ */
+export function amendHistory<T>(history: History<T>, next: T): History<T> {
+  if (Object.is(history.present, next)) return history;
+  return { past: history.past, present: next, future: [] };
+}
+
 export const canUndo = <T>(history: History<T>): boolean => history.past.length > 0;
 export const canRedo = <T>(history: History<T>): boolean => history.future.length > 0;
 

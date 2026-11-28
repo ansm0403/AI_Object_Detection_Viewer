@@ -83,7 +83,7 @@ const CAR_MARK_PX: readonly (readonly [number, number])[] = [
 const RINGS = [10, 20, 30, 40, 50, 60, 70, 80];
 /** The view shown while there is no box to fit to: the car in the middle, 60 m across the shorter side. */
 const HOME_METRES = 60;
-/** Below this width the second legend line (how to operate) does not fit and is left to the panel. */
+/** Below this width the legend lines on how to operate (mouse, keys) do not fit and are left out. */
 const LEGEND_HINT_MIN_WIDTH = 460;
 
 const polygon = (points: readonly BevPoint[]) =>
@@ -483,6 +483,9 @@ export function BevEditor({
         {size.width >= LEGEND_HINT_MIN_WIDTH && (
           <span className="block whitespace-nowrap">
             Drag the box: move · squares: resize · knob: turn · wheel: zoom · background: pan
+            <span data-part="legend-keys" className="block">
+              Arrow keys: move 5 cm · with Shift: 50 cm
+            </span>
           </span>
         )}
       </span>

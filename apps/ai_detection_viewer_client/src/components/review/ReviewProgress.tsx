@@ -10,6 +10,11 @@ type Props = {
    * the bar says so instead of letting the reviewer find out later.
    */
   notSaved?: boolean;
+  /**
+   * (F8) Boxes of the scene on screen that carry an edit. Shown from 1440px
+   * and always in the tooltip. 0 / absent → nothing is shown.
+   */
+  edited?: number;
 };
 
 /**
@@ -17,17 +22,22 @@ type Props = {
  * frame, a thin bar split by verdict, and the counts that need attention.
  * Pure presentation — the numbers come from `summarizeProgress`.
  */
-export function ReviewProgress({ counts, notSaved = false }: Props) {
+export function ReviewProgress({ counts, notSaved = false, edited = 0 }: Props) {
   const pct = (n: number) => (counts.total > 0 ? (n / counts.total) * 100 : 0);
   // A sliver stays visible even at 1 of 583.
   const width = (n: number) => (n > 0 ? `${Math.max(pct(n), 1.5)}%` : '0%');
+  // The top bar must stay on ONE line (it sits right above the filter bar).
+  // The two counts appear from 1280px; with the "Not saved" note next to them
+  // that is too much up to about 1335px (measured: the bar wrapped at
+  // 1280–1320px), so the counts then wait until 1400px. The tooltip has them.
+  const countsFrom = notSaved ? 'min-[1400px]:inline' : 'xl:inline';
 
   return (
     <div
       className="flex items-center gap-2 text-xs text-zinc-400 tabular-nums"
       // The two counts below are hidden under 1280px (the top bar must stay on
       // one line); the tooltip keeps them reachable there.
-      title={`Reviewed boxes across all frames — ${counts.approved} approved, ${counts.rejected} rejected, ${counts.unsure} unsure`}
+      title={`Reviewed boxes across all frames — ${counts.approved} approved, ${counts.rejected} rejected, ${counts.unsure} unsure${edited > 0 ? ` · ${edited} box${edited === 1 ? '' : 'es'} edited in this scene` : ''}`}
     >
       <span>
         Reviewed <span className="font-semibold text-zinc-100">{counts.reviewed}</span> /{' '}
@@ -45,16 +55,21 @@ export function ReviewProgress({ counts, notSaved = false }: Props) {
         <span className="bg-zinc-400" style={{ width: width(counts.unsure) }} />
         <span className="bg-rose-400" style={{ width: width(counts.rejected) }} />
       </span>
-      <span className={`hidden xl:inline ${counts.rejected > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
+      <span className={`hidden ${countsFrom} ${counts.rejected > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
         {counts.rejected} rejected
       </span>
-      <span className={`hidden xl:inline ${counts.unsure > 0 ? 'text-zinc-300' : 'text-zinc-600'}`}>
+      <span className={`hidden ${countsFrom} ${counts.unsure > 0 ? 'text-zinc-300' : 'text-zinc-600'}`}>
         {counts.unsure} unsure
       </span>
+      {edited > 0 && (
+        <span data-part="edited-count" className="hidden min-[1440px]:inline text-amber-300">
+          {edited} edited
+        </span>
+      )}
       {notSaved && (
         <span
           role="status"
-          title="This browser is not storing the reviews (storage is blocked or full). They will be lost when the page is reloaded — export them to keep a copy."
+          title="This browser is not storing the reviews and box edits (storage is blocked or full). They will be lost when the page is reloaded — export them to keep a copy."
           className="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-300 ring-1 ring-inset ring-amber-500/40"
         >
           Not saved

@@ -25,6 +25,8 @@ type Props = {
   controls?: ReactNode;
   // (F4-F) Extra content at the top of the SCROLLING area (the practice score).
   bodyTop?: ReactNode;
+  // (F8) What was changed on the selected box, when it has been edited.
+  editNote?: string;
 };
 
 export function AnalyticsPanel({
@@ -39,6 +41,7 @@ export function AnalyticsPanel({
   headerRight,
   controls,
   bodyTop,
+  editNote,
 }: Props) {
   return (
     <aside className={`flex flex-col h-full ${PANEL_CLASS}`}>
@@ -46,7 +49,7 @@ export function AnalyticsPanel({
       {controls}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {bodyTop}
-        <SelectedObjectInfo frame={frame} selectedId={selectedId} />
+        <SelectedObjectInfo frame={frame} selectedId={selectedId} editNote={editNote} />
         {/* Measured (nuScenes) frames have no model scores — every box would
             land in the top bucket as a fake "100%" distribution (Rule #6). Swap
             the histogram for a one-line note, mirroring how Filters swaps the

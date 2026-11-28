@@ -10,6 +10,7 @@
 |---|---|---|
 | `b.js` | 단계 0(좁은 창의 맨 위 줄)과 단계 B(편집 화면에 들어가고 나오기, 집중 보기 / 함께 보기, 그려지는 것, 창 크기 넷, 박스 156개 프레임, 등장 움직임) | 142 |
 | `c.js` | 단계 C(이동, 변, 모서리, 회전, 숫자 입력, 끄는 동안 3D 화면과 사진이 따라오는지, 저장, Undo / Redo / Revert, 평가와 검색이 그대로인지, 점이 늦거나 없을 때) | 77 |
+| `d.js` | 단계 D("수정됨" 표시가 생기고 사라지는 곳, Evaluate / Explore에는 없는지, 화살표 5cm / Shift 50cm, 이어 누른 화살표가 실행 취소 한 단계인지, Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, 한글 입력 상태, 숫자 칸 안에서는 키가 박스로 가지 않는지, 맨 위 줄이 창 폭 18가지에서 한 줄인지, 저장이 거부될 때) | 85 |
 | `perf-c2.js` | 끄는 동안의 프레임 시간(통과/실패가 아니라 측정). 화면이 그려질 때마다 포인터를 한 번 움직인다 | |
 
 ## 돌리는 방법
@@ -30,6 +31,7 @@
    ```bash
    node docs/plan-feature/assets/F8/checks/b.js "$(pwd)" /tmp/f8-checks
    node docs/plan-feature/assets/F8/checks/c.js "$(pwd)" /tmp/f8-checks
+   node docs/plan-feature/assets/F8/checks/d.js "$(pwd)" /tmp/f8-checks
    ```
 
    마지막 줄이 `c: 77 / 77 passed` 모양이면 통과다.

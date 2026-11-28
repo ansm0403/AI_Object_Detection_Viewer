@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   HISTORY_LIMIT,
+  amendHistory,
   canRedo,
   canUndo,
   pushHistory,
@@ -55,6 +56,25 @@ describe('undo history', () => {
     expect(h.past).toHaveLength(HISTORY_LIMIT);
     expect(h.past[0]).toBe(25);
     expect(h.present).toBe(HISTORY_LIMIT + 25);
+  });
+
+  it('amendHistory changes the present without adding a step', () => {
+    // one arrow press is pushed, the rest of the run amends it: one Undo takes the run back
+    let h = pushHistory(startHistory('label'), 'moved 5 cm');
+    h = amendHistory(h, 'moved 10 cm');
+    h = amendHistory(h, 'moved 15 cm');
+    expect(h.present).toBe('moved 15 cm');
+    expect(h.past).toEqual(['label']);
+    expect(undoHistory(h).present).toBe('label');
+  });
+
+  it('amendHistory drops what was ahead, and is a no-op for the same state', () => {
+    const h = undoHistory(pushHistory(pushHistory(startHistory('a'), 'b'), 'c'));
+    expect(canRedo(h)).toBe(true);
+    const amended = amendHistory(h, 'b2');
+    expect(amended.present).toBe('b2');
+    expect(canRedo(amended)).toBe(false);
+    expect(amendHistory(amended, 'b2')).toBe(amended);
   });
 
   it('never mutates the history it was given', () => {

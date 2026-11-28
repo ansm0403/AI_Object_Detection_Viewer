@@ -32,29 +32,30 @@
 </head>
 <body>
 <header>
-  <h1>F8 단계별 확인 <small>2026-11-27 19:25 KST (단계 C까지) · 배포용 빌드(3100번)를 실제로 조작해 찍음 · 소프트웨어 렌더링 · 캡처는 모두 단계 C의 마지막 빌드에서 다시 찍었다</small></h1>
+  <h1>F8 단계별 확인 <small>2026-11-27 20:15 KST (단계 D까지) · 배포용 빌드(3100번)를 실제로 조작해 찍음 · 소프트웨어 렌더링 · 캡처는 모두 단계 D의 마지막 빌드에서 다시 찍었다</small></h1>
   <nav id="nav"></nav>
 </header>
 <main>
   <div class="note" id="note"></div>
   <div id="view"></div>
-  <p class="hint">← → 로 넘긴다. 그림은 실제 크기(1:1)다. 통과/실패의 원문은 <code>2026-11-27_steps/0_b_checks.txt</code>(단계 0과 B, 142항목)와 <code>c_checks.txt</code>(단계 C, 77항목), 기존 화면 확인의 결과는 <code>regression_summary.txt</code>(362항목), 끄는 동안의 프레임 시간은 <code>c_drag_frame_times.json</code>에 있다.</p>
+  <p class="hint">← → 로 넘긴다. 그림은 실제 크기(1:1)다. 통과/실패의 원문은 <code>2026-11-27_steps/0_b_checks.txt</code>(단계 0과 B, 142항목)와 <code>c_checks.txt</code>(단계 C, 77항목), <code>d_checks.txt</code>(단계 D, 85항목), 기존 화면 확인의 결과는 <code>regression_summary.txt</code>(362항목), 끄는 동안의 프레임 시간은 <code>c_drag_frame_times.json</code>에 있다.</p>
 </main>
 <script>
 const DIR = '2026-11-27_steps/';
 const SCREENS = [
   {
     key: '요약',
-    title: '단계 0 + A + B + C의 요약',
-    html: `<p><span class="pass">새 확인 219 / 219 통과 (0과 B 142, C 77)</span><span class="pass">기존 확인 362 / 362 통과</span><span class="pass">테스트 1,127개 통과 (전 989)</span> 타입 오류 0, 린트 오류 0(경고 19개 그대로), 배포용 빌드 성공.</p>
+    title: '단계 0 + A + B + C + D의 요약',
+    html: `<p><span class="pass">새 확인 304 / 304 통과 (0과 B 142, C 77, D 85)</span><span class="pass">기존 확인 362 / 362 통과</span><span class="pass">테스트 1,139개 통과 (전 989)</span> 타입 오류 0, 린트 오류 0(경고 19개 그대로), 배포용 빌드 성공.</p>
       <table>
         <tr><th>단계</th><th>한 일</th><th>확인</th></tr>
         <tr><td>0</td><td>1280px 아래에서 앱 이름을 숨겨, 검수 모드의 맨 위 줄이 접히지 않게 했다</td><td class="n">24항목</td></tr>
         <tr><td>A</td><td>순수 함수와 저장소. 화면은 바뀌지 않는다</td><td class="n">테스트 +138</td></tr>
         <tr><td>B</td><td>편집 화면의 틀과 그리기: 들어가기 / 나가기, 집중 보기 / 함께 보기, 위에서 본 화면, 편집 줄, 패널, 등장 움직임</td><td class="n">118항목</td></tr>
         <tr><td>C</td><td>조작(이동, 변, 모서리, 회전, 숫자)과 따라오기(3D 화면, 사진 6장), 저장, Undo / Redo / Revert</td><td class="n">77항목</td></tr>
+        <tr><td>D</td><td>"수정됨" 표시(목록 줄, 3D 이름표, 맨 위 줄, Selected 칸, 근거 줄)와 키(화살표, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)</td><td class="n">85항목</td></tr>
       </table>
-      <p><b>아직 안 되는 것(단계 D):</b> 목록의 줄, 3D 화면의 이름표, 맨 위 줄, Selected 칸의 "수정됨" 표시. 화살표 키로 조금씩 옮기기와 Ctrl+Z 키(버튼은 된다). 단계 C의 내용은 뒤쪽 "C 요약" 화면부터.</p>
+      <p><b>아직 안 되는 것(단계 E, F):</b> 내보내기 파일에 수정이 들어가지 않는다(<code>review@3</code>). 연습 모드의 "진짜 라벨과의 가까움". 반려한 박스를 장면을 넘어 차례로 넘기기. 단계 C는 "C 요약", 단계 D는 "D 요약" 화면부터.</p>
       <p><b>계획과 달라진 점</b></p>
       <p><span class="diff">달라짐</span><b>박스를 옮길 때 높이를 그대로 둔다.</b> 설계 문서(결정 5)에는 "차의 바닥면을 따라 옮긴다"고 썼다. 만들면서 보니 그러면 위에서 본 화면에서 끌기만 해도 "Up/down" 숫자가 함께 바뀌고, 크기를 고칠 때와 규칙이 달라진다. 그래서 <b>위에서 본 화면은 x, y, 폭, 길이, 방향만 바꾸고 높이와 위아래 위치는 절대 건드리지 않는다</b>로 통일했다(테스트가 손잡이 열 개 모두에서 잠근다). 대가: 언덕길에서 박스를 멀리 옮기면 길에서 뜨거나 묻힐 수 있고(가장 기운 프레임에서 1m에 약 8cm), 그때는 Up/down 숫자로 맞춘다.</p>
       <p><span class="diff">달라짐</span><b>Up/down은 박스의 "바닥"이 라벨의 바닥에서 얼마나 위/아래인가</b>로 정했다(중심이 아니라). 높이를 늘려도 Up/down이 따라 바뀌지 않게 하려는 것이다.</p>
@@ -204,6 +205,91 @@ const SCREENS = [
     title: 'C-7. 같은 상태를 1024×768에서',
     img: 'c7_all_changed_1024x768.jpg', w: 1024, h: 768,
     html: `<p>가장 좁은 패널(360px)에서도 잘린 숫자가 없고 편집 줄이 한 줄이다. 1280×720에서도 같은 것을 확인했다.</p>`,
+  },
+  {
+    key: 'D 요약',
+    title: '단계 D. "수정됨" 표시와 키 — 요약',
+    html: `<p><span class="pass">새 확인 85 / 85</span><span class="pass">단계 0·B 142 / 142, C 77 / 77 (다시 돌림)</span><span class="pass">기존 확인 362 / 362</span> 테스트 1,139개(+12), 타입 오류 0, 린트 경고 19개 그대로, 배포용 빌드 성공.</p>
+      <p><b>되는 것 (표시):</b> 고친 박스가 있으면 ① 목록의 그 줄에 노란 연필 ② 3D 이름표에 "· N edited"(그 프레임에서 고친 수) ③ 맨 위 줄에 "N edited"(지금 장면에서 고친 수, 1440px부터. 더 좁으면 마우스를 올렸을 때의 설명에) ④ Selected 칸의 첫 줄 "Edited"에 무엇을 바꿨는지 ⑤ 근거 줄의 LiDAR 점 개수 옆에 "in label"(그 수는 고친 박스가 아니라 원본 라벨의 것이라는 뜻). Evaluate와 Explore에서는 아무 표시도 없다(원본 박스를 쓰는 곳이다).</p>
+      <p><b>되는 것 (키):</b> 편집 화면에서 화살표 = 5cm, Shift+화살표 = 50cm(화면에 보이는 방향 그대로. 위 = 차가 향하는 쪽). Ctrl+Z = 실행 취소, Ctrl+Shift+Z 또는 Ctrl+Y = 다시 실행. 한글 입력 상태에서도 된다(물리 키로 읽는다). 숫자 칸에 글자를 치는 동안에는 키가 박스로 가지 않는다.</p>
+      <p><b>맨 위 줄의 남는 폭 (실제 앱, 창 폭 18가지를 1024 ~ 1536px로 바꿔 가며 잼. 두 묶음 사이의 빈자리, px)</b></p>
+      <table>
+        <tr><th>상태</th><th>1024</th><th>1280</th><th>1320</th><th>1400</th><th>1440</th><th>1536</th><th>18가지 폭 모두</th></tr>
+        <tr><td>박스 2개 수정</td><td class="n">141</td><td class="n">56</td><td class="n">96</td><td class="n">176</td><td class="n">163</td><td class="n">259</td><td>한 줄</td></tr>
+        <tr><td>가장 넓은 글자("2424", "156 edited")</td><td class="n">120</td><td class="n">35</td><td class="n">75</td><td class="n">155</td><td class="n">129</td><td class="n">225</td><td>한 줄</td></tr>
+        <tr><td>"Not saved"가 뜬 상태</td><td class="n">63</td><td class="n">95</td><td class="n">135</td><td class="n">98</td><td class="n">84</td><td class="n">180</td><td>한 줄</td></tr>
+        <tr><td>"Not saved" + 가장 넓은 글자</td><td class="n">42</td><td class="n">74</td><td class="n">114</td><td class="n">77</td><td class="n">50</td><td class="n">146</td><td>한 줄</td></tr>
+      </table>
+      <p><b>계획과 달라진 점</b></p>
+      <p><span class="diff">달라짐</span><b>맨 위 줄의 "N edited"는 1280px이 아니라 1440px부터 보인다.</b> 설계 문서(결정 16)에는 1280px부터라고 썼다. 재 보니 1280px에서는 남는 폭이 56px뿐이고, 1400px에서도 "Not saved"와 겹치면 두 줄로 접혔다. 1440px부터는 가장 넓은 경우에도 50px가 남는다. 더 좁은 창에서는 마우스를 올렸을 때의 설명("… · 2 boxes edited in this scene")에 있다.</p>
+      <p><span class="diff">고침</span><b>F8 전부터 있던 문제: "Not saved"가 뜬 상태에서 창이 1280 ~ 1320px이면 맨 위 줄이 두 줄로 접혔다.</b> 단계 0에서 고친 것은 1280px 아래였고, 이 구간은 그때 재지 않았다(1024, 1040, 1279px만 쟀다). 수정이 없는 화면에서도 접히는 것을 확인했다(고치기 전: "Not saved"만으로 1280, 1300px에서, 검수 수가 네 자리면 1320px에서도). F8이 "Not saved"가 뜨는 경우를 하나 늘리므로(수정의 저장 실패) 같이 고쳤다: <b>"Not saved"가 떠 있을 때는 "N rejected / N unsure" 두 숫자를 1400px부터 보인다</b>(그 아래에서는 설명에 있다). "Not saved"가 없을 때의 화면은 그대로다.</p>
+      <p><span class="diff">달라짐</span><b>편집 화면 밖에는 "Revert" 버튼을 두지 않았다.</b> 밖에서는 실행 취소가 없어서, 잘못 누르면 되돌릴 길이 없다. 되돌리려면 편집 화면에 들어가서 Revert to label을 누른다(그것은 Ctrl+Z로 다시 살릴 수 있다).</p>
+      <p><span class="diff">달라짐</span>근거 줄의 글자는 "153 pts in the label"이 아니라 <b>"153 pts in label"</b>이다(가장 좁은 패널에서 줄의 폭이 334px이라 줄였다. 마우스를 올리면 긴 설명이 나온다).</p>
+      <p><span class="diff">더함</span><b>이어 누른 화살표는 실행 취소 한 단계다.</b> 화살표를 누르고 있으면 1초에 약 30번 눌린다. 그것이 Ctrl+Z 30번이면 쓸 수 없으므로, 0.8초 안에 이어진 화살표는 한 묶음으로 친다(끌기, 숫자 입력, Ctrl+Z가 끼면 묶음이 끝난다).</p>
+      <p><span class="diff">더함</span><b>위에서 본 화면의 안내 칸에 셋째 줄</b> "Arrow keys: move 5 cm · with Shift: 50 cm". 화살표 키를 알려 주는 곳이 화면에 없었다(캡처를 보다가 찾았다). 화면 폭이 460px보다 좁으면 둘째 줄과 함께 나오지 않는다.</p>
+      <p><span class="diff">알림</span><code>page.tsx</code>는 <b>2,343줄</b>이다(F8 전 2,175, 단계 C 뒤 2,310). 늘어난 것은 표시를 각 부품에 넘기는 줄이고, 계산은 <code>useEditedSummary</code>(훅)와 <code>lib/editing/keys</code>(순수 함수, 테스트 10개)에 있다.</p>`,
+  },
+  {
+    key: 'D1: 화살표 키',
+    title: 'D-1. → 를 누르고 있어 0.60m 옮긴 뒤',
+    img: 'd1_nudged.jpg', w: 1536, h: 700,
+    html: `<p><b>무엇을 보면 되는지:</b> ① 흰 박스가 회색 점선(원본 라벨)에서 오른쪽으로 0.60m 옮겨졌다. 패널에 "moved 0.60 m". ② 왼쪽 아래 안내 칸의 셋째 줄 "Arrow keys: move 5 cm · with Shift: 50 cm". ③ 맨 위 줄 오른쪽에 "1 edited".</p>
+      <p><b>확인한 것:</b> → 한 번이면 화면에서 오른쪽으로 5cm(2.00px), 위아래로는 0px. 3D 장면에서도 박스 하나만 0.0500m 움직이고 높이는 그대로다. ← 로 돌아오면 원본과 같아져 <b>저장된 수정이 없다.</b> Shift+← 는 50cm. 누르고 있기(12번 반복)는 0.60m이고 <b>Ctrl+Z 한 번에 전부 돌아온다.</b> 1초 쉬고 누른 두 번은 두 단계다. 화살표 → 끌기 → 화살표는 세 단계다.</p>
+      <p><b>안 되어야 하는 것:</b> 편집 화면을 연 직후 0.4초 안의 화살표는 아무것도 옮기지 않는다(아직 보지 않은 박스). 숫자 칸 안에서는 화살표와 Ctrl+Z가 그 칸의 것이다. 재생 중에는 옮겨지지 않는다. Alt+화살표, A, J, Z는 박스와 판정을 건드리지 않는다. 화살표로 페이지가 스크롤되지 않는다.</p>`,
+  },
+  {
+    key: 'D2: 표시',
+    title: 'D-2. 편집을 끝낸 뒤의 "수정됨" 표시 (1536×700)',
+    img: 'd2_marks.jpg', w: 1536, h: 700,
+    html: `<p><b>무엇을 보면 되는지:</b> ① 왼쪽 목록의 맨 아래 고른 줄(car 527702)에 <b>노란 연필</b>. 다른 71줄에는 없다. ② 3D 화면 왼쪽 위 이름표: "LIDAR · MEASURED 3D <b>· 1 EDITED</b>". ③ 맨 위 줄 오른쪽: "1 rejected 0 unsure <b>1 edited</b>". ④ 오른쪽 패널의 LiDAR 줄: "153 pts <b>in label</b>". ⑤ 그 아래 노란 버튼 "Edited · edit".</p>
+      <p>이 창 높이에서는 Selected 칸이 패널을 아래로 스크롤해야 보인다(F8 전에도 그랬다). 다음 화면들에 보인다.</p>
+      <p><b>확인한 것:</b> 같은 프레임의 다른 박스를 고르면 "Edited" 줄과 "in label"이 사라지고 목록의 연필은 그 줄에 남는다. 다른 프레임으로 가면 목록과 3D 이름표의 표시는 없고 맨 위 줄은 "1 edited" 그대로다(장면 단위). 다른 프레임의 박스를 하나 더 고치면 "2 edited". 다른 장면(scene-0061)에서는 표시가 없다. <b>Evaluate와 Explore에서는 어디에도 표시가 없다.</b> 새로 들어와도(저장된 수정을 읽어) 같은 표시가 나온다. Revert to label을 누르면 표시가 모두 사라진다. 그리기 호출 수는 고치기 전과 같다(72 = 72).</p>
+      <p>(가운데 아래의 작은 사진은 캡처할 때 마우스가 타임라인 위에 있어서 뜬 미리보기다.)</p>`,
+  },
+  {
+    key: 'D2: 목록의 줄',
+    title: 'D-2. 목록의 줄을 가까이서',
+    img: 'd2_marks_list_row.jpg', w: 272, h: 150,
+    html: `<p><b>무엇을 보면 되는지:</b> 클래스 이름과 카메라 표시 사이의 노란 연필(11×11px). 마우스를 올리면 "Edited — the box drawn for this row is the reviewer's edit, not the nuScenes label".</p>
+      <p><b>확인한 것 (글자가 아니라 위치로):</b> 다섯 창 폭(1024, 1280, 1400, 1440, 1536px)에서 그 줄의 모든 칸이 줄 안에 있고 서로 겹치지 않으며, 연필 때문에 클래스 이름이 새로 잘리지 않는다. 가장 좁은 목록(238px)에서도 같다.</p>`,
+  },
+  {
+    key: 'D3: 1440×900',
+    title: 'D-3. 1440×900: Selected 칸의 "Edited" 줄',
+    img: 'd5_marks_1440x900.jpg', w: 1440, h: 900,
+    html: `<p><b>무엇을 보면 되는지:</b> 오른쪽 아래 SELECTED의 첫 줄 "Edited: <b>moved 0.05 m</b>". 그 아래 3D bbox의 숫자는 이제 원본이 아니라 <b>고친 박스</b>의 것이라서, 무엇이 바뀌었는지를 맨 위에 둔다. 맨 위 줄에는 "2 edited"(이 장면에서 두 개를 고친 상태).</p>`,
+  },
+  {
+    key: 'D3: 1024×768',
+    title: 'D-3. 1024×768: 가장 좁은 창',
+    img: 'd5_marks_1024x768.jpg', w: 1024, h: 768,
+    html: `<p><b>무엇을 보면 되는지:</b> 맨 위 줄에 "N edited"가 <b>없다</b>(1440px 아래. "Reviewed 1 / 2424"에 마우스를 올리면 설명에 "2 boxes edited in this scene"). 목록의 연필, 3D 이름표의 "· 1 EDITED", "in label", Selected의 "Edited" 줄은 그대로 있다.</p>`,
+  },
+  {
+    key: 'D4: 전부 바꿨을 때',
+    title: 'D-4. 여섯 가지를 모두 바꿨을 때의 "Edited" 줄 (1024×768, 가장 좁은 패널)',
+    img: 'd6_all_changed_selected_1024.jpg', w: 1024, h: 768,
+    html: `<p><b>무엇을 보면 되는지:</b> "moved 0.61 m · lowered 0.25 m · length +1.13 m · width +0.33 m · height +0.36 m · turned +68.0°". 가장 긴 경우이고, 패널 안에서 줄이 바뀌며 다 보인다(잘림 없음, 다음 줄 "Class"와 겹치지 않음). 1536×700에서는 두 줄이다.</p>`,
+  },
+  {
+    key: 'D4: 약한 박스',
+    title: 'D-4. 점이 거의 없는 박스를 고쳤을 때의 근거 줄 (1024×768)',
+    img: 'd6_weak_box_strip_1024.jpg', w: 1024, h: 768,
+    html: `<p><b>무엇을 보면 되는지:</b> 오른쪽 패널의 "LiDAR 0 pts · weak <b>in label</b>   Visible 40–60%   Seen by BR". 근거 줄이 가장 길어지는 경우다. 폭 334px 안에 세 묶음이 23px씩 떨어져 들어간다(1536×700에서는 43px씩).</p>
+      <p>3D 이름표는 "· 2 EDITED"다(이 프레임에서 두 박스를 고친 상태).</p>`,
+  },
+  {
+    key: 'D5: Not saved 1280',
+    title: 'D-5. 저장이 안 될 때의 맨 위 줄, 1280px (F8 전에는 여기서 두 줄로 접혔다)',
+    img: 'd4_top_bar_not_saved_1280.jpg', w: 1280, h: 110,
+    html: `<p><b>무엇을 보면 되는지:</b> 브라우저가 저장을 거부하게 만든 상태다. "NOT SAVED"가 뜨고, 그 대신 "N rejected / N unsure" 두 숫자가 자리를 내준다(1400px부터 다시 보인다. 그 아래에서는 마우스를 올렸을 때의 설명에 있다). 맨 위 줄이 한 줄이고 아래의 필터 줄과 겹치지 않는다.</p>
+      <p><b>확인한 것:</b> 저장을 거부해도 수정은 이번 방문 동안 그대로 동작하고(목록의 연필도 나온다), 저장소에는 아무것도 쓰이지 않는다. 편집 화면 안에서도 같은 경고가 나온다(단계 C).</p>`,
+  },
+  {
+    key: 'D5: Not saved 1440',
+    title: 'D-5. 같은 상태, 1440px',
+    img: 'd4_top_bar_not_saved_1440.jpg', w: 1440, h: 110,
+    html: `<p>1440px부터는 두 숫자, "N edited", "NOT SAVED"가 모두 보인다. 가장 넓은 글자로 바꿔도 50px가 남는다.</p>`,
   },
 ];
 let at = 0;

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { pickCamera } from '@/lib/cameras';
 import {
+  amendHistory,
   boxChange,
   canEditFrame,
   canRedo,
@@ -54,6 +55,13 @@ export type EditView =
  * A drag is not held back: the handle has to be found and grabbed first.
  */
 export const MIN_LOOK_MS = 400;
+
+/**
+ * Arrow presses that follow each other within this time are ONE movement: one
+ * undo step, not one per press. Holding an arrow for a second is thirty presses;
+ * thirty Undos to take it back would make Undo useless.
+ */
+export const NUDGE_RUN_MS = 800;
 
 /** The box the editor is working on, with everything the screen says about it. */
 export type EditTarget = {
@@ -284,6 +292,7 @@ export function useBoxEditor({
   const beginDrag = useCallback(
     (handle: DragHandle, at: BevPoint): boolean => {
       if (locked !== null || !base || !projector) return false;
+      lastNudge.current = null;
       const start = base.stored;
       gesture.current = {
         handle,
@@ -330,24 +339,44 @@ export function useBoxEditor({
     (field: BoxField, value: number) => {
       if (locked !== null || !base || !projector) return;
       if (performance.now() - since.current < MIN_LOOK_MS) return;
+      lastNudge.current = null;
       commit(setBoxField(base.stored, field, value, { projector, label: base.label }));
     },
     [locked, base, projector, commit],
   );
 
-  /** Move the box by a step as the top view shows it (metres; x right, y down). */
+  /**
+   * Move the box by a step as the top view shows it (metres; x right, y down).
+   * A run of steps (see `NUDGE_RUN_MS`) is one undo step.
+   */
+  const lastNudge = useRef<{ key: string; at: number } | null>(null);
   const nudge = useCallback(
     (delta: BevPoint) => {
       if (locked !== null || !base || !projector || gesture.current) return;
-      if (performance.now() - since.current < MIN_LOOK_MS) return;
-      commit(nudgeBox(base.stored, delta, projector));
+      if (!session || session.key !== base.key) return;
+      const now = performance.now();
+      if (now - since.current < MIN_LOOK_MS) return;
+      const next = nudgeBox(base.stored, delta, projector);
+      const inRun =
+        lastNudge.current !== null &&
+        lastNudge.current.key === base.key &&
+        now - lastNudge.current.at < NUDGE_RUN_MS;
+      lastNudge.current = { key: base.key, at: now };
+      if (!inRun) {
+        commit(next);
+        return;
+      }
+      store(base.frameId, base.objectId, base.label, next);
+      setSession({ ...session, history: amendHistory(session.history, next) });
+      followWithCamera(base.objectId, next);
     },
-    [locked, base, projector, commit],
+    [locked, base, projector, session, commit, store, followWithCamera],
   );
 
   const step = useCallback(
     (move: (history: History<BoxValues>) => History<BoxValues>) => {
       if (!base || !session || session.key !== base.key || gesture.current) return;
+      lastNudge.current = null; // an undo / redo ends a run of arrow presses
       const history = move(session.history);
       if (history === session.history) return;
       store(base.frameId, base.objectId, base.label, history.present);

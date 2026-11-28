@@ -44,6 +44,7 @@ export {
 } from './overlay';
 export {
   HISTORY_LIMIT,
+  amendHistory,
   canRedo,
   canUndo,
   pushHistory,
@@ -66,3 +67,5 @@ export {
 } from './view';
 export type { BevView, PixelSize } from './view';
 export { countInside, makeInsideTest } from './points';
+export { NUDGE_STEP, NUDGE_STEP_LARGE, resolveEditKey } from './keys';
+export type { EditKeyAction, EditKeyEvent } from './keys';

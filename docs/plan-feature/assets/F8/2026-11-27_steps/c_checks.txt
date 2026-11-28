@@ -63,8 +63,8 @@ PASS  C · after pausing, back on frame 9, the editor is on the same box and unl
       zoomed out as far as it goes: the box is 13×17 px on screen
 PASS  C · zoomed far out: the handles are not offered and the view says "Zoom in to resize or turn the box"
 PASS  C · zoomed far out (the box only a few pixels wide), dragging its middle still MOVES it — no size changed  — {"length":4.27,"width":1.77,"height":1.64,"heading":171.5,"lift":0} · moved 38.69 m
-PASS  C · the photo does not switch camera WHILE dragging  — CAM_BACK_RIGHT -> CAM_BACK_RIGHT
-PASS  C · on release, when the photo no longer shows the box, the camera that does is shown  — CAM_BACK_RIGHT -> CAM_BACK
+PASS  C · the photo does not switch camera WHILE dragging  — CAM_FRONT_RIGHT -> CAM_FRONT_RIGHT
+PASS  C · on release, when the photo no longer shows the box, the camera that does is shown  — CAM_FRONT_RIGHT -> CAM_BACK
 PASS  C · a drag that is interrupted (pointercancel) changes nothing
 PASS  C · dragging the background and the wheel move the view, not the box
 PASS  C · no page errors (blocked / camera)

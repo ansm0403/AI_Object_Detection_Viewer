@@ -139,10 +139,10 @@ PASS  B · 1024×768 split: no page scroll
       1024×768 split: top view 316×576
 PASS  B · 1024×768: no page errors
 PASS  B · scene-0061 frame 20 is open (156 boxes)  — 156
-PASS  B · the editor grows in (animation "bev-grow", scale between 0 and 1 shortly after the key)  — {"scale":0.842881,"origin":"136px 173px","animation":"bev-grow"}
+PASS  B · the editor grows in (animation "bev-grow", scale between 0 and 1 shortly after the key)  — {"scale":0.785945,"origin":"136px 173px","animation":"bev-grow"}
 PASS  B · it grows out of the list row of the box  — 136px 173px vs row 136px 173px
 PASS  B · the entrance lasts 0.32 s and then the editor is at full size  — animation 0.32s
-      key press -> end of the entrance, measured in the page (156 boxes, software GL): 413 ms
+      key press -> end of the entrance, measured in the page (156 boxes, software GL): 359 ms
 PASS  B · 155 other boxes are drawn on the largest frame  — 155
 PASS  B · a small box (a pedestrian, 0.82 m) is shown large enough to grab (longer side ≥ 80 px)  — 157px
 PASS  B · largest frame: no page errors

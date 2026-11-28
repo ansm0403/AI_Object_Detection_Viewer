@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo } from 'react';
-import { applyEdits, type EditMap, type EditScope } from '@/lib/editing';
+import { applyEdits, countEdited, editedIdsOf, type EditMap, type EditScope } from '@/lib/editing';
 import type { Frame } from '@/lib/types';
 import { EDIT_STORAGE_KEY, useEditStore } from '@/store';
 
@@ -56,4 +56,29 @@ export function useEditedFrames(frames: Frame[] | null, edits: EditMap, on: bool
     });
     return changed ? next : frames;
   }, [frames, edits, on]);
+}
+
+const NO_IDS: ReadonlySet<string> = new Set();
+
+/**
+ * (F8) What the "edited" marks need: how many boxes of the scene on screen
+ * carry an edit, and which boxes of the current frame do. `on` is the same
+ * switch as in `useEditedFrames` — where edits are not laid over the boxes
+ * (evaluate, explore), nothing is marked as edited either.
+ */
+export function useEditedSummary(
+  frames: Frame[] | null,
+  current: Frame | null,
+  edits: EditMap,
+  on: boolean,
+): { inScene: number; inFrame: ReadonlySet<string> } {
+  const inScene = useMemo(
+    () => (on && frames && Object.keys(edits).length > 0 ? countEdited(frames, edits) : 0),
+    [frames, edits, on],
+  );
+  const inFrame = useMemo(
+    () => (on && current && inScene > 0 ? editedIdsOf(current, edits) : NO_IDS),
+    [current, edits, on, inScene],
+  );
+  return { inScene, inFrame };
 }

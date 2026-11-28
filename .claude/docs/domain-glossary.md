@@ -998,6 +998,12 @@ express with yaw alone.
 The list of states a box went through while it was being edited, so the last change can be taken
 back (Ctrl+Z) and put back again. One drag — press, move, release — is one step.
 
+**Nudge (조금씩 옮기기)** *(F8)*
+Moving a box by a small fixed step with a key instead of dragging it: one arrow press is 5 cm, with
+Shift 50 cm, in the direction the top view shows. For the last few centimetres a mouse is too coarse
+(at the usual zoom 5 cm is 2 pixels). A run of presses — a held key repeats about 30 times a second —
+counts as ONE step of the undo history, so one Ctrl+Z takes the whole run back.
+
 **SVG vs Canvas 2D (두 가지 그리기 방법)** *(F8)*
 SVG draws shapes as elements of the page (each one can be styled and clicked): right for a few
 hundred boxes and the handles. Canvas 2D paints pixels directly: right for thousands of LiDAR points.
