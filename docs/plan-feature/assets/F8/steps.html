@@ -32,21 +32,21 @@
 </head>
 <body>
 <header>
-  <h1>F8 단계별 확인 <small>2026-11-27 20:15 KST (단계 D까지) · 배포용 빌드(3100번)를 실제로 조작해 찍음 · 소프트웨어 렌더링 · 캡처는 모두 단계 D의 마지막 빌드에서 다시 찍었다</small></h1>
+  <h1>F8 단계별 확인 <small>2026-11-28 19:35 KST (단계 E까지) · 배포용 빌드(3100번)를 실제로 조작해 찍음 · 소프트웨어 렌더링 · 단계 0 ~ D의 캡처는 단계 D의 마지막 빌드(11-27), 단계 E의 캡처는 단계 E의 마지막 빌드(11-28)에서 찍었다</small></h1>
   <nav id="nav"></nav>
 </header>
 <main>
   <div class="note" id="note"></div>
   <div id="view"></div>
-  <p class="hint">← → 로 넘긴다. 그림은 실제 크기(1:1)다. 통과/실패의 원문은 <code>2026-11-27_steps/0_b_checks.txt</code>(단계 0과 B, 142항목)와 <code>c_checks.txt</code>(단계 C, 77항목), <code>d_checks.txt</code>(단계 D, 85항목), 기존 화면 확인의 결과는 <code>regression_summary.txt</code>(362항목), 끄는 동안의 프레임 시간은 <code>c_drag_frame_times.json</code>에 있다.</p>
+  <p class="hint">← → 로 넘긴다. 그림은 실제 크기(1:1)다. 통과/실패의 원문은 <code>2026-11-27_steps/0_b_checks.txt</code>(단계 0과 B, 142항목)와 <code>c_checks.txt</code>(단계 C, 77항목), <code>d_checks.txt</code>(단계 D, 85항목), <code>2026-11-28_steps/e_checks.txt</code>(단계 E, 68항목), 기존 화면 확인의 결과는 <code>regression_summary.txt</code>(362항목), 끄는 동안의 프레임 시간은 <code>c_drag_frame_times.json</code>에 있다.</p>
 </main>
 <script>
 const DIR = '2026-11-27_steps/';
 const SCREENS = [
   {
     key: '요약',
-    title: '단계 0 + A + B + C + D의 요약',
-    html: `<p><span class="pass">새 확인 304 / 304 통과 (0과 B 142, C 77, D 85)</span><span class="pass">기존 확인 362 / 362 통과</span><span class="pass">테스트 1,139개 통과 (전 989)</span> 타입 오류 0, 린트 오류 0(경고 19개 그대로), 배포용 빌드 성공.</p>
+    title: '단계 0 + A + B + C + D + E의 요약',
+    html: `<p><span class="pass">새 확인 372 / 372 통과 (0과 B 142, C 77, D 85, E 68)</span><span class="pass">기존 확인 362 / 362 통과</span><span class="pass">테스트 1,164개 통과 (전 989)</span> 타입 오류 0, 린트 오류 0(경고 19개 그대로), 배포용 빌드 성공.</p>
       <table>
         <tr><th>단계</th><th>한 일</th><th>확인</th></tr>
         <tr><td>0</td><td>1280px 아래에서 앱 이름을 숨겨, 검수 모드의 맨 위 줄이 접히지 않게 했다</td><td class="n">24항목</td></tr>
@@ -54,8 +54,9 @@ const SCREENS = [
         <tr><td>B</td><td>편집 화면의 틀과 그리기: 들어가기 / 나가기, 집중 보기 / 함께 보기, 위에서 본 화면, 편집 줄, 패널, 등장 움직임</td><td class="n">118항목</td></tr>
         <tr><td>C</td><td>조작(이동, 변, 모서리, 회전, 숫자)과 따라오기(3D 화면, 사진 6장), 저장, Undo / Redo / Revert</td><td class="n">77항목</td></tr>
         <tr><td>D</td><td>"수정됨" 표시(목록 줄, 3D 이름표, 맨 위 줄, Selected 칸, 근거 줄)와 키(화살표, Ctrl+Z, Ctrl+Shift+Z, Ctrl+Y)</td><td class="n">85항목</td></tr>
+        <tr><td>E</td><td>내보내기 <code>review@3</code>(판정과 수정이 한 파일에), 연습 모드에서 고친 박스가 진짜 라벨에 얼마나 가까운지</td><td class="n">68항목</td></tr>
       </table>
-      <p><b>아직 안 되는 것(단계 E, F):</b> 내보내기 파일에 수정이 들어가지 않는다(<code>review@3</code>). 연습 모드의 "진짜 라벨과의 가까움". 반려한 박스를 장면을 넘어 차례로 넘기기. 단계 C는 "C 요약", 단계 D는 "D 요약" 화면부터.</p>
+      <p><b>아직 안 되는 것(단계 F):</b> 반려한 박스를 장면을 넘어 차례로 넘기기. 단계 C는 "C 요약", D는 "D 요약", E는 "E 요약" 화면부터.</p>
       <p><b>계획과 달라진 점</b></p>
       <p><span class="diff">달라짐</span><b>박스를 옮길 때 높이를 그대로 둔다.</b> 설계 문서(결정 5)에는 "차의 바닥면을 따라 옮긴다"고 썼다. 만들면서 보니 그러면 위에서 본 화면에서 끌기만 해도 "Up/down" 숫자가 함께 바뀌고, 크기를 고칠 때와 규칙이 달라진다. 그래서 <b>위에서 본 화면은 x, y, 폭, 길이, 방향만 바꾸고 높이와 위아래 위치는 절대 건드리지 않는다</b>로 통일했다(테스트가 손잡이 열 개 모두에서 잠근다). 대가: 언덕길에서 박스를 멀리 옮기면 길에서 뜨거나 묻힐 수 있고(가장 기운 프레임에서 1m에 약 8cm), 그때는 Up/down 숫자로 맞춘다.</p>
       <p><span class="diff">달라짐</span><b>Up/down은 박스의 "바닥"이 라벨의 바닥에서 얼마나 위/아래인가</b>로 정했다(중심이 아니라). 높이를 늘려도 Up/down이 따라 바뀌지 않게 하려는 것이다.</p>
@@ -291,6 +292,135 @@ const SCREENS = [
     img: 'd4_top_bar_not_saved_1440.jpg', w: 1440, h: 110,
     html: `<p>1440px부터는 두 숫자, "N edited", "NOT SAVED"가 모두 보인다. 가장 넓은 글자로 바꿔도 50px가 남는다.</p>`,
   },
+  {
+    key: 'E 요약',
+    title: '단계 E. 내보내기 review@3과 연습 모드의 가까움 — 요약',
+    html: `<p><span class="pass">새 확인 68 / 68</span><span class="pass">단계 0·B 142 / 142, C 77 / 77, D 85 / 85 (다시 돌림)</span><span class="pass">기존 확인 362 / 362</span> 테스트 1,164개(+25), 타입 오류 0, 린트 경고 19개 그대로, 배포용 빌드 성공.</p>
+      <p><b>되는 것 (내보내기):</b> 내려받는 파일의 형식이 <code>review@3</code>이 됐다. 줄 하나는 <b>판정이 있거나 수정이 있는 박스</b>다. 줄마다 <code>edit</code>가 있다: 고치지 않은 박스는 <code>null</code>, 고친 박스는 원본(<code>original</code>), 고친 값(<code>edited</code>), 차이(<code>change</code>), 고친 시각. 고치기만 하고 판정하지 않은 박스는 <code>verdict: null</code>이다. <code>summary.edited</code>가 생겼다. CSV에는 열 15개가 늘었다. 수정만 있고 판정이 없어도 내려받을 수 있다.</p>
+      <p><b>되는 것 (연습 모드):</b> "Reveal answers"를 누르면 그 프레임에서 <b>고친 박스마다</b> 진짜 라벨과의 거리가 나온다: 연습 세트가 보여 준 때 → 고친 뒤. 세 가지로 잰다(중심 m, 크기 m, 방향 °). 가까워졌으면 초록, 멀어졌으면 붉은색. 심지 않은 박스를 고쳤으면 "not planted"로 나오고 멀어진 만큼이 보인다.</p>
+      <p><b>파일의 숫자가 맞는지 확인한 것:</b> ① 파일의 <code>change</code>가 화면의 말과 숫자 하나하나 같다("moved 0.50 m · raised 0.20 m · length +0.53 m · turned −6.5°"). ② 파일의 <code>original</code>이 <b>nuScenes 샘플 파일의 그 주석과 같다</b>(중심과 크기의 가장 큰 차이 0, 방향 0.00000029rad. 앱의 파서를 거치지 않고 파일을 직접 읽어 비교). ③ <code>edited</code>가 저장된 수정과 같다(소수 여섯 자리). ④ 연습 모드의 표가 답안지("moved 1.3 m")와 데이터 파일에서 직접 계산한 값(1.71m)과 같다.</p>
+      <p><b>연습 모드의 맨 위 줄, 남는 폭 (실제 앱, 창 폭 19가지, px)</b></p>
+      <table>
+        <tr><th>상태</th><th>1024</th><th>1280</th><th>1400</th><th>1536</th><th>19가지 폭 모두</th></tr>
+        <tr><td>반려 1개, 수정 없음</td><td class="n">146</td><td class="n">103</td><td class="n">84</td><td class="n">220</td><td>한 줄 (고치기 전: 1280, 1300, 1320px에서 접힘)</td></tr>
+        <tr><td>가장 넓은 글자("2424", "156 edited")</td><td class="n">126</td><td class="n">83</td><td class="n">64</td><td class="n">133</td><td>한 줄</td></tr>
+        <tr><td>수정 1개 + "Not saved"</td><td class="n">68</td><td class="n">142</td><td class="n">123</td><td class="n">89</td><td>한 줄</td></tr>
+        <tr><td>가장 넓은 글자 + "Not saved"</td><td class="n">47</td><td class="n">121</td><td class="n">102</td><td class="n">55</td><td>한 줄</td></tr>
+      </table>
+      <p><b>계획과 달라진 점</b></p>
+      <p><span class="diff">고침</span><b>F8 전부터 있던 문제: 연습 모드에서는 수정이 하나도 없어도 창이 1280 ~ 1320px이면 맨 위 줄이 두 줄로 접혔다.</b> 연습 모드의 배지("PRACTICE · LABELS MODIFIED")가 "MEASURED"보다 약 92px 넓기 때문이다. 단계 D의 폭 확인은 연습 모드를 켜지 않고 했다. 고친 방법: <b>연습 모드에서는 앱 이름이 1280px이 아니라 1400px부터 보인다.</b> 그리고 연습 모드에서 "N edited"는 1536px부터, "Not saved"가 뜬 때의 rejected / unsure 두 숫자도 1536px부터 보인다. 연습 모드가 아닐 때의 화면은 단계 D와 같다(단계 D의 확인 85항목을 다시 돌렸다).</p>
+      <p><span class="diff">고침</span><b>단계 B·C에서 내가 쓴 글자: 연습 모드의 편집 화면이 연습용 박스를 "nuScenes label"이라고 불렀다.</b> 연습 모드의 박스는 일부러 틀리게 바꾼 것일 수 있으므로 그렇게 부르면 거짓이다. 이제 연습 모드에서는 <b>"practice label"</b>이라고 하고, LiDAR 점 개수 옆의 말은 "in the label"이 아니라 "in the original"이다(그 수는 nuScenes가 원래 박스에 대해 센 것이다).</p>
+      <p><span class="diff">달라짐</span><b><code>change</code>에 <code>liftMetres</code>를 더했다.</b> 설계 문서(결정 18)에는 옮긴 거리, 크기 차이, 돌린 각도만 있었다. 화면이 "raised 0.20 m"라고 말하므로 파일에도 있어야 "화면과 같은 숫자"가 된다. CSV에는 <code>lift_m</code>과 <code>editedAt</code>도 더해 열이 15개 늘었다(설계: 13개).</p>
+      <p><span class="diff">달라짐</span>장면이 있는 내보내기의 형식은 <code>review@3</code> 하나만 쓴다(<code>@2</code>를 쓰는 길은 남기지 않았다). 앱은 내보낸 파일을 다시 읽지 않는다.</p>
+      <p><span class="diff">더함</span><b>"Reset reviews…"는 수정을 지우지 않는다.</b> 두 번째 클릭 전에 "box edits are kept"라고 알려 준다. 수정은 편집 화면의 Revert to label로 되돌린다.</p>
+      <p><span class="diff">더함</span>가까움 표에 <b>심지 않은 박스</b>도 나온다. 멀쩡한 박스를 고치면 진짜 라벨에서 멀어진 만큼이 붉은색으로 보인다.</p>
+      <p><span class="diff">알림</span>박스를 고치고 편집 화면에서 나오면 <b>답이 다시 가려진다</b>("Reveal answers"를 다시 눌러야 표가 보인다). 고치는 동안 답이 보이지 않게 하려는 것과 같은 방향이라 그대로 두었다.</p>
+      <p><span class="diff">알림</span>차가 기울어 있는 프레임에서는 화면의 0.50m가 수평 거리로 0.500024m다(scene-0061의 3번째 프레임에서 확인). 화면과 파일 모두 수평 거리를 적고, 화면은 소수 둘째 자리까지 보인다.</p>
+      <p><span class="diff">알림</span>기존 확인 스크립트 <code>F7.5/checks/reg.js</code>의 기대값 한 곳을 <code>review@2</code>에서 <code>review@3</code>으로 바꿨다(형식 이름을 직접 비교하는 줄이다). <code>page.tsx</code>는 <b>2,373줄</b>이다(F8 전 2,175, 단계 D 뒤 2,343).</p>`,
+  },
+  {
+    key: 'E1: 메뉴',
+    title: 'E-1. 고치기만 하고 판정하지 않았을 때의 Export 메뉴',
+    dir: '2026-11-28_steps/',
+    img: 'e1_menu_edit_only.jpg', w: 420, h: 240,
+    html: `<p><b>무엇을 보면 되는지:</b> "Nothing reviewed yet · 1 box edited". 판정이 없어도 <b>Download JSON / CSV가 켜져 있다</b>(전에는 판정이 있어야 내려받을 수 있었다). "Reset reviews…"는 꺼져 있다(지울 판정이 없다).</p>
+      <p><b>확인한 것:</b> 아무것도 없을 때는 "Nothing reviewed yet"이고 세 버튼이 모두 꺼져 있다. 판정 2개와 수정 1개가 있으면 "2 reviewed boxes in all scenes · 1 box edited · saved in this browser". 파일 이름은 <code>review_nuscenes_20261128-1915.json</code> 모양이다. 내려받아도 저장된 수정은 한 글자도 바뀌지 않는다.</p>`,
+  },
+  {
+    key: 'E1: 파일',
+    title: 'E-1. 내려받은 파일의 한 줄 (판정도 있고 수정도 있는 박스)',
+    html: `<p><b>무엇을 보면 되는지:</b> <code>verdict</code>와 <code>edit</code>가 한 줄에 나란히 있다. <code>original</code>은 nuScenes의 주석 그대로, <code>edited</code>는 검수자가 고친 값, <code>change</code>는 화면의 "moved … · raised … · length … · turned …"와 같은 숫자다. 좌표는 nuScenes의 표현이다(전역 좌표의 중심, 폭 · 길이 · 높이, yaw와 쿼터니언 [w, x, y, z]). 소수 여섯 자리까지다.</p>
+      <p>파일 어디에도 "correct", "fixed", "ground truth"라는 말은 없다(확인했다). 고친 값은 <b>edited</b>이고, 한 검수자의 판단이다.</p>
+      <pre style="margin:8px 0 0;padding:10px 12px;background:#0b0b0d;border:1px solid #27272a;border-radius:6px;font:12px/1.5 ui-monospace,Consolas,monospace;color:#d4d4d8;overflow:auto;max-height:520px">{
+ "scene": "scene-0916",
+ "frameIndex": 9,
+ "frameId": "5b7cb170eee6468aa1fdbd3abcf63c5a",
+ "objectId": "52770232202d4ad1a98ed07d5b4c20b9",
+ "annotationToken": "d9bcf93a645740b19838b0ab4123f553",
+ "class": "car",
+ "verdict": "rejected",
+ "reasons": ["wrong_position"],
+ "note": "",
+ "reviewedAt": "2026-11-28T10:15:10.277Z",
+ "edit": {
+  "original": {
+   "translation": [697.116, 1799.168, 0.682],
+   "size": [1.771, 4.268, 1.643],
+   "yaw": 0.763896,
+   "rotation": [0.92794, 0, 0, 0.372729]
+  },
+  "edited": {
+   "translation": [696.690171, 1799.434779, 0.882],
+   "size": [1.771, 4.8, 1.643],
+   "yaw": 0.649668,
+   "rotation": [0.947704, 0, 0, 0.319151]
+  },
+  "change": {
+   "movedMetres": 0.502495,
+   "liftMetres": 0.2,
+   "sizeDelta": [0, 0.532, 0],
+   "turnedDegrees": -6.544786
+  },
+  "editedAt": "2026-11-28T10:15:07.864Z"
+ }
+}</pre>
+      <p>파일 전체(세 줄짜리 예): <code>2026-11-28_steps/e_review_export_example.json</code>. 다른 장면(scene-0061)의 수정이 먼저 나오고, 그 프레임 번호는 그 장면 안에서 센 것이다.</p>
+      <p><b>CSV의 열:</b> <code>scene, frameIndex, frameId, objectId, annotationToken, class, verdict, reasons, note, reviewedAt</code> 뒤에 <code>edited, editedAt, moved_m, lift_m, d_width_m, d_length_m, d_height_m, turned_deg, edited_x_m, edited_y_m, edited_z_m, edited_width_m, edited_length_m, edited_height_m, edited_yaw_rad</code>. 고치지 않은 줄은 <code>edited</code>가 false이고 나머지 칸이 비어 있다. 원본 값은 JSON에만 있다(표가 두 배로 넓어져서).</p>`,
+  },
+  {
+    key: 'E2: Reset',
+    title: 'E-2. "Reset reviews…"를 한 번 누른 상태',
+    dir: '2026-11-28_steps/',
+    img: 'e2_menu_reset_armed.jpg', w: 420, h: 260,
+    html: `<p><b>무엇을 보면 되는지:</b> "Click again to delete all 2 · in all scenes · no undo · <b>box edits are kept</b>". 판정만 지워지고 수정은 남는다는 것을 지우기 전에 알려 준다. 글자가 메뉴 밖으로 나가지 않는다(위치로 확인).</p>
+      <p><b>확인한 것:</b> 한 번 더 누르면 판정 2개는 사라지고 수정 2개는 저장소에 그대로 있다. 그때 내려받은 파일에는 두 박스가 판정 없이(<code>verdict: null</code>) 들어 있다. 그중 하나를 Revert to label로 되돌리면 파일에서도 빠진다.</p>`,
+  },
+  {
+    key: 'E3: 연습 편집',
+    title: 'E-3. 연습 모드에서 박스를 고치는 화면',
+    dir: '2026-11-28_steps/',
+    img: 'e3_practice_editor.jpg', w: 1536, h: 700,
+    html: `<p><b>무엇을 보면 되는지:</b> 연습 모드의 박스는 일부러 틀리게 바꾼 것일 수 있다. 그래서 편집 화면이 그 박스를 <b>"practice label"</b>이라고 부른다: ① 편집 줄의 "Saved as an edit on top of the practice label" ② 왼쪽 아래 안내 칸의 "- - - practice label"(회색 점선) ③ 패널의 LiDAR 줄 "4 pts <b>in the original</b>"(그 수는 nuScenes가 원래 박스에 대해 센 것이다).</p>
+      <p><b>확인한 것:</b> 연습 모드의 편집 화면 어디에도 "nuScenes label"이라는 말이 없다. 연습 모드의 수정은 연습용 칸에만 저장되고, 연습 모드를 끄면 진짜 박스 위에 덮이지 않는다(표시도, 개수도, 내보내기 메뉴도 비어 있다). 다시 켜면 돌아온다.</p>`,
+  },
+  {
+    key: 'E4: 가까움',
+    title: 'E-4. 연습 모드: 고친 박스가 진짜 라벨에 얼마나 가까운지 (1536×700)',
+    dir: '2026-11-28_steps/',
+    img: 'e4_practice_closeness_1536x700.jpg', w: 1536, h: 700,
+    html: `<p><b>무엇을 보면 되는지:</b> 오른쪽 아래의 <b>"YOUR EDITS · DISTANCE TO THE REAL LABEL"</b>. 줄 하나가 고친 박스 하나다. 칸마다 "연습 세트가 보여 준 때 → 고친 뒤"이고 0이면 진짜 라벨과 같다는 뜻이다.</p>
+      <p>이 캡처는 확인 스크립트가 일부러 <b>틀린 쪽으로</b> 옮긴 것이다: <b>93d56d position</b>은 심어 둔 오류가 1.29m였는데 0.50m를 엉뚱한 쪽으로 옮겨 1.71m가 됐다(붉은색). <b>34daad not planted</b>는 멀쩡한 박스를 0.50m 옮겨서 0.00 → 0.50이 됐다. 제대로 고치면 초록색으로 줄어든다.</p>
+      <p><b>확인한 것:</b> "Reveal answers"를 누르기 전에는 이 칸이 화면에 없다(답을 알려 주는 숫자이기 때문이다). 1.29는 답안지의 "moved 1.3 m"와 같고, 1.71은 저장된 수정과 nuScenes 파일의 주석 사이의 거리를 직접 계산한 값과 같다. 색은 숫자의 방향과 맞다.</p>
+      <p>이 창 높이에서는 표를 보려면 패널을 아래로 스크롤해야 한다(설계 문서에 적어 둔 대가다).</p>`,
+  },
+  {
+    key: 'E4: 1024',
+    title: 'E-4. 같은 표, 1024×768 (가장 좁은 패널)',
+    dir: '2026-11-28_steps/',
+    img: 'e4_practice_closeness_1024x768.jpg', w: 1024, h: 768,
+    html: `<p>패널 안쪽 폭 334px에 네 칸이 들어간다. 가장 넓은 숫자("12.34 → 10.12", "179.9 → 179.9")로 바꿔 넣어도 칸이 겹치거나 잘리지 않는다(위치로 확인. 세 창 크기 모두).</p>`,
+  },
+  {
+    key: 'E4: 1440',
+    title: 'E-4. 같은 표, 1440×900',
+    dir: '2026-11-28_steps/',
+    img: 'e4_practice_closeness_1440x900.jpg', w: 1440, h: 900,
+    html: `<p>이 창에서는 심어 둔 오류의 목록과 표가 스크롤 없이 함께 보인다.</p>`,
+  },
+  {
+    key: 'E5: 연습 맨 위 줄',
+    title: 'E-5. 연습 모드의 맨 위 줄, 1440px',
+    dir: '2026-11-28_steps/',
+    img: 'e5_practice_top_bar_1440.jpg', w: 1440, h: 110,
+    html: `<p><b>무엇을 보면 되는지:</b> 연습 모드에서는 "N edited"가 <b>1536px부터</b> 보인다(배지가 넓어서). 이 폭에서는 마우스를 올렸을 때의 설명에 있다. 한 줄이다.</p>`,
+  },
+  {
+    key: 'E5: 연습 1280',
+    title: 'E-5. 연습 모드 + 저장이 안 될 때, 1280px (F8 전에는 "Not saved" 없이도 여기서 접혔다)',
+    dir: '2026-11-28_steps/',
+    img: 'e5_practice_top_bar_not_saved_1280.jpg', w: 1280, h: 110,
+    html: `<p><b>무엇을 보면 되는지:</b> 앱 이름이 없다(연습 모드에서는 1400px부터 나온다). 그 자리 덕분에 배지, 모드 버튼, 진행 표시, "NOT SAVED", Export가 한 줄에 들어간다. 남는 폭은 142px, 가장 넓은 글자로는 121px다.</p>`,
+  },
 ];
 let at = 0;
 const nav = document.getElementById('nav');
@@ -301,7 +431,7 @@ function show(i) {
   const s = SCREENS[at];
   nav.innerHTML = SCREENS.map((x, k) => `<button aria-pressed="${k === at}" data-k="${k}">${k + 1}. ${x.key}</button>`).join('');
   note.innerHTML = `<h2>${s.title}</h2>${s.html}`;
-  view.innerHTML = s.img ? `<div class="shot"><img src="${DIR}${s.img}" width="${s.w}" height="${s.h}" style="width:${s.w}px;height:${s.h}px" alt=""></div>` : '';
+  view.innerHTML = s.img ? `<div class="shot"><img src="${s.dir || DIR}${s.img}" width="${s.w}" height="${s.h}" style="width:${s.w}px;height:${s.h}px" alt=""></div>` : '';
   try { history.replaceState(null, '', `#${at + 1}`); } catch (e) { /* 파일로 열었을 때 무시 */ }
 }
 nav.addEventListener('click', (e) => { const k = e.target?.dataset?.k; if (k !== undefined) show(Number(k)); });

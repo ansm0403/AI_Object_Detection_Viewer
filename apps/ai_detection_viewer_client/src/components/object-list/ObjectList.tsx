@@ -161,7 +161,7 @@ export function ObjectList({
                   <span
                     role="img"
                     data-edited="true"
-                    title="Edited — the box drawn for this row is the reviewer's edit, not the nuScenes label"
+                    title="Edited — the box drawn for this row is the reviewer's edit, not the label it was made from"
                     aria-label="Edited"
                     className="shrink-0 text-[11px] leading-none text-amber-300"
                   >

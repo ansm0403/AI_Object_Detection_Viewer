@@ -10,6 +10,12 @@ type Props = {
    * the scene on screen: both actions cover all scenes (Edge_F#7 Case 2).
    */
   reviewedCount: number;
+  /**
+   * (F8) Box edits of the same scope. They are written into the same file, so
+   * a download is possible when there are edits and no reviews. "Reset
+   * reviews" does not delete them (an edit is taken back in the editor).
+   */
+  editedCount?: number;
   /** (F7) What the count covers, e.g. "in all scenes". Shown next to it. */
   scope?: string;
   /** (F7) A caveat about the export, e.g. scenes that are not loaded yet. */
@@ -25,11 +31,21 @@ type Props = {
  * takes two clicks inside the menu — the first only arms the button and says
  * how many reviews would go.
  */
-export function ExportMenu({ reviewedCount, scope, exportNote, onExport, onReset }: Props) {
+export function ExportMenu({
+  reviewedCount,
+  editedCount = 0,
+  scope,
+  exportNote,
+  onExport,
+  onReset,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [armed, setArmed] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const empty = reviewedCount === 0;
+  const noReviews = reviewedCount === 0;
+  // Nothing to write into a file: no review and no edit.
+  const empty = noReviews && editedCount === 0;
+  const editedText = editedCount > 0 ? `${editedCount} box${editedCount === 1 ? '' : 'es'} edited` : '';
 
   const close = () => {
     setOpen(false);
@@ -81,9 +97,9 @@ export function ExportMenu({ reviewedCount, scope, exportNote, onExport, onReset
           className="absolute right-0 top-full z-30 mt-1.5 w-64 overflow-hidden rounded-md bg-zinc-900 py-1 shadow-xl shadow-black/50 ring-1 ring-zinc-700"
         >
           <p className="px-3 pt-1 pb-1.5 text-[11px] text-zinc-500">
-            {empty
-              ? 'Nothing reviewed yet'
-              : `${reviewedCount} reviewed box${reviewedCount === 1 ? '' : 'es'}${scope ? ` ${scope}` : ''} · saved in this browser`}
+            {noReviews
+              ? `Nothing reviewed yet${editedText ? ` · ${editedText}` : ''}`
+              : `${reviewedCount} reviewed box${reviewedCount === 1 ? '' : 'es'}${scope ? ` ${scope}` : ''}${editedText ? ` · ${editedText}` : ''} · saved in this browser`}
           </p>
           {exportNote && !empty && (
             <p className="px-3 pb-1.5 text-[11px] text-amber-300/90">{exportNote}</p>
@@ -118,7 +134,7 @@ export function ExportMenu({ reviewedCount, scope, exportNote, onExport, onReset
           <button
             type="button"
             role="menuitem"
-            disabled={empty}
+            disabled={noReviews}
             // flex-wrap: the armed text ("… delete all 2,424" + "in all scenes · no
             // undo") is wider than the menu; the warning must wrap, not be cut off.
             className={`${item} flex-wrap gap-y-0.5 ${armed ? 'bg-rose-500/15 text-rose-200 hover:bg-rose-500/25' : 'text-rose-300'}`}
@@ -140,6 +156,9 @@ export function ExportMenu({ reviewedCount, scope, exportNote, onExport, onReset
               <span className="whitespace-nowrap text-[10px] text-rose-300/80">
                 {scope ? `${scope} · no undo` : 'no undo'}
               </span>
+            )}
+            {armed && editedCount > 0 && (
+              <span className="whitespace-nowrap text-[10px] text-rose-300/80">box edits are kept</span>
             )}
           </button>
         </div>

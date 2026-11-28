@@ -98,8 +98,15 @@ export function Header({
             count has four digits). Of the things that could yield, only the
             name frees enough room for the widest case — every box reviewed plus
             the "Not saved" warning (42px to spare at 1024px). Below lg the bar
-            may wrap, so the name is shown again. The page title still carries it. */}
-        <span className="text-sm font-semibold text-zinc-100 tracking-tight lg:hidden xl:inline">
+            may wrap, so the name is shown again. The page title still carries it.
+            (F8) On the practice set the badge is about 92px wider ("Practice ·
+            labels modified"), and the bar wrapped at 1280–1320px: the name then
+            comes back at 1400px instead of 1280px. */}
+        <span
+          className={`text-sm font-semibold text-zinc-100 tracking-tight lg:hidden ${
+            practiceActive ? 'min-[1400px]:inline' : 'xl:inline'
+          }`}
+        >
           AI Detection Viewer
         </span>
 

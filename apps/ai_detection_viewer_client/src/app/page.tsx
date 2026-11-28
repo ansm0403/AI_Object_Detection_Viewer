@@ -105,6 +105,7 @@ import {
 import {
   ExportMenu,
   PracticeScoreCard,
+  usePracticeCloseness,
   QueueBar,
   ReviewControls,
   ReviewProgress,
@@ -921,10 +922,12 @@ export default function Index() {
   // practice scene on screen: that is the only data its records are about.
   const handleExport = useCallback(
     (type: ReviewExportFileType) => {
-      if (!frames || !sceneOnScreen) return;
+      if (!sceneFrames || !sceneOnScreen) return;
       const now = new Date();
+      // (F8) The DATA's frames, never the ones with the edits laid over: the
+      // file says what each edited box was changed FROM.
       const exportScenes = plantedErrors
-        ? [{ name: sceneOnScreen.info.name, frames }]
+        ? [{ name: sceneOnScreen.info.name, frames: sceneFrames }]
         : (scenes.catalog?.scenes ?? []).flatMap((info) => {
             const loaded = sceneLibrary.get(info.name);
             return loaded ? [{ name: info.name, frames: loaded.frames }] : [];
@@ -932,6 +935,7 @@ export default function Index() {
       const data = buildSceneReviewExport(exportScenes, reviews, {
         scope: reviewScope,
         exportedAt: now.toISOString(),
+        edits: storedEdits.edits,
       });
       const filename = reviewExportFilename(reviewScope, now, type);
       if (type === 'json') {
@@ -940,11 +944,21 @@ export default function Index() {
         downloadTextFile(filename, UTF8_BOM + reviewExportToCsv(data), 'text/csv');
       }
     },
-    [frames, sceneOnScreen, plantedErrors, scenes.catalog, sceneLibrary, reviews, reviewScope],
+    [
+      sceneFrames,
+      sceneOnScreen,
+      plantedErrors,
+      scenes.catalog,
+      sceneLibrary,
+      reviews,
+      reviewScope,
+      storedEdits.edits,
+    ],
   );
   // (F7) What the export menu acts on: every record of the scope, whatever
   // scene it belongs to. And a caveat when the file cannot hold all of them.
   const reviewRecordCount = useMemo(() => Object.keys(reviews).length, [reviews]);
+  const editRecordCount = useMemo(() => Object.keys(storedEdits.edits).length, [storedEdits.edits]);
   const catalogSceneCount = scenes.catalog?.scenes.length ?? 0;
   const exportNote = plantedErrors
     ? 'The file covers the practice set of the scene on screen only.'
@@ -1500,6 +1514,15 @@ export default function Index() {
         : null,
     [plantedErrors, reviews, currentFrameId],
   );
+  // (F8) Practice mode: the edited boxes of this frame against the REAL label
+  // (the scene's own boxes are still in the library while its practice set is
+  // on screen). Shown by the practice card only after "Reveal answers".
+  const practiceCloseness = usePracticeCloseness(
+    plantedErrors,
+    labelFrame,
+    sceneOnScreen ? sceneLibrary.get(sceneOnScreen.info.name)?.frames : undefined,
+    storedEdits.edits,
+  );
 
   // (F3) Every state — loading, error, empty, loaded — renders inside the same
   // WorkspaceShell, so the panes sit in the same place before and after the
@@ -1586,11 +1609,14 @@ export default function Index() {
             counts={reviewProgress.overall}
             notSaved={reviewStorageFailed || storedEdits.storageFailed}
             edited={edited.inScene}
+            // The practice badge is wider than "Measured".
+            tight={plantedErrors !== null}
           />
           <ExportMenu
             // (F7) Export and reset act on EVERY scene's records, so the menu
             // counts those — not the scene on screen (Edge_F#7 Case 2).
             reviewedCount={reviewRecordCount}
+            editedCount={editRecordCount}
             scope="in all scenes"
             exportNote={exportNote}
             onExport={handleExport}
@@ -1824,6 +1850,7 @@ export default function Index() {
             onRevert={editor.revert}
             onDone={editor.exit}
             notSaved={storedEdits.storageFailed}
+            practice={plantedErrors !== null}
           />
         ) : sampleCheckOn ? (
           // (F7.5) The sample is fixed: no score slider, no class chips.
@@ -2081,6 +2108,7 @@ export default function Index() {
             locked={editor.locked}
             onSetField={editor.setField}
             notSaved={storedEdits.storageFailed}
+            practice={plantedErrors !== null}
           />
         ) : sampleCheckOn ? (
           <SamplePanel
@@ -2203,6 +2231,7 @@ export default function Index() {
                     frameScore={practiceScores.frame}
                     overallScore={practiceScores.overall}
                     plantedInFrame={practiceScores.plantedInFrame}
+                    closeness={practiceCloseness}
                     onSelect={setSelectedObject}
                   />
                 ) : undefined,
@@ -2260,6 +2289,7 @@ export default function Index() {
             emptyMessage={EDIT_BLOCK_MESSAGES[reviewBlock ?? 'not-in-frame']}
             growFrom={editor.growFrom}
             locked={editor.locked}
+            practice={plantedErrors !== null}
             onDragStart={editor.beginDrag}
             onDrag={editor.dragTo}
             onDragEnd={editor.endDrag}

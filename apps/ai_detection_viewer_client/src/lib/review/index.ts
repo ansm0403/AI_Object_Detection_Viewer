@@ -46,7 +46,15 @@ export {
   reviewExportToCsv,
   reviewExportToJson,
 } from './export';
-export type { ReviewExport, ReviewExportFileType, ReviewExportRow } from './export';
+export type {
+  ExportedBox,
+  ExportedEdit,
+  ReviewExport,
+  ReviewExportFileType,
+  ReviewExportRow,
+} from './export';
+export { editCloseness } from './closeness';
+export type { EditCloseness } from './closeness';
 export { sanitizeReviews } from './persisted';
 export {
   DEFAULT_PRACTICE_SEED,

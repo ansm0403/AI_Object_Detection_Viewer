@@ -83,7 +83,7 @@ export type ReviewMap = Record<string, ReviewRecord>;
  *  - `rejected`: the box is wrong — the model reported something that is not there;
  *  - `unsure`:   the photo cannot settle it.
  * Reasons and notes are not used in that scope. Nothing that reads the two
- * label scopes (progress, queue, `review@2` export) ever reads this one.
+ * label scopes (progress, queue, `review@3` export) ever reads this one.
  */
 export type ReviewScope = 'nuscenes' | 'nuscenes-practice' | 'nuscenes-false-alarms';
 

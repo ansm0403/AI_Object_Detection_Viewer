@@ -4,6 +4,7 @@ import type { MouseEvent, ReactNode } from 'react';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { classLabel } from '@/lib/ui/class-label';
 import { displayId } from '@/lib/ui/display-id';
+import { labelNameOf } from './labels';
 import type { EditView } from './useBoxEditor';
 
 /** Keys shown on the buttons. The handling is in `useEditShortcuts`. */
@@ -23,6 +24,8 @@ type Props = {
   onDone: () => void;
   /** The browser is not storing the edits (storage blocked or full). */
   notSaved?: boolean;
+  /** The boxes are the practice set's (deliberately modified), not the dataset's. */
+  practice?: boolean;
 };
 
 /**
@@ -42,7 +45,9 @@ export function EditBar({
   onRevert,
   onDone,
   notSaved = false,
+  practice = false,
 }: Props) {
+  const labelName = labelNameOf(practice);
   return (
     <div className="flex items-center flex-wrap lg:flex-nowrap gap-x-3 gap-y-2 h-full bg-zinc-900/60 border-b border-zinc-800 px-4 py-1.5">
       <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-amber-300">
@@ -72,7 +77,7 @@ export function EditBar({
         className="hidden min-[1400px]:block w-px h-5 bg-zinc-800 shrink-0"
       />
       <span className="hidden min-[1400px]:inline shrink-0 text-[11px] text-zinc-500 whitespace-nowrap">
-        Saved as an edit on top of the nuScenes label — the label itself is not changed
+        Saved as an edit on top of the {labelName} — the label itself is not changed
       </span>
       {notSaved && (
         <span
@@ -109,7 +114,7 @@ export function EditBar({
           onClick={onRevert}
           disabled={!onRevert}
           tone="amber"
-          title="Remove the edit: the box is the nuScenes label again"
+          title={`Remove the edit: the box is the ${labelName} again`}
           ariaLabel="Revert to label"
         >
           Revert<span className="hidden xl:inline"> to label</span>

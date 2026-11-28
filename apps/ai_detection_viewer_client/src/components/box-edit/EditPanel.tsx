@@ -7,6 +7,7 @@ import { REJECT_REASON_LABELS, VERDICT_LABELS } from '@/components/review/labels
 import { displayId } from '@/lib/ui/display-id';
 import { classLabel } from '@/lib/ui/class-label';
 import { PANEL_CLASS, PanelHeader } from '@/components/workspace';
+import { labelNameOf } from './labels';
 import type { EditTarget } from './useBoxEditor';
 
 type Props = {
@@ -25,6 +26,8 @@ type Props = {
   onSetField: (field: BoxField, value: number) => void;
   /** The browser is not storing the edits. */
   notSaved?: boolean;
+  /** The boxes are the practice set's (deliberately modified), not the dataset's. */
+  practice?: boolean;
 };
 
 const FIELD_LABELS: Record<BoxField, string> = {
@@ -47,7 +50,7 @@ const FIELD_TITLES: Record<BoxField, string> = {
   height: 'Height of the box, metres. Changing it keeps the bottom of the box where it is.',
   heading:
     'Where the front of the box points, in degrees from the front of the car (0° = the same way as the car, +90° = to its left)',
-  lift: 'How far the bottom of the box is above (+) or below (−) the bottom of the nuScenes label, metres',
+  lift: 'How far the bottom of the box is above (+) or below (−) the bottom of the label it was made from, metres',
 };
 
 const format = (field: BoxField, value: number) => {
@@ -79,6 +82,7 @@ export function EditPanel({
   locked,
   onSetField,
   notSaved = false,
+  practice = false,
 }: Props) {
   const verdictText = record
     ? [VERDICT_LABELS[record.verdict], ...record.reasons.map((r) => REJECT_REASON_LABELS[r].toLowerCase())].join(' · ')
@@ -113,7 +117,9 @@ export function EditPanel({
               <span className="text-zinc-200">
                 {target.labelLidarPoints === undefined ? '—' : `${target.labelLidarPoints} pts`}
               </span>{' '}
-              <span className="text-zinc-600">in the label</span>
+              {/* Practice: the count is of the box nuScenes annotated, not of the
+                  (possibly modified) practice box the edit started from. */}
+              <span className="text-zinc-600">{practice ? 'in the original' : 'in the label'}</span>
             </span>
             <span title="Of the points drawn in the top view (a thinned copy of the sweep), how many are inside the box as it is now.">
               <span className="text-zinc-500">In view</span>{' '}
@@ -158,7 +164,7 @@ export function EditPanel({
               {target.changeText.length > 0 ? (
                 <span className="text-amber-200">{target.changeText.join(' · ')}</span>
               ) : (
-                <span className="text-zinc-500">nothing — the box is the nuScenes label</span>
+                <span className="text-zinc-500">nothing — the box is the {labelNameOf(practice)}</span>
               )}
             </p>
             <p

@@ -3,6 +3,7 @@ export { ReviewProgress } from './ReviewProgress';
 export { QueueBar } from './QueueBar';
 export { ExportMenu } from './ExportMenu';
 export { PracticeScoreCard } from './PracticeScoreCard';
+export { usePracticeCloseness } from './usePracticeCloseness';
 export { UTF8_BOM, downloadTextFile } from './download';
 export { EvidenceStrip, type BoxEvidence } from './EvidenceStrip';
 export { useReviewShortcuts } from './useReviewShortcuts';

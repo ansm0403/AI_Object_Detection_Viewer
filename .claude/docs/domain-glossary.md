@@ -1004,6 +1004,22 @@ Shift 50 cm, in the direction the top view shows. For the last few centimetres a
 (at the usual zoom 5 cm is 2 pixels). A run of presses — a held key repeats about 30 times a second —
 counts as ONE step of the undo history, so one Ctrl+Z takes the whole run back.
 
+**Export `review@3` (내보내기 형식 3판)** *(F8)*
+The downloaded review file since F8. A row is a box that has a verdict OR an edit; every row carries
+`edit`: `null`, or the box as the dataset has it (`original`), as the reviewer left it (`edited`), the
+difference (`change`: moved, lift, size delta, turn) and when. A box that was edited but never judged
+has `verdict: null` — that is why the version number went up: a reader of `review@2` could assume
+every row had a verdict. Values are in nuScenes terms (global centre, width / length / height, yaw and
+the quaternion `[w, x, y, z]`), six decimals. The file never calls an edit "correct".
+
+**Distance to the real label (진짜 라벨과의 거리)** *(F8, practice mode)*
+On the practice set a few boxes were deliberately made wrong, and the app still knows the real ones.
+So an edit made there can be measured: how far is the box from the real label — centre (metres), size
+(the largest of the three differences, metres), heading (degrees) — as the practice set showed it, and
+after the edit. 0 = the same as the real label. Shown only after "Reveal answers": while a box is being
+edited these numbers would say which way to drag it. On the REAL data there is nothing to measure an
+edit against — the label is the thing being questioned.
+
 **SVG vs Canvas 2D (두 가지 그리기 방법)** *(F8)*
 SVG draws shapes as elements of the page (each one can be styled and clicked): right for a few
 hundred boxes and the handles. Canvas 2D paints pixels directly: right for thousands of LiDAR points.

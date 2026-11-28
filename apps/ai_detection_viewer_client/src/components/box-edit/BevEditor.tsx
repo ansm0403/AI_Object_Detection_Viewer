@@ -20,6 +20,7 @@ import type { Frame, Point3D } from '@/lib/types';
 import { getClassColor } from '@/lib/ui/class-colors';
 import { ViewerLabel } from '@/components/workspace';
 import { BevPoints, INSIDE_COLOR } from './BevPoints';
+import { labelNameOf } from './labels';
 import type { EditTarget } from './useBoxEditor';
 
 type PointsStatus = 'inline' | 'loading' | 'ready' | 'failed';
@@ -39,6 +40,8 @@ type Props = {
   growFrom: string | null;
   /** Why the box cannot be changed right now (shown; the handles do not react); `null` = it can. */
   locked: string | null;
+  /** The boxes are the practice set's (deliberately modified), not the dataset's. */
+  practice?: boolean;
   /**
    * A handle (or the box itself: `'move'`) was grabbed at this top-view point.
    * Returns false when the drag is not accepted; the pointer then pans the view.
@@ -113,6 +116,7 @@ export function BevEditor({
   emptyMessage,
   growFrom,
   locked,
+  practice = false,
   onDragStart,
   onDrag,
   onDragEnd,
@@ -478,7 +482,9 @@ export function BevEditor({
             ■
           </span>{' '}
           points inside the box
-          {labelFootprint && <span className="text-zinc-300"> · - - - nuScenes label</span>}
+          {labelFootprint && (
+            <span className="text-zinc-300"> · - - - {labelNameOf(practice)}</span>
+          )}
         </span>
         {size.width >= LEGEND_HINT_MIN_WIDTH && (
           <span className="block whitespace-nowrap">

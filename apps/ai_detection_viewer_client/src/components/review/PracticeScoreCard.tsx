@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { PlantedError, PracticeErrorKind, PracticeScore } from '@/lib/review';
+import type { EditCloseness, PlantedError, PracticeErrorKind, PracticeScore } from '@/lib/review';
 import { displayId } from '@/lib/ui/display-id';
 import { SECTION_TITLE_CLASS } from '@/components/workspace';
 
@@ -19,6 +19,12 @@ type Props = {
   overallScore: PracticeScore;
   /** The answer key for the current frame (shown only after "Reveal"). */
   plantedInFrame: PlantedError[];
+  /**
+   * (F8) The edited boxes of the current frame, measured against the REAL
+   * label. Part of the answer key: shown only after "Reveal" — while a box is
+   * being edited these numbers would say which way to drag it.
+   */
+  closeness?: EditCloseness[];
   onSelect: (objectId: string) => void;
 };
 
@@ -31,7 +37,13 @@ type Props = {
  * a local, temporary view state and is reset when the frame changes (the card
  * is keyed on the frame by the page).
  */
-export function PracticeScoreCard({ frameScore, overallScore, plantedInFrame, onSelect }: Props) {
+export function PracticeScoreCard({
+  frameScore,
+  overallScore,
+  plantedInFrame,
+  closeness = [],
+  onSelect,
+}: Props) {
   const [revealed, setRevealed] = useState(false);
 
   return (
@@ -91,7 +103,80 @@ export function PracticeScoreCard({ frameScore, overallScore, plantedInFrame, on
           ))}
         </ul>
       )}
+      {revealed && (
+        <div data-part="closeness" className="mt-2">
+          <h4
+            className="text-[10px] font-semibold uppercase tracking-wider text-amber-300/90"
+            title="How far each box you edited is from the nuScenes label it was made from: as the practice set showed it → with your edit. 0 = the same as the nuScenes label."
+          >
+            Your edits · distance to the real label
+          </h4>
+          {closeness.length === 0 ? (
+            <p className="mt-0.5 text-[11px] text-zinc-500">
+              No box of this frame has been edited. Select one and press E.
+            </p>
+          ) : (
+            <table className="mt-0.5 w-full text-[11px] tabular-nums">
+              <thead>
+                <tr className="text-zinc-500">
+                  <th className="text-left font-normal">shown → edited</th>
+                  <th className="text-right font-normal">centre m</th>
+                  <th className="text-right font-normal">size m</th>
+                  <th className="text-right font-normal">heading °</th>
+                </tr>
+              </thead>
+              <tbody>
+                {closeness.map((row) => (
+                  <tr key={row.objectId} data-closeness={row.objectId}>
+                    <td className="py-0.5 pr-1 whitespace-nowrap">
+                      <button
+                        type="button"
+                        title="Click to select"
+                        onClick={(e) => {
+                          onSelect(row.objectId);
+                          if (e.detail > 0) e.currentTarget.blur();
+                        }}
+                        className="font-mono text-amber-200 hover:underline"
+                      >
+                        {displayId(row.objectId)}
+                      </button>{' '}
+                      <span className="text-zinc-500">
+                        {row.planted ? KIND_LABELS[row.planted] : 'not planted'}
+                      </span>
+                    </td>
+                    <Distance before={row.before.centre} after={row.after.centre} digits={2} />
+                    <Distance before={row.before.size} after={row.after.size} digits={2} />
+                    <Distance before={row.before.heading} after={row.after.heading} digits={1} />
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </section>
+  );
+}
+
+/**
+ * One measure of a row: the distance as the practice set showed the box, an
+ * arrow, and the distance with the edit — green when the edit came closer to
+ * the real label, rose when it went further away. Compared as the numbers
+ * are printed, so "0.12 → 0.12" is never coloured.
+ */
+function Distance({ before, after, digits }: { before: number; after: number; digits: number }) {
+  const from = before.toFixed(digits);
+  const to = after.toFixed(digits);
+  const tone =
+    Number(to) < Number(from)
+      ? 'text-emerald-300'
+      : Number(to) > Number(from)
+        ? 'text-rose-300'
+        : 'text-zinc-300';
+  return (
+    <td className="py-0.5 pl-1 text-right whitespace-nowrap text-zinc-500">
+      {from} → <span className={tone}>{to}</span>
+    </td>
   );
 }
 

@@ -15,6 +15,12 @@ type Props = {
    * and always in the tooltip. 0 / absent → nothing is shown.
    */
   edited?: number;
+  /**
+   * The other half of the top bar is wider than usual: the practice badge
+   * ("Practice · labels modified") takes about 92px more than "Measured". Some
+   * of the counts then appear later, so the bar still fits on one line.
+   */
+  tight?: boolean;
 };
 
 /**
@@ -22,15 +28,26 @@ type Props = {
  * frame, a thin bar split by verdict, and the counts that need attention.
  * Pure presentation — the numbers come from `summarizeProgress`.
  */
-export function ReviewProgress({ counts, notSaved = false, edited = 0 }: Props) {
+export function ReviewProgress({ counts, notSaved = false, edited = 0, tight = false }: Props) {
   const pct = (n: number) => (counts.total > 0 ? (n / counts.total) * 100 : 0);
   // A sliver stays visible even at 1 of 583.
   const width = (n: number) => (n > 0 ? `${Math.max(pct(n), 1.5)}%` : '0%');
-  // The top bar must stay on ONE line (it sits right above the filter bar).
-  // The two counts appear from 1280px; with the "Not saved" note next to them
-  // that is too much up to about 1335px (measured: the bar wrapped at
-  // 1280–1320px), so the counts then wait until 1400px. The tooltip has them.
-  const countsFrom = notSaved ? 'min-[1400px]:inline' : 'xl:inline';
+  // The top bar must stay on ONE line (it sits right above the filter bar),
+  // so what is shown depends on the window width AND on what else is in the
+  // bar. Measured on the running app over 18 widths (1024–1536px):
+  //  - the two counts fit from 1280px; with the "Not saved" note from 1400px
+  //    (the bar wrapped at 1280–1320px);
+  //  - the "N edited" count fits from 1440px;
+  //  - with the practice badge (`tight`; the Header then also holds the app
+  //    name back until 1400px): the counts with "Not saved" from 1536px, and
+  //    "N edited" from 1536px.
+  // Whatever is not shown is in the tooltip.
+  const countsFrom = !notSaved
+    ? 'xl:inline'
+    : tight
+      ? 'min-[1536px]:inline'
+      : 'min-[1400px]:inline';
+  const editedFrom = tight ? 'min-[1536px]:inline' : 'min-[1440px]:inline';
 
   return (
     <div
@@ -62,7 +79,7 @@ export function ReviewProgress({ counts, notSaved = false, edited = 0 }: Props) 
         {counts.unsure} unsure
       </span>
       {edited > 0 && (
-        <span data-part="edited-count" className="hidden min-[1440px]:inline text-amber-300">
+        <span data-part="edited-count" className={`hidden ${editedFrom} text-amber-300`}>
           {edited} edited
         </span>
       )}

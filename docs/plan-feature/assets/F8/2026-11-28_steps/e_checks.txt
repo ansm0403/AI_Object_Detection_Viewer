@@ -1,0 +1,70 @@
+PASS  E · nothing reviewed, nothing edited: the menu says "Nothing reviewed yet" and offers no download  — Nothing reviewed yet · [true,true,true]
+PASS  E · one box edited, none reviewed: the menu says "Nothing reviewed yet · 1 box edited"; the downloads are offered, Reset is not  — Nothing reviewed yet · 1 box edited · [false,false,true]
+PASS  E · the file is review@3 and its name is review_nuscenes_<date>-<time>.json  — ai-detection-viewer/review@3 · review_nuscenes_20261128-1915.json
+PASS  E · it covers all 10 scenes and is not a practice file  — 10 scenes
+PASS  E · summary: 18,538 boxes, 0 reviewed, 1 edited  — {"totalBoxes":18538,"reviewed":0,"approved":0,"rejected":0,"unsure":0,"edited":1}
+PASS  E · one row: the edited box, with NO verdict (verdict null, no reasons, no review time)  — {"scene":"scene-0916","frameIndex":9,"frameId":"5b7cb170eee6468aa1fdbd3abcf63c5a","objectId":"52770232202d4ad1a98ed07d5b4c20b9","annotationToken":"d9bcf93a645740b19838b0ab4123f553","class":"car","verdict":null,"reasons":[],"note":"","reviewedAt":null,"edit":"…"}
+PASS  E · "change" in the file is what the screen says, number for number  — file: moved 0.50 m · raised 0.20 m · length +0.53 m · turned −6.5° | screen: moved 0.50 m · raised 0.20 m · length +0.53 m · turned −6.5°
+PASS  E · "original" in the file is the annotation in the nuScenes sample file (translation, size: within 0.000001 m; yaw within 0.000001 rad)  — largest difference 0.0e+0 m, yaw 2.9e-7 rad
+PASS  E · "edited" in the file is the stored edit (six decimals), with the quaternion [w, 0, 0, z] of its yaw  — {"translation":[696.690171,1799.434779,0.882],"size":[1.771,4.8,1.643],"yaw":0.649668,"rotation":[0.947704,0,0,0.319151]}
+PASS  E · no number in the file has more than six decimals
+PASS  E · the word "correct" / "fixed" / "ground truth" is nowhere in the file
+PASS  E · two reviewed, one edited: "2 reviewed boxes in all scenes · 1 box edited · saved in this browser"  — 2 reviewed boxes in all scenes · 1 box edited · saved in this browser
+PASS  E · two rows: the edited box now has its verdict AND its edit; the other has a verdict and edit null  — {"totalBoxes":18538,"reviewed":2,"approved":1,"rejected":1,"unsure":0,"edited":1}
+PASS  E · rows are in frame order, then the frame’s box order  — 720ca5,527702
+PASS  E · CSV: starts with the byte-order mark, one header + 2 rows, every line with the same number of cells (25)  — 3 lines, 25 columns
+PASS  E · CSV: the columns are the review@2 ones, then the edit columns  — scene,frameIndex,frameId,objectId,annotationToken,class,verdict,reasons,note,reviewedAt,edited,editedAt,moved_m,lift_m,d_width_m,d_length_m,d_height_m,turned_deg,edited_x_m,edited_y_m,edited_z_m,edited_width_m,edited_length_m,edited_height_m,edited_yaw_rad
+PASS  E · CSV: the edited row says true and carries the same numbers as the JSON; the other says false with empty cells  — {"scene":"scene-0916","frameIndex":"9","frameId":"5b7cb170eee6468aa1fdbd3abcf63c5a","objectId":"52770232202d4ad1a98ed07d5b4c20b9","annotationToken":"d9bcf93a645740b19838b0ab4123f553","class":"car","ve
+PASS  E · the edits as stored are what they were before the downloads
+PASS  E · an edit in another scene: 3 rows, scene-0061 first (catalog order), its frame counted within its scene (3)  — [["scene-0061",3,null,0.500024],["scene-0916",9,"approved",null],["scene-0916",9,"rejected",0.502495]]
+PASS  E · "Reset reviews…" armed: it says the box edits are kept  — SV for spreadsheets Click again to delete all 2 in all scenes · no undo box edits are kept
+PASS  E · … and every text of the armed menu is inside the menu (by position)
+PASS  E · after the reset: no reviews, both edits still stored
+PASS  E · the file then holds the two edited boxes, both without a verdict
+PASS  E · after Revert to label the box is not in the file any more
+PASS  E · no page errors (export)
+PASS  E · practice: before "Reveal answers" the closeness block is not on the page
+PASS  E · practice: after Reveal the block is there and says no box of this frame has been edited  — YOUR EDITS · DISTANCE TO THE REAL LABEL No box of this frame has been edited. Select one and press E.
+PASS  E · practice: the editor calls the box it starts from "practice label", never "nuScenes label"  — EDIT BOX person 93d56d · frame 1 Saved as an edit on top of the practice label — the label itself is not changed 3D view V ↶ Undo Ctrl Z ↷ Redo Revert to label Done Esc | EDIT BOX Frame 1 · person 93d56d LiDAR 4 pts in the original In view 0 pts inside the box
+PASS  E · practice: once changed, the dashed outline is named "practice label" in the legend  — INTS ↑ front of the car ■ points inside the box · - - - practice label Drag the box: move · squares: resize · knob: turn · wheel: zoom · background: pan Arrow keys: move 5 cm · with Shift: 50 cm 0.2 m
+PASS  E · 1536×700: practice: the panel’s two point counts ("… in the original" / "In view …") do not touch  — 102px between them · LiDAR 4 pts in the original In view 0 pts inside the box
+PASS  E · practice: after an edit, back in the panel, the answers are hidden again
+PASS  E · 1536×700: practice: the row of the edited box — "position", centre as planted (1.3 m in the answer key) → with the edit (1.71 m from the dataset file)  — ["93d56d position","1.29 → 1.71","0.00 → 0.00","0.0 → 0.0"]
+PASS  E · 1536×700: practice: the edited value is coloured by its direction (closer = green, further = rose, same = grey)  — rose,zinc,zinc (expected rose first)
+PASS  E · 1536×700: practice: the edit is stored under the practice scope only — nothing under the real annotations
+PASS  E · 1536×700: practice: a box nothing was planted on, moved 0.50 m — "not planted", 0.00 → 0.50, in rose  — {"id":"34daad97663c4e8ea00f842adc581ab5","cells":["34daad not planted","0.00 → 0.50","0.00 → 0.00","0.0 → 0.0"],"tones":["rose","zinc","zinc"]}
+PASS  E · 1536×700: practice: the closeness table is inside the card, no cell over another or cut — also with the widest numbers ("12.34 → 10.12", "179.9 → 179.9")  — ok · table 374px (widest 374px) in a 398px card
+PASS  E · practice: the marks are there too (2 list rows, top bar "2 edited", the 3D tag says practice and "2 edited")  — {"tag":["LIDAR MEASURED · BOXES MODIFIED (PRACTICE) · 2 EDITED Drag · rotate Scroll · zoom Click · select 3D scene; drag to orbit, scroll to zoom."],"rows":2,"count":"2 edited"}
+PASS  E · practice: the menu counts the practice edits and says the file covers the practice set only  — Nothing reviewed yet · 2 boxes edited · The file covers the practice set of the scene on screen only.
+PASS  E · practice: the file is flagged practice, named review_nuscenes-practice_…, covers one scene, 2 edited  — review_nuscenes-practice_20261128-1915.json · {"totalBoxes":2424,"reviewed":0,"approved":0,"rejected":0,"unsure":0,"edited":2}
+PASS  E · practice: "original" in that file is the PRACTICE box (the planted error), not the nuScenes annotation  — original is 1.29 m from the nuScenes annotation; planted: moved 1.3 m
+PASS  E · practice off: no mark, no count, no closeness block — the practice edits are not laid over the real boxes  — {"rows":0,"count":null,"tag":false,"card":false}
+PASS  E · practice off: the export menu is back to "Nothing reviewed yet" (practice edits are not in the real file)  — Nothing reviewed yet
+PASS  E · practice on again: the two practice edits are back  — 2
+PASS  E · 1536×700: no page errors (practice)
+PASS  E · 1024×768: practice: the panel’s two point counts ("… in the original" / "In view …") do not touch  — 62px between them · LiDAR 4 pts in the original In view 0 pts inside the box
+PASS  E · 1024×768: practice: the row of the edited box — "position", centre as planted (1.3 m in the answer key) → with the edit (1.71 m from the dataset file)  — ["93d56d position","1.29 → 1.71","0.00 → 0.00","0.0 → 0.0"]
+PASS  E · 1024×768: practice: the edited value is coloured by its direction (closer = green, further = rose, same = grey)  — rose,zinc,zinc (expected rose first)
+PASS  E · 1024×768: practice: the edit is stored under the practice scope only — nothing under the real annotations
+PASS  E · 1024×768: practice: a box nothing was planted on, moved 0.50 m — "not planted", 0.00 → 0.50, in rose  — {"id":"34daad97663c4e8ea00f842adc581ab5","cells":["34daad not planted","0.00 → 0.50","0.00 → 0.00","0.0 → 0.0"],"tones":["rose","zinc","zinc"]}
+PASS  E · 1024×768: practice: the closeness table is inside the card, no cell over another or cut — also with the widest numbers ("12.34 → 10.12", "179.9 → 179.9")  — ok · table 334px (widest 334px) in a 358px card
+PASS  E · 1024×768: no page errors (practice)
+PASS  E · 1440×900: practice: the panel’s two point counts ("… in the original" / "In view …") do not touch  — 102px between them · LiDAR 4 pts in the original In view 0 pts inside the box
+PASS  E · 1440×900: practice: the row of the edited box — "position", centre as planted (1.3 m in the answer key) → with the edit (1.71 m from the dataset file)  — ["93d56d position","1.29 → 1.71","0.00 → 0.00","0.0 → 0.0"]
+PASS  E · 1440×900: practice: the edited value is coloured by its direction (closer = green, further = rose, same = grey)  — rose,zinc,zinc (expected rose first)
+PASS  E · 1440×900: practice: the edit is stored under the practice scope only — nothing under the real annotations
+PASS  E · 1440×900: practice: a box nothing was planted on, moved 0.50 m — "not planted", 0.00 → 0.50, in rose  — {"id":"34daad97663c4e8ea00f842adc581ab5","cells":["34daad not planted","0.00 → 0.50","0.00 → 0.00","0.0 → 0.0"],"tones":["rose","zinc","zinc"]}
+PASS  E · 1440×900: practice: the closeness table is inside the card, no cell over another or cut — also with the widest numbers ("12.34 → 10.12", "179.9 → 179.9")  — ok · table 374px (widest 374px) in a 398px card
+PASS  E · 1440×900: no page errors (practice)
+PASS  E · practice: top bar, 19 widths from 1024 to 1536 px, 1 rejected, no edit: always one line  — room left (px) 1024:146 1100:222 1200:322 1279:401 1280:103 1300:123 1320:143 1340:163 1360:183 1380:203 1399:222 1400:84 1420:104 1439:123 1440:124 1460:144 1500:184 1535:219 1536:220
+PASS  E · practice: top bar, 19 widths from 1024 to 1536 px, no edit, widest text ("2424"): always one line  — room left (px) 1024:126 1100:202 1200:302 1279:381 1280:83 1300:103 1320:123 1340:143 1360:163 1380:183 1399:202 1400:64 1420:84 1439:103 1440:104 1460:124 1500:164 1535:199 1536:200
+PASS  E · (setup) practice, one box edited: "1 edited" is in the top bar  — {"notSaved":false,"count":"1 edited"}
+PASS  E · practice: top bar, 19 widths from 1024 to 1536 px, 1 edited ("N edited" shown from 1536 px): always one line  — room left (px) 1024:146 1100:222 1200:322 1279:401 1280:103 1300:123 1320:143 1340:163 1360:183 1380:203 1399:222 1400:84 1420:104 1439:123 1440:124 1460:144 1500:184 1535:219 1536:167
+PASS  E · practice: top bar, 19 widths from 1024 to 1536 px, widest texts ("2424", "156 edited"): always one line  — room left (px) 1024:126 1100:202 1200:302 1279:381 1280:83 1300:103 1320:123 1340:143 1360:163 1380:183 1399:202 1400:64 1420:84 1439:103 1440:104 1460:124 1500:164 1535:199 1536:133
+PASS  E · no page errors (practice top bar)
+PASS  E · (setup) practice, one box edited, the browser refusing to store it: "1 edited" and "Not saved" are in the top bar  — {"notSaved":true,"count":"1 edited"}
+PASS  E · practice: top bar, 19 widths from 1024 to 1536 px, 1 edited + "Not saved" ("N edited" shown from 1536 px): always one line  — room left (px) 1024:68 1100:144 1200:244 1279:323 1280:142 1300:162 1320:182 1340:202 1360:222 1380:242 1399:261 1400:123 1420:143 1439:162 1440:163 1460:183 1500:223 1535:258 1536:89
+PASS  E · practice: top bar, 19 widths from 1024 to 1536 px, widest texts ("2424", "156 edited") + "Not saved": always one line  — room left (px) 1024:47 1100:123 1200:223 1279:302 1280:121 1300:141 1320:161 1340:181 1360:201 1380:221 1399:240 1400:102 1420:122 1439:141 1440:142 1460:162 1500:202 1535:237 1536:55
+PASS  E · no page errors (practice top bar + "Not saved")
+
+e: 68 / 68 passed
