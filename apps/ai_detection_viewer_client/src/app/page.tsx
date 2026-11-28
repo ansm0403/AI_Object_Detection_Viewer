@@ -44,6 +44,7 @@ import {
   useBoxEditor,
   useDraftFrame,
   useEditShortcuts,
+  useEditCountIn,
   useEditedFrames,
   useEditedSummary,
   useStoredEdits,
@@ -933,15 +934,20 @@ export default function Index() {
       }),
     [scenes.catalog, sceneLibrary, sceneOnScreen, sceneFrames],
   );
+  // What an export covers: every loaded scene — or, on the practice set, the
+  // practice scene on screen. (F8) The DATA's frames, never the ones with the
+  // edits laid over: the file says what each edited box was changed FROM.
+  const exportScenes = useMemo(
+    () =>
+      plantedErrors && sceneOnScreen && sceneFrames
+        ? [{ name: sceneOnScreen.info.name, frames: sceneFrames }]
+        : loadedScenes,
+    [plantedErrors, sceneOnScreen, sceneFrames, loadedScenes],
+  );
   const handleExport = useCallback(
     (type: ReviewExportFileType) => {
       if (!sceneFrames || !sceneOnScreen) return;
       const now = new Date();
-      // (F8) The DATA's frames, never the ones with the edits laid over: the
-      // file says what each edited box was changed FROM.
-      const exportScenes = plantedErrors
-        ? [{ name: sceneOnScreen.info.name, frames: sceneFrames }]
-        : loadedScenes;
       const data = buildSceneReviewExport(exportScenes, reviews, {
         scope: reviewScope,
         exportedAt: now.toISOString(),
@@ -954,12 +960,14 @@ export default function Index() {
         downloadTextFile(filename, UTF8_BOM + reviewExportToCsv(data), 'text/csv');
       }
     },
-    [sceneFrames, sceneOnScreen, plantedErrors, loadedScenes, reviews, reviewScope, storedEdits.edits],
+    [sceneFrames, sceneOnScreen, exportScenes, reviews, reviewScope, storedEdits.edits],
   );
   // (F7) What the export menu acts on: every record of the scope, whatever
   // scene it belongs to. And a caveat when the file cannot hold all of them.
   const reviewRecordCount = useMemo(() => Object.keys(reviews).length, [reviews]);
-  const editRecordCount = useMemo(() => Object.keys(storedEdits.edits).length, [storedEdits.edits]);
+  // (F8) The edits the file will hold: those of the scenes it covers. A stale
+  // record (its box is not in the data any more) is in no file and not counted.
+  const editRecordCount = useEditCountIn(exportScenes, storedEdits.edits);
   const catalogSceneCount = scenes.catalog?.scenes.length ?? 0;
   const exportNote = plantedErrors
     ? 'The file covers the practice set of the scene on screen only.'
@@ -1257,9 +1265,10 @@ export default function Index() {
     stopPlayback,
   });
   // (F8) The second pass: from one rejected box to the next, in whatever frame
-  // or scene it is. The editor stays open and follows the selection.
+  // or scene it is. From the review screen (the "N rejected" count in the top
+  // bar) and inside the editor, which stays open and follows the selection.
   const rejectedWalk = useRejectedWalk({
-    on: editor.editing,
+    on: reviewEnabled && mode === 'review',
     scenes: loadedScenes,
     reviews,
     visibleIdsOf: visibleIds3DOf,
@@ -1626,6 +1635,8 @@ export default function Index() {
             edited={edited.inScene}
             // The practice badge is wider than "Measured".
             tight={plantedErrors !== null}
+            onNextRejected={rejectedWalk.onNext}
+            rejectedEverywhere={rejectedWalk.count}
           />
           <ExportMenu
             // (F7) Export and reset act on EVERY scene's records, so the menu
@@ -2294,6 +2305,7 @@ export default function Index() {
       overlayLabel={editing ? 'Top view' : undefined}
       overlaySpan={editing && editor.view === 'split' ? 'list' : 'list+main'}
       evenColumns={editing && editor.view === 'split'}
+      listEmpty={editing}
       overlay={
         editing && editor.projector ? (
           <BevEditor

@@ -105,7 +105,10 @@ export function EditBar({
           Not saved
         </span>
       )}
-      <div className="flex items-center gap-1.5 ml-auto shrink-0">
+      {/* Below the fixed layout (lg) the bar may be much narrower than its
+          buttons (measured at 390px: they ran 125px out of the window and the
+          whole page scrolled sideways), so there the group wraps too. */}
+      <div className="flex items-center flex-wrap justify-end gap-1.5 ml-auto lg:flex-nowrap lg:shrink-0">
         {rejected && rejected.count > 0 && (
           <>
             <span

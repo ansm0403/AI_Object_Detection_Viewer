@@ -51,6 +51,14 @@ type WorkspaceShellProps = {
    */
   evenColumns?: boolean;
   /**
+   * (F8) The list cell holds nothing right now (the box editor lies over it
+   * and the list is not drawn). On the fixed layout the cell keeps its place;
+   * on a narrow window, where the cells are stacked, an empty cell 60% of the
+   * window tall would sit between the timeline and the panel with the
+   * numbers — there it is left out.
+   */
+  listEmpty?: boolean;
+  /**
    * Width / height of the camera cell. The shell sizes the cell; the viewer
    * inside only fills it. nuScenes photos are 16:9; COCO photos vary, so 4:3.
    */
@@ -90,6 +98,7 @@ export function WorkspaceShell({
   overlayLabel = 'Report',
   overlaySpan = 'list+main',
   evenColumns = false,
+  listEmpty = false,
   cameraAspect,
 }: WorkspaceShellProps) {
   // The overlay lies over the whole 3D cell (and not just over the list).
@@ -166,7 +175,9 @@ export function WorkspaceShell({
         {/* Left column — object list. Narrow: capped height, scrolls inside. */}
         <section
           aria-label="Objects"
-          className="order-4 h-[60vh] lg:h-auto lg:col-start-1 lg:row-start-1 min-h-0"
+          className={`order-4 h-[60vh] lg:h-auto lg:col-start-1 lg:row-start-1 min-h-0 ${
+            listEmpty ? 'hidden lg:block' : ''
+          }`}
         >
           {list}
         </section>

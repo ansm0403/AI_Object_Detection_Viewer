@@ -201,5 +201,17 @@ describe('applyEdits', () => {
     expect([...editedIdsOf(frame, edits)]).toEqual([id]);
     expect(countEdited(frames, edits)).toBe(2);
     expect(countEdited(frames, {})).toBe(0);
+    // a record whose frame or box is not there (stale storage) is not counted
+    const stale = withEdit(
+      withEdit(edits, 'no-such-frame', 'x', edited, AT),
+      frames[0].id,
+      'no-such-box',
+      edited,
+      AT,
+    );
+    expect(Object.keys(stale).length).toBe(Object.keys(edits).length + 2);
+    expect(countEdited(frames, stale)).toBe(2);
+    // only the frames given are counted
+    expect(countEdited([], edits)).toBe(0);
   });
 });

@@ -13,7 +13,7 @@ import {
 import type { Frame } from '@/lib/types';
 
 type Options = {
-  /** Only worked out while it is shown (the box editor is open). */
+  /** Only worked out where it is shown: on the review screen and in the box editor. */
   on: boolean;
   /** Every scene whose boxes are in memory, in catalog order. */
   scenes: readonly SceneFrames[];

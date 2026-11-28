@@ -7,4 +7,9 @@ export type { BoxDraft } from './useBoxDraft';
 export { MIN_LOOK_MS, useBoxEditor } from './useBoxEditor';
 export type { EditTarget, EditView } from './useBoxEditor';
 export { useEditShortcuts } from './useEditShortcuts';
-export { useEditedFrames, useEditedSummary, useStoredEdits } from './useStoredEdits';
+export {
+  useEditCountIn,
+  useEditedFrames,
+  useEditedSummary,
+  useStoredEdits,
+} from './useStoredEdits';

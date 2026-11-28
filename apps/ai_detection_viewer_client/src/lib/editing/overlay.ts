@@ -125,13 +125,23 @@ export function applyEdits(frame: Frame, edits: EditMap): Frame {
   return changes ? replaceBoxes(frame, changes) : frame;
 }
 
-/** How many boxes of these frames have an edit record. */
-export function countEdited(frames: readonly Frame[], edits: EditMap): number {
+/**
+ * How many boxes of these frames have an edit record.
+ *
+ * Counted from the RECORDS (a handful) rather than by visiting every box, and
+ * a record whose frame or box is not among `frames` is not counted: a stale
+ * record (the data changed, the storage was hand-edited) is laid over nothing
+ * and is in no export, so it must not be in a count either.
+ */
+export function countEdited(frames: Iterable<Frame>, edits: EditMap): number {
+  const records = Object.values(edits);
+  if (records.length === 0) return 0;
+  const byId = new Map<string, Frame>();
+  for (const frame of frames) byId.set(frame.id, frame);
   let count = 0;
-  for (const frame of frames) {
-    for (const detection of frame.detections3D) {
-      if (getEdit(edits, frame.id, detection.id)) count += 1;
-    }
+  for (const record of records) {
+    const frame = byId.get(record.frameId);
+    if (frame?.detections3D.some((detection) => detection.id === record.objectId)) count += 1;
   }
   return count;
 }

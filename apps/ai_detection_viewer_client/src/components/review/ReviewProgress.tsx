@@ -21,6 +21,17 @@ type Props = {
    * of the counts then appear later, so the bar still fits on one line.
    */
   tight?: boolean;
+  /**
+   * (F8) Go to the next rejected box, in whatever frame or scene it is. With
+   * it, the "N rejected" count is a button; absent (nothing rejected anywhere,
+   * or none that the filters show) it is plain text.
+   *
+   * The count itself is of the scene on screen (like the rest of the bar); the
+   * walk covers every scene, so the button also works at "0 rejected" when
+   * another scene has some. `rejectedEverywhere` is that total, for the tooltip.
+   */
+  onNextRejected?: () => void;
+  rejectedEverywhere?: number;
 };
 
 /**
@@ -28,7 +39,14 @@ type Props = {
  * frame, a thin bar split by verdict, and the counts that need attention.
  * Pure presentation — the numbers come from `summarizeProgress`.
  */
-export function ReviewProgress({ counts, notSaved = false, edited = 0, tight = false }: Props) {
+export function ReviewProgress({
+  counts,
+  notSaved = false,
+  edited = 0,
+  tight = false,
+  onNextRejected,
+  rejectedEverywhere,
+}: Props) {
   const pct = (n: number) => (counts.total > 0 ? (n / counts.total) * 100 : 0);
   // A sliver stays visible even at 1 of 583.
   const width = (n: number) => (n > 0 ? `${Math.max(pct(n), 1.5)}%` : '0%');
@@ -72,9 +90,32 @@ export function ReviewProgress({ counts, notSaved = false, edited = 0, tight = f
         <span className="bg-zinc-400" style={{ width: width(counts.unsure) }} />
         <span className="bg-rose-400" style={{ width: width(counts.rejected) }} />
       </span>
-      <span className={`hidden ${countsFrom} ${counts.rejected > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
-        {counts.rejected} rejected
-      </span>
+      {onNextRejected ? (
+        // The same text, the same width: only the element changes, so the bar's
+        // measured widths hold.
+        <button
+          type="button"
+          data-part="next-rejected"
+          title={`${counts.rejected} rejected in this scene${
+            rejectedEverywhere !== undefined ? `, ${rejectedEverywhere} in all scenes` : ''
+          }. Click: go to the next rejected box (scene, frame, then list order; boxes hidden by the filters are skipped).`}
+          onClick={(event) => {
+            onNextRejected();
+            // A mouse click must not leave the focus here: Space / Enter would
+            // jump again while the reviewer is judging the box.
+            if (event.detail > 0) event.currentTarget.blur();
+          }}
+          className={`hidden ${countsFrom} ${
+            counts.rejected > 0 ? 'text-rose-300' : 'text-zinc-400'
+          } underline decoration-current/40 decoration-dotted underline-offset-2 hover:decoration-solid hover:text-rose-200`}
+        >
+          {counts.rejected} rejected
+        </button>
+      ) : (
+        <span className={`hidden ${countsFrom} ${counts.rejected > 0 ? 'text-rose-300' : 'text-zinc-600'}`}>
+          {counts.rejected} rejected
+        </span>
+      )}
       <span className={`hidden ${countsFrom} ${counts.unsure > 0 ? 'text-zinc-300' : 'text-zinc-600'}`}>
         {counts.unsure} unsure
       </span>

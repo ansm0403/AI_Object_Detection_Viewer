@@ -1,5 +1,4 @@
 import type { Frame } from '@/lib/types';
-import { getReview } from './records';
 import type { ReviewMap } from './types';
 
 /**
@@ -44,31 +43,39 @@ export function rejectedBoxes(
   reviews: ReviewMap,
   isVisible?: (frame: Frame) => ReadonlySet<string>,
 ): RejectedBox[] {
-  // Nothing rejected → nothing to look for (the common case; skips the walk).
-  let any = false;
-  for (const key in reviews) {
-    if (reviews[key].verdict === 'rejected') {
-      any = true;
-      break;
-    }
-  }
-  if (!any) return [];
+  // Built from the RECORDS (a handful), not by walking every box of every
+  // scene (18,538 in the shipped sample): the list is needed on every render
+  // of the review screen that follows a verdict.
+  const rejected = Object.values(reviews).filter((record) => record.verdict === 'rejected');
+  if (rejected.length === 0) return [];
 
-  const boxes: RejectedBox[] = [];
+  const frames = new Map<string, { scene: string; s: number; f: number; frame: Frame }>();
   scenes.forEach((scene, s) => {
-    scene.frames.forEach((frame, f) => {
-      let visible: ReadonlySet<string> | undefined;
-      frame.detections3D.forEach((box, b) => {
-        if (getReview(reviews, frame.id, box.id)?.verdict !== 'rejected') return;
-        if (isVisible) {
-          visible ??= isVisible(frame);
-          if (!visible.has(box.id)) return;
-        }
-        boxes.push({ scene: scene.name, frameId: frame.id, objectId: box.id, at: [s, f, b] });
-      });
-    });
+    scene.frames.forEach((frame, f) => frames.set(frame.id, { scene: scene.name, s, f, frame }));
   });
-  return boxes;
+  const visibleIn = new Map<string, ReadonlySet<string>>();
+  const boxes: RejectedBox[] = [];
+  for (const record of rejected) {
+    const place = frames.get(record.frameId);
+    if (!place) continue;
+    const b = place.frame.detections3D.findIndex((box) => box.id === record.objectId);
+    if (b === -1) continue;
+    if (isVisible) {
+      let visible = visibleIn.get(record.frameId);
+      if (!visible) {
+        visible = isVisible(place.frame);
+        visibleIn.set(record.frameId, visible);
+      }
+      if (!visible.has(record.objectId)) continue;
+    }
+    boxes.push({
+      scene: place.scene,
+      frameId: record.frameId,
+      objectId: record.objectId,
+      at: [place.s, place.f, b],
+    });
+  }
+  return boxes.sort((x, y) => compare(x.at, y.at));
 }
 
 /**

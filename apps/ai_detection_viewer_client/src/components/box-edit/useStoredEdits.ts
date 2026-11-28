@@ -82,3 +82,19 @@ export function useEditedSummary(
   );
   return { inScene, inFrame };
 }
+
+/**
+ * (F8) How many edit records belong to a box of these scenes — what an export
+ * of them will hold. A stale record (its box is not in the data) is not counted.
+ */
+export function useEditCountIn(
+  scenes: readonly { frames: readonly Frame[] }[],
+  edits: EditMap,
+): number {
+  return useMemo(() => {
+    function* frames() {
+      for (const scene of scenes) yield* scene.frames;
+    }
+    return countEdited(frames(), edits);
+  }, [scenes, edits]);
+}

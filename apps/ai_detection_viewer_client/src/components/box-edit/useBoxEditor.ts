@@ -223,6 +223,14 @@ export function useBoxEditor({
         ? { key: sessionKey, history: startHistory(base.stored) }
         : null,
     );
+  } else if (session && base && !sameBoxValues(session.history.present, base.stored)) {
+    // The stored box is not what this editor last wrote: it was changed from
+    // OUTSIDE — another tab edited or reverted the same box. The steps recorded
+    // here lead back to states the reviewer is no longer looking at (an Undo
+    // would bring back an edit the other tab had removed), so the history
+    // starts again from what is stored now. Changes made here never get to
+    // this branch: the store and the history are written in the same update.
+    setSession({ key: session.key, history: startHistory(base.stored) });
   }
   // When the box became the one being edited (for `MIN_LOOK_MS`). Stamped in
   // an effect: reading the clock is not something a render may do.
